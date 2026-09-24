@@ -122,69 +122,67 @@ export default function HomePage({ onNavigate }) {
   return (
     <div className="flex flex-col">
       {/* 1. HERO SECTION */}
-      <section className="relative min-h-[75vh] sm:min-h-[85vh] lg:min-h-[88vh] flex items-center overflow-hidden bg-[#FAF7F2] text-[#1F1A1C]">
-        {/* Background Saree Showcase Image — 100% Brightness & High-Clarity */}
+      <section className="relative min-h-[75vh] sm:min-h-[85vh] flex items-center justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2]">
+        {/* Background Image — Full 100% Brightness & Vibrant Saree Showcase */}
         <div className="absolute inset-0 z-0">
           <picture>
             <source media="(max-width: 640px)" srcSet="/images/occasions/wedding_edit.jpg" />
             <img
               src="/images/occasions/wedding_edit.jpg"
               alt="PALLUVO Luxury Saree Hero"
-              className="w-full h-full object-cover object-center sm:object-right md:object-[80%_center] opacity-100 scale-100 transition-transform duration-1000 ease-out"
+              className="w-full h-full object-cover object-top sm:object-right md:object-[75%_center] opacity-100 scale-100 transition-transform duration-1000 ease-out"
             />
           </picture>
-          {/* Subtle soft gradient fade on mobile only for bottom text legibility */}
-          <div className="sm:hidden absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 via-40% to-transparent pointer-events-none" />
+          {/* Subtle directional gradient on the left/bottom to maintain crisp text contrast while keeping the saree & model 100% luminous */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C]/90 via-[#1F1A1C]/40 via-55% to-transparent sm:bg-gradient-to-r sm:from-[#1F1A1C]/90 sm:via-[#1F1A1C]/40 sm:via-35% sm:to-transparent pointer-events-none" />
         </div>
 
-        {/* Hero Content — Floating Luxury Glassmorphic Editorial Card */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-20 w-full flex items-center">
-          <div className="max-w-xl w-full bg-[#FAF7F2]/95 sm:bg-[#FAF7F2]/95 backdrop-blur-md p-6 sm:p-10 rounded-3xl border border-[#C5A059]/50 shadow-2xl space-y-4 sm:space-y-6 animate-fade-in text-[#1F1A1C]">
-            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#5B1425]/10 border border-[#5B1425]/30 text-[#5B1425] text-[10px] sm:text-xs font-semibold uppercase tracking-widest shadow-xs">
-              <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
-              <span>The Festive & Bridal Heirloom Edit</span>
+        {/* Hero Content — Seamless Full-Bleed Luxury Typography */}
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-28 flex flex-col items-start max-w-2xl w-full">
+          <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#FAF7F2]/10 backdrop-blur-md border border-[#C5A059]/40 text-[#C5A059] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-4 sm:mb-6 animate-fade-in shadow-sm">
+            <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
+            <span>The Festive & Bridal Heirloom Edit</span>
+          </div>
+
+          <h1 className="font-serif text-3.5xl sm:text-6xl lg:text-7xl font-bold leading-[1.15] sm:leading-[1.1] tracking-tight text-[#FAF7F2] drop-shadow-sm animate-slide-up">
+            Every drape, <br />
+            <span className="italic font-normal gold-gradient-text">a little magic.</span>
+          </h1>
+
+          <p className="mt-3.5 sm:mt-6 text-sm sm:text-lg text-[#FAF7F2]/85 leading-relaxed font-sans max-w-lg drop-shadow-xs">
+            Handcrafted Banarasi, pure Kanjivaram, and ethereal organza sarees designed to make your celebratory moments unforgettable.
+          </p>
+
+          <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
+            <button
+              onClick={() => onNavigate('shop')}
+              className="px-6 sm:px-8 py-3.5 sm:py-4 bg-[#5B1425] hover:bg-[#7E1E34] text-[#FAF7F2] font-bold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 shadow-2xl flex items-center justify-center gap-2.5 border border-[#C5A059]/30 active:scale-95 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
+            >
+              <span>Explore Sarees</span>
+              <ArrowRight className="w-4 h-4 text-[#C5A059]" />
+            </button>
+
+            <button
+              onClick={() => onNavigate('shop', { occasion: 'Wedding' })}
+              className="px-6 sm:px-8 py-3.5 sm:py-4 bg-[#FAF7F2]/10 hover:bg-[#FAF7F2]/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 border border-white/20 hover:border-[#C5A059] active:scale-95 text-center cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
+            >
+              Bridal Edit
+            </button>
+          </div>
+
+          {/* Micro Trust Stats */}
+          <div className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-white/15 grid grid-cols-3 gap-3 sm:gap-6 text-left w-full">
+            <div>
+              <div className="font-serif text-lg sm:text-2xl font-bold text-[#C5A059]">100%</div>
+              <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Pure Handloom</div>
             </div>
-
-            <h1 className="font-serif text-3xl sm:text-5xl lg:text-6xl font-bold leading-[1.12] tracking-tight text-[#1F1A1C]">
-              Every drape, <br />
-              <span className="italic font-normal text-[#5B1425]">a little magic.</span>
-            </h1>
-
-            <p className="text-xs sm:text-base text-[#6E6467] leading-relaxed font-sans">
-              Handcrafted Banarasi, pure Kanjivaram, and ethereal organza sarees designed to make your celebratory moments unforgettable.
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto pt-1">
-              <button
-                onClick={() => onNavigate('shop')}
-                className="px-6 sm:px-8 py-3.5 bg-[#5B1425] hover:bg-[#7E1E34] text-[#FAF7F2] font-bold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 shadow-xl flex items-center justify-center gap-2 border border-[#C5A059]/40 active:scale-95 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none"
-              >
-                <span>Explore Sarees</span>
-                <ArrowRight className="w-4 h-4 text-[#C5A059]" />
-              </button>
-
-              <button
-                onClick={() => onNavigate('shop', { occasion: 'Wedding' })}
-                className="px-6 sm:px-8 py-3.5 bg-white hover:bg-[#F4EFEB] text-[#1F1A1C] font-semibold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 border border-[#EAE2D7] hover:border-[#C5A059] active:scale-95 text-center cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none shadow-sm"
-              >
-                Bridal Edit
-              </button>
+            <div>
+              <div className="font-serif text-lg sm:text-2xl font-bold text-[#C5A059]">15k+</div>
+              <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Drapes Loved</div>
             </div>
-
-            {/* Micro Trust Stats */}
-            <div className="pt-4 sm:pt-5 border-t border-[#EAE2D7] grid grid-cols-3 gap-2 sm:gap-4 text-left w-full">
-              <div>
-                <div className="font-serif text-base sm:text-xl font-bold text-[#5B1425]">100%</div>
-                <div className="text-[9px] sm:text-[10px] text-[#6E6467] uppercase tracking-wider mt-0.5">Pure Handloom</div>
-              </div>
-              <div>
-                <div className="font-serif text-base sm:text-xl font-bold text-[#5B1425]">15k+</div>
-                <div className="text-[9px] sm:text-[10px] text-[#6E6467] uppercase tracking-wider mt-0.5">Drapes Loved</div>
-              </div>
-              <div>
-                <div className="font-serif text-base sm:text-xl font-bold text-[#5B1425]">4.9 ★</div>
-                <div className="text-[9px] sm:text-[10px] text-[#6E6467] uppercase tracking-wider mt-0.5">Verified Reviews</div>
-              </div>
+            <div>
+              <div className="font-serif text-lg sm:text-2xl font-bold text-[#C5A059]">4.9 ★</div>
+              <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Verified Reviews</div>
             </div>
           </div>
         </div>

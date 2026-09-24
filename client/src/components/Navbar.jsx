@@ -62,7 +62,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
           <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
             
             {/* Left: Mobile Hamburger & Logo */}
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0 mr-4 sm:mr-6 lg:mr-8 xl:mr-12">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0 mr-2 sm:mr-4 lg:mr-4 xl:mr-8">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="lg:hidden p-2 -ml-1 text-[#1F1A1C] hover:text-[#5B1425] rounded-xl hover:bg-[#F4EFEB] transition cursor-pointer"
@@ -76,7 +76,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
                 className="cursor-pointer group flex flex-col items-start select-none"
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="font-cinzel text-2xl sm:text-3xl font-bold tracking-[0.18em] sm:tracking-[0.2em] text-[#5B1425] group-hover:text-[#7E1E34] transition">
+                  <span className="font-cinzel text-2xl sm:text-3xl font-bold tracking-[0.18em] sm:tracking-[0.2em] text-[#5B1425] group-hover:text-[#7E1E34] transition whitespace-nowrap">
                     PALLUVO
                   </span>
                   <span className="text-[#C5A059] text-base sm:text-lg -mt-1 group-hover:rotate-12 transition transform">✦</span>
@@ -87,11 +87,11 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
               </div>
             </div>
 
-            {/* Center: Desktop Navigation */}
-            <nav className="hidden lg:flex items-center justify-center gap-5 xl:gap-8 text-sm font-medium tracking-wide flex-1 h-full">
+            {/* Center: Desktop Navigation — Single-Line Non-Wrapping Layout */}
+            <nav className="hidden lg:flex items-center justify-center gap-3.5 xl:gap-6 2xl:gap-8 text-xs xl:text-sm font-medium tracking-wide flex-1 h-full shrink-0">
               <button
                 onClick={() => handleNav('home')}
-                className={`h-full inline-flex items-center transition-colors px-1 border-b-2 cursor-pointer ${
+                className={`h-full inline-flex items-center transition-colors px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
                   currentPage === 'home'
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
                     : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
@@ -102,7 +102,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
               <button
                 onClick={() => handleNav('shop')}
-                className={`h-full inline-flex items-center transition-colors px-1 border-b-2 cursor-pointer ${
+                className={`h-full inline-flex items-center transition-colors px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
                   currentPage === 'shop'
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
                     : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
@@ -113,24 +113,24 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
               <button
                 onClick={() => handleNav('shop', { filter: 'new_arrival' })}
-                className="h-full inline-flex items-center transition-colors px-1 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-1 cursor-pointer"
+                className="h-full inline-flex items-center transition-colors px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-1 cursor-pointer whitespace-nowrap shrink-0"
               >
                 <span>New Arrivals</span>
-                <span className="bg-[#5B1425] text-[#FAF7F2] text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">New</span>
+                <span className="bg-[#5B1425] text-[#FAF7F2] text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0">New</span>
               </button>
 
               {/* Collections Dropdown */}
               <div
-                className="relative h-full flex items-center"
+                className="relative h-full flex items-center shrink-0"
                 onMouseEnter={() => setCollectionsDropdown(true)}
                 onMouseLeave={() => setCollectionsDropdown(false)}
               >
                 <button
                   onClick={() => handleNav('shop')}
-                  className="h-full inline-flex items-center transition-colors px-1 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-1 cursor-pointer"
+                  className="h-full inline-flex items-center transition-colors px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-1 cursor-pointer whitespace-nowrap shrink-0"
                 >
                   <span>Collections</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-[#6E6467]" />
+                  <ChevronDown className="w-3.5 h-3.5 text-[#6E6467] shrink-0" />
                 </button>
 
                 {collectionsDropdown && (
@@ -163,26 +163,26 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
               <button
                 onClick={() => handleNav('shop', { filter: 'best_seller' })}
-                className="h-full inline-flex items-center transition-colors px-1 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] cursor-pointer"
+                className="h-full inline-flex items-center transition-colors px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] cursor-pointer whitespace-nowrap shrink-0"
               >
                 Best Sellers
               </button>
 
               <button
                 onClick={() => handleNav('offers')}
-                className="h-full inline-flex items-center transition-colors px-1 border-b-2 border-transparent text-[#9A7730] font-semibold hover:text-[#5B1425] gap-1 cursor-pointer"
+                className="h-full inline-flex items-center transition-colors px-1.5 xl:px-2 border-b-2 border-transparent text-[#9A7730] font-semibold hover:text-[#5B1425] gap-1 cursor-pointer whitespace-nowrap shrink-0"
               >
-                <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
+                <Sparkles className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
                 <span>Offers</span>
               </button>
             </nav>
 
             {/* Right: Actions (Search, Wishlist, Compare, Account, Cart) */}
-            <div className="flex items-center space-x-1.5 sm:space-x-3">
+            <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
               {/* Search Trigger (Desktop only - mobile uses dedicated search bar below) */}
               <button
                 onClick={() => setIsSearchOpen(true)}
-                className="hidden lg:flex p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition items-center gap-1 cursor-pointer"
+                className="hidden lg:flex p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition items-center gap-1 cursor-pointer shrink-0"
                 aria-label="Search sarees"
               >
                 <Search className="w-5 h-5" />
@@ -192,7 +192,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
               {/* Wishlist (Desktop only - mobile uses bottom navigation) */}
               <button
                 onClick={() => handleNav('wishlist')}
-                className="hidden lg:inline-flex relative p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer"
+                className="hidden lg:inline-flex relative p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer shrink-0"
                 aria-label="Wishlist"
                 title="Wishlist"
               >
@@ -207,7 +207,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
               {/* Compare Sarees (Desktop & Tablet) */}
               <button
                 onClick={() => setIsCompareOpen(true)}
-                className="hidden sm:inline-flex relative p-2 text-[#1F1A1C] hover:text-[#C5A059] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer"
+                className="hidden sm:inline-flex relative p-2 text-[#1F1A1C] hover:text-[#C5A059] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer shrink-0"
                 aria-label="Compare Sarees"
                 title="Compare Sarees"
               >
@@ -220,7 +220,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
               </button>
 
               {/* User Account Dropdown (Desktop) */}
-              <div className="hidden lg:block relative">
+              <div className="hidden lg:block relative shrink-0">
                 <button
                   onClick={() => {
                     if (user) {
@@ -295,7 +295,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
               {/* Shopping Bag Button */}
               <button
                 onClick={() => setIsCartOpen(true)}
-                className="relative p-2 bg-[#5B1425] text-[#FAF7F2] hover:bg-[#7E1E34] rounded-full transition shadow-md flex items-center gap-1.5 px-3 cursor-pointer"
+                className="relative p-2 bg-[#5B1425] text-[#FAF7F2] hover:bg-[#7E1E34] rounded-full transition shadow-md flex items-center gap-1.5 px-3 cursor-pointer shrink-0"
                 aria-label="Shopping Bag"
               >
                 <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 text-[#C5A059]" />
@@ -309,17 +309,19 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
             </div>
           </div>
 
-          {/* Second Row: Mobile Search Bar */}
+          {/* Second Row: Mobile Search Bar — Keyboard Focusable & Accessible */}
           <div className="lg:hidden pb-3 pt-0.5">
-            <div
+            <button
+              type="button"
               onClick={() => setIsSearchOpen(true)}
-              className="w-full flex items-center gap-2.5 bg-white border border-[#E0D8CD] rounded-xl px-3.5 py-2.5 shadow-xs cursor-pointer active:scale-[0.99] transition-transform"
+              aria-label="Search sarees, collections and more"
+              className="w-full flex items-center gap-2.5 bg-white border border-[#E0D8CD] rounded-xl px-3.5 py-2.5 shadow-xs cursor-pointer active:scale-[0.99] transition-transform text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
             >
               <Search className="w-4 h-4 text-[#C5A059] shrink-0" />
               <span className="text-xs text-[#8C8285] font-normal truncate">
                 Search sarees, collections & more...
               </span>
-            </div>
+            </button>
           </div>
         </div>
 
