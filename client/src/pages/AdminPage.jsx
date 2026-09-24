@@ -681,123 +681,221 @@ export default function AdminPage({ onNavigate }) {
 
       {/* Product Add/Edit Modal */}
       {showProductModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-[#FAF7F2] w-full max-w-2xl rounded-2xl p-6 border border-[#EAE2D7] shadow-2xl space-y-4 my-8">
-            <div className="flex items-center justify-between border-b border-[#EAE2D7] pb-3">
-              <h3 className="font-serif font-bold text-lg text-[#1F1A1C]">
-                {editingProductId ? 'Edit Saree Drape' : 'Add New Saree to Catalog'}
-              </h3>
-              <button onClick={() => setShowProductModal(false)}><X className="w-5 h-5" /></button>
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowProductModal(false);
+          }}
+        >
+          <div className="relative bg-[#FAF7F2] w-full max-w-2xl rounded-2xl p-5 sm:p-7 border border-[#C5A059]/40 shadow-2xl space-y-5 my-auto max-h-[90vh] overflow-y-auto animate-fade-in text-[#1F1A1C]">
+            <div className="flex items-center justify-between border-b border-[#EAE2D7] pb-4">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#5B1425] bg-[#5B1425]/10 px-2.5 py-0.5 rounded-full">
+                  Inventory Management
+                </span>
+                <h3 className="font-serif font-bold text-xl text-[#1F1A1C] mt-1">
+                  {editingProductId ? 'Edit Saree Drape' : 'Add New Saree to Catalog'}
+                </h3>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowProductModal(false)}
+                className="p-2 rounded-full hover:bg-black/5 text-[#6E6467] hover:text-[#1F1A1C] transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             <form onSubmit={handleSaveProduct} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold mb-1">Saree Name *</label>
+              <div className="space-y-1">
+                <label className="block font-semibold text-[#1F1A1C]">Saree Title *</label>
                 <input
                   type="text"
                   required
                   value={productForm.name}
                   onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
                   placeholder="e.g. Royal Crimson Banarasi Katan Silk Saree"
-                  className="w-full bg-white border p-2 rounded-xl"
+                  className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl text-sm"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold mb-1">Price (₹) *</label>
-                  <input
-                    type="number"
-                    required
-                    value={productForm.price}
-                    onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                    className="w-full bg-white border p-2 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">MRP (₹) *</label>
-                  <input
-                    type="number"
-                    required
-                    value={productForm.mrp}
-                    onChange={(e) => setProductForm({ ...productForm, mrp: e.target.value })}
-                    className="w-full bg-white border p-2 rounded-xl"
-                  />
-                </div>
+              <div className="space-y-1">
+                <label className="block font-semibold text-[#1F1A1C]">Tagline / Subtitle</label>
+                <input
+                  type="text"
+                  value={productForm.tagline || ''}
+                  onChange={(e) => setProductForm({ ...productForm, tagline: e.target.value })}
+                  placeholder="e.g. Handwoven Kadwa Zari Weave with Intricate Floral Pallu"
+                  className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl"
+                />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-semibold mb-1">Fabric *</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-[#1F1A1C]">Category *</label>
+                  <select
+                    value={productForm.category_id}
+                    onChange={(e) => setProductForm({ ...productForm, category_id: parseInt(e.target.value) })}
+                    className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl font-medium"
+                  >
+                    <option value={1}>Banarasi Sarees</option>
+                    <option value={2}>Kanjivaram Silk</option>
+                    <option value={3}>Pure Silk</option>
+                    <option value={4}>Organza & Tissue</option>
+                    <option value={5}>Linen & Cotton</option>
+                    <option value={6}>Designer Sarees</option>
+                    <option value={7}>Party Wear</option>
+                    <option value={8}>Bridal Trousseau</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-[#1F1A1C]">Fabric Type *</label>
                   <input
                     type="text"
                     required
                     value={productForm.fabric}
                     onChange={(e) => setProductForm({ ...productForm, fabric: e.target.value })}
-                    className="w-full bg-white border p-2 rounded-xl"
+                    placeholder="e.g. Pure Katan Silk"
+                    className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl"
                   />
                 </div>
-                <div>
-                  <label className="block font-semibold mb-1">Occasion *</label>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-[#1F1A1C]">Occasion *</label>
                   <select
                     value={productForm.occasion}
                     onChange={(e) => setProductForm({ ...productForm, occasion: e.target.value })}
-                    className="w-full bg-white border p-2 rounded-xl"
+                    className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl font-medium"
                   >
                     <option value="Wedding">Wedding</option>
+                    <option value="Bridal">Bridal</option>
                     <option value="Festive">Festive</option>
                     <option value="Party">Party</option>
                     <option value="Workwear">Workwear</option>
+                    <option value="Traditional">Traditional</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block font-semibold mb-1">Stock Quantity *</label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-[#1F1A1C]">Offer Price (₹) *</label>
                   <input
                     type="number"
                     required
+                    min="1"
+                    value={productForm.price}
+                    onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+                    className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl font-semibold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-[#1F1A1C]">MRP (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={productForm.mrp}
+                    onChange={(e) => setProductForm({ ...productForm, mrp: e.target.value })}
+                    className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-[#1F1A1C]">Stock Units *</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
                     value={productForm.stock_quantity}
                     onChange={(e) => setProductForm({ ...productForm, stock_quantity: e.target.value })}
-                    className="w-full bg-white border p-2 rounded-xl"
+                    className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl font-semibold"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block font-semibold mb-1">Image URL (High-Res) *</label>
-                <input
-                  type="url"
-                  required
-                  value={productForm.images[0] || ''}
-                  onChange={(e) => setProductForm({ ...productForm, images: [e.target.value] })}
-                  className="w-full bg-white border p-2 rounded-xl"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block font-semibold text-[#1F1A1C]">Color Shade Name</label>
+                  <input
+                    type="text"
+                    value={productForm.color_name || 'Wine Red'}
+                    onChange={(e) => setProductForm({ ...productForm, color_name: e.target.value })}
+                    placeholder="e.g. Royal Wine, Peacock Green"
+                    className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-[#1F1A1C]">Color Swatch Hex</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={productForm.color_hex || '#5B1425'}
+                      onChange={(e) => setProductForm({ ...productForm, color_hex: e.target.value })}
+                      className="w-10 h-10 rounded-xl border border-[#EAE2D7] cursor-pointer p-0.5 bg-white"
+                    />
+                    <input
+                      type="text"
+                      value={productForm.color_hex || '#5B1425'}
+                      onChange={(e) => setProductForm({ ...productForm, color_hex: e.target.value })}
+                      placeholder="#5B1425"
+                      className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl font-mono uppercase"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block font-semibold mb-1">Detailed Description *</label>
+              <div className="space-y-1">
+                <label className="block font-semibold text-[#1F1A1C]">High-Res Saree Image URL *</label>
+                <div className="flex gap-2 items-start">
+                  <input
+                    type="url"
+                    required
+                    value={productForm.images[0] || ''}
+                    onChange={(e) => setProductForm({ ...productForm, images: [e.target.value] })}
+                    placeholder="https://images.unsplash.com/photo-..."
+                    className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl text-xs"
+                  />
+                  {productForm.images[0] && (
+                    <img 
+                      src={productForm.images[0]} 
+                      alt="Preview" 
+                      className="w-10 h-14 object-cover rounded-lg border border-[#EAE2D7] shadow-sm flex-shrink-0"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-[#1F1A1C]">Craftsmanship & Weave Description *</label>
                 <textarea
                   rows="3"
                   required
                   value={productForm.description}
                   onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                  placeholder="Describe the weaving technique, borders, pallu, and styling suggestions..."
-                  className="w-full bg-white border p-2 rounded-xl"
+                  placeholder="Describe the weaving technique, zari craftsmanship, borders, pallu artwork, and styling suggestions..."
+                  className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl text-xs leading-relaxed"
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#EAE2D7]">
                 <button
                   type="button"
                   onClick={() => setShowProductModal(false)}
-                  className="px-4 py-2 border rounded-xl"
+                  className="px-5 py-2.5 border border-[#EAE2D7] text-[#6E6467] hover:text-[#1F1A1C] hover:bg-black/5 rounded-xl font-semibold transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-[#5B1425] text-white font-bold rounded-xl uppercase"
+                  className="px-7 py-2.5 bg-[#5B1425] hover:bg-[#7E1E34] text-white font-bold rounded-xl uppercase tracking-wider shadow-lg transition flex items-center gap-2"
                 >
-                  Save Saree
+                  <Check className="w-4 h-4" />
+                  <span>{editingProductId ? 'Update Saree' : 'Publish Saree to Catalog'}</span>
                 </button>
               </div>
             </form>
@@ -807,18 +905,33 @@ export default function AdminPage({ onNavigate }) {
 
       {/* Order Status Update Modal */}
       {updatingOrderId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#FAF7F2] w-full max-w-md rounded-2xl p-6 border border-[#EAE2D7] shadow-2xl space-y-4">
-            <h3 className="font-serif font-bold text-lg text-[#1F1A1C]">
-              Update Order #{updatingOrderId} Status
-            </h3>
-            <form onSubmit={handleUpdateOrderStatus} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold mb-1">Lifecycle Stage</label>
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setUpdatingOrderId(null);
+          }}
+        >
+          <div className="relative bg-[#FAF7F2] w-full max-w-md rounded-2xl p-6 border border-[#C5A059]/40 shadow-2xl space-y-4 my-auto animate-fade-in text-[#1F1A1C]">
+            <div className="flex items-center justify-between border-b border-[#EAE2D7] pb-3">
+              <h3 className="font-serif font-bold text-lg text-[#1F1A1C]">
+                Update Order #{updatingOrderId} Status
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setUpdatingOrderId(null)}
+                className="p-1.5 rounded-full hover:bg-black/5 text-[#6E6467]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateOrderStatus} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="block font-semibold text-[#1F1A1C]">Lifecycle Stage</label>
                 <select
                   value={orderStatusForm.status}
                   onChange={(e) => setOrderStatusForm({ ...orderStatusForm, status: e.target.value })}
-                  className="w-full bg-white border p-2 rounded-xl"
+                  className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl font-medium"
                 >
                   <option value="Placed">Placed</option>
                   <option value="Packed">Packed</option>
@@ -829,28 +942,39 @@ export default function AdminPage({ onNavigate }) {
                 </select>
               </div>
 
-              <div>
-                <label className="block font-semibold mb-1">Courier AWB / Tracking No.</label>
+              <div className="space-y-1">
+                <label className="block font-semibold text-[#1F1A1C]">Courier AWB / Tracking Number</label>
                 <input
                   type="text"
                   value={orderStatusForm.tracking_number}
                   onChange={(e) => setOrderStatusForm({ ...orderStatusForm, tracking_number: e.target.value })}
                   placeholder="e.g. BLR-BD-991122"
-                  className="w-full bg-white border p-2 rounded-xl font-mono"
+                  className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl font-mono"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="space-y-1">
+                <label className="block font-semibold text-[#1F1A1C]">Courier Partner</label>
+                <input
+                  type="text"
+                  value={orderStatusForm.courier_partner}
+                  onChange={(e) => setOrderStatusForm({ ...orderStatusForm, courier_partner: e.target.value })}
+                  placeholder="e.g. BlueDart Luxury Express"
+                  className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#EAE2D7]">
                 <button
                   type="button"
                   onClick={() => setUpdatingOrderId(null)}
-                  className="px-4 py-2 border rounded-xl"
+                  className="px-4 py-2 border border-[#EAE2D7] text-[#6E6467] rounded-xl font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-[#5B1425] text-white font-bold rounded-xl uppercase"
+                  className="px-6 py-2 bg-[#5B1425] hover:bg-[#7E1E34] text-white font-bold rounded-xl uppercase tracking-wider shadow-md transition"
                 >
                   Update Status
                 </button>
@@ -862,66 +986,89 @@ export default function AdminPage({ onNavigate }) {
 
       {/* Coupon Modal */}
       {showCouponModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#FAF7F2] w-full max-w-md rounded-2xl p-6 border border-[#EAE2D7] shadow-2xl space-y-4">
-            <h3 className="font-serif font-bold text-lg text-[#1F1A1C]">
-              Create New Promo Coupon
-            </h3>
-            <form onSubmit={handleSaveCoupon} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold mb-1">Coupon Code (e.g. FESTIVE25)</label>
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowCouponModal(false);
+          }}
+        >
+          <div className="relative bg-[#FAF7F2] w-full max-w-md rounded-2xl p-6 border border-[#C5A059]/40 shadow-2xl space-y-4 my-auto animate-fade-in text-[#1F1A1C]">
+            <div className="flex items-center justify-between border-b border-[#EAE2D7] pb-3">
+              <h3 className="font-serif font-bold text-lg text-[#1F1A1C]">
+                Create New Promo Coupon
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setShowCouponModal(false)}
+                className="p-1.5 rounded-full hover:bg-black/5 text-[#6E6467]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCoupon} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="block font-semibold text-[#1F1A1C]">Coupon Code *</label>
                 <input
                   type="text"
                   required
                   value={couponForm.code}
                   onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
-                  className="w-full bg-white border p-2 rounded-xl uppercase font-mono font-bold"
+                  placeholder="e.g. FESTIVE25"
+                  className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl uppercase font-mono font-bold tracking-wider"
                 />
               </div>
-              <div>
-                <label className="block font-semibold mb-1">Title</label>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-[#1F1A1C]">Offer Title *</label>
                 <input
                   type="text"
                   required
                   value={couponForm.title}
                   onChange={(e) => setCouponForm({ ...couponForm, title: e.target.value })}
-                  placeholder="Festive Saree Treat"
-                  className="w-full bg-white border p-2 rounded-xl"
+                  placeholder="e.g. Festive Special 25% Off"
+                  className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl"
                 />
               </div>
+
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold mb-1">Discount (%)</label>
+                <div className="space-y-1">
+                  <label className="block font-semibold text-[#1F1A1C]">Discount (%) *</label>
                   <input
                     type="number"
                     required
+                    min="1"
+                    max="90"
                     value={couponForm.discount_percent}
                     onChange={(e) => setCouponForm({ ...couponForm, discount_percent: e.target.value })}
-                    className="w-full bg-white border p-2 rounded-xl"
+                    className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl font-bold"
                   />
                 </div>
-                <div>
-                  <label className="block font-semibold mb-1">Min Order (₹)</label>
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-[#1F1A1C]">Min Order (₹) *</label>
                   <input
                     type="number"
                     required
+                    min="0"
                     value={couponForm.min_order_amount}
                     onChange={(e) => setCouponForm({ ...couponForm, min_order_amount: e.target.value })}
-                    className="w-full bg-white border p-2 rounded-xl"
+                    className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl"
                   />
                 </div>
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#EAE2D7]">
                 <button
                   type="button"
                   onClick={() => setShowCouponModal(false)}
-                  className="px-4 py-2 border rounded-xl"
+                  className="px-4 py-2 border border-[#EAE2D7] text-[#6E6467] rounded-xl font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-[#5B1425] text-white font-bold rounded-xl uppercase"
+                  className="px-6 py-2 bg-[#5B1425] hover:bg-[#7E1E34] text-white font-bold rounded-xl uppercase tracking-wider shadow-md transition"
                 >
                   Create Coupon
                 </button>
