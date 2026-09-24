@@ -170,10 +170,13 @@ export default function Footer({ onNavigate }) {
                 </button>
               </li>
               <li>
-                <span className="text-[#FAF7F2]/60">Concierge: +91 98765 43210</span>
+                <span className="text-[#FAF7F2]/80 font-medium">Concierge: +91 84988 54323</span>
               </li>
               <li>
-                <span className="text-[#FAF7F2]/60">Email: concierge@palluvo.com</span>
+                <span className="text-[#FAF7F2]/80 font-medium">Support: +91 81067 89789</span>
+              </li>
+              <li>
+                <span className="text-[#FAF7F2]/80 font-medium">Email: contact@palluvo.com</span>
               </li>
               <li>
                 <span className="text-[#FAF7F2]/60">Hours: Mon-Sat, 10 AM - 8 PM IST</span>

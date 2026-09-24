@@ -53,7 +53,7 @@ export default function InvoiceModal({ isOpen, onClose, order }) {
                 <div>PALLUVO Luxury Fashion Pvt Ltd</div>
                 <div>Silk Mark Certified Brand | GSTIN: 29AABCU9603R1ZM</div>
                 <div>Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</div>
-                <div>Email: concierge@palluvo.com | Support: +91 80 2233 4455</div>
+                <div>Email: contact@palluvo.com | Support: +91 84988 54323 / +91 81067 89789</div>
               </div>
             </div>
 
