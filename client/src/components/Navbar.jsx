@@ -59,10 +59,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           
           {/* Top Row */}
-          <div className="flex items-center justify-between h-16 sm:h-20">
+          <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
             
             {/* Left: Mobile Hamburger & Logo */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0 mr-4 sm:mr-6 lg:mr-8 xl:mr-12">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="lg:hidden p-2 -ml-1 text-[#1F1A1C] hover:text-[#5B1425] rounded-xl hover:bg-[#F4EFEB] transition cursor-pointer"
@@ -75,25 +75,25 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
                 onClick={() => handleNav('home')}
                 className="cursor-pointer group flex flex-col items-start select-none"
               >
-                <div className="flex items-center gap-1 sm:gap-1.5">
+                <div className="flex items-center gap-1.5">
                   <span className="font-cinzel text-2xl sm:text-3xl font-bold tracking-[0.18em] sm:tracking-[0.2em] text-[#5B1425] group-hover:text-[#7E1E34] transition">
                     PALLUVO
                   </span>
-                  <span className="text-[#C5A059] text-base sm:text-lg -mt-1 sm:-mt-2 group-hover:rotate-12 transition transform">✦</span>
+                  <span className="text-[#C5A059] text-base sm:text-lg -mt-1 group-hover:rotate-12 transition transform">✦</span>
                 </div>
-                <span className="text-[9px] sm:text-[11px] font-serif tracking-[0.12em] sm:tracking-[0.15em] text-[#6E6467] -mt-1 uppercase italic">
+                <span className="text-[9px] sm:text-[10px] font-serif tracking-[0.15em] text-[#6E6467] -mt-1 uppercase italic block whitespace-nowrap">
                   Every drape, a little magic
                 </span>
               </div>
             </div>
 
             {/* Center: Desktop Navigation */}
-            <nav className="hidden lg:flex items-center space-x-7 xl:space-x-8 text-sm font-medium tracking-wide">
+            <nav className="hidden lg:flex items-center justify-center gap-5 xl:gap-8 text-sm font-medium tracking-wide flex-1 h-full">
               <button
                 onClick={() => handleNav('home')}
-                className={`transition-colors py-2 border-b-2 cursor-pointer ${
+                className={`h-full inline-flex items-center transition-colors px-1 border-b-2 cursor-pointer ${
                   currentPage === 'home'
-                    ? 'border-[#5B1425] text-[#5B1425] font-semibold'
+                    ? 'border-[#5B1425] text-[#5B1425] font-bold'
                     : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
                 }`}
               >
@@ -102,9 +102,9 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
               <button
                 onClick={() => handleNav('shop')}
-                className={`transition-colors py-2 border-b-2 cursor-pointer ${
+                className={`h-full inline-flex items-center transition-colors px-1 border-b-2 cursor-pointer ${
                   currentPage === 'shop'
-                    ? 'border-[#5B1425] text-[#5B1425] font-semibold'
+                    ? 'border-[#5B1425] text-[#5B1425] font-bold'
                     : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
                 }`}
               >
@@ -113,7 +113,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
               <button
                 onClick={() => handleNav('shop', { filter: 'new_arrival' })}
-                className="transition-colors py-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] flex items-center gap-1 cursor-pointer"
+                className="h-full inline-flex items-center transition-colors px-1 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-1 cursor-pointer"
               >
                 <span>New Arrivals</span>
                 <span className="bg-[#5B1425] text-[#FAF7F2] text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">New</span>
@@ -121,20 +121,20 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
               {/* Collections Dropdown */}
               <div
-                className="relative py-2"
+                className="relative h-full flex items-center"
                 onMouseEnter={() => setCollectionsDropdown(true)}
                 onMouseLeave={() => setCollectionsDropdown(false)}
               >
                 <button
                   onClick={() => handleNav('shop')}
-                  className="transition-colors text-[#1F1A1C] hover:text-[#5B1425] flex items-center gap-1 cursor-pointer"
+                  className="h-full inline-flex items-center transition-colors px-1 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-1 cursor-pointer"
                 >
                   <span>Collections</span>
                   <ChevronDown className="w-3.5 h-3.5 text-[#6E6467]" />
                 </button>
 
                 {collectionsDropdown && (
-                  <div className="absolute top-full left-0 w-64 bg-[#FAF7F2] border border-[#EAE2D7] rounded-xl shadow-2xl py-3 px-2 animate-fade-in z-50">
+                  <div className="absolute top-[85%] left-0 w-64 bg-[#FAF7F2] border border-[#EAE2D7] rounded-xl shadow-2xl py-3 px-2 animate-fade-in z-50">
                     <div className="text-[11px] font-semibold text-[#6E6467] uppercase tracking-wider px-3 py-1 border-b border-[#EAE2D7]/60 mb-1">
                       Curated For Every Occasion
                     </div>
@@ -163,14 +163,14 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
               <button
                 onClick={() => handleNav('shop', { filter: 'best_seller' })}
-                className="transition-colors py-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] cursor-pointer"
+                className="h-full inline-flex items-center transition-colors px-1 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] cursor-pointer"
               >
                 Best Sellers
               </button>
 
               <button
                 onClick={() => handleNav('offers')}
-                className="transition-colors py-2 border-b-2 border-transparent text-[#9A7730] font-semibold hover:text-[#5B1425] flex items-center gap-1 cursor-pointer"
+                className="h-full inline-flex items-center transition-colors px-1 border-b-2 border-transparent text-[#9A7730] font-semibold hover:text-[#5B1425] gap-1 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
                 <span>Offers</span>
