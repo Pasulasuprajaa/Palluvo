@@ -1,13 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import {
   Star, Heart, ShoppingBag, ShieldCheck, Truck, RotateCcw,
-  Sparkles, Check, ChevronRight, Share2, ZoomIn, X, Plus, Minus, Tag, MapPin
+  Sparkles, Check, ChevronRight, Share2, ZoomIn, X, Plus, Minus, Tag, MapPin,
+  Scale, Clock, Flame, Eye, CreditCard, Ruler, Scissors, MessageCircle, ThumbsUp
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useCompare } from '../context/CompareContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import ProductCard from '../components/ProductCard';
+import BankOffersModal from '../components/BankOffersModal';
+import SizeGuideModal from '../components/SizeGuideModal';
+import ReviewModal from '../components/ReviewModal';
+import FrequentlyBoughtTogether from '../components/FrequentlyBoughtTogether';
+import ProductQA from '../components/ProductQA';
+import RecentlyViewed from '../components/RecentlyViewed';
 
 export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   const [product, setProduct] = useState(null);
@@ -18,20 +26,45 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   const [activeTab, setActiveTab] = useState('description');
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
+  // Flipkart & Amazon feature modals
+  const [bankOffersOpen, setBankOffersOpen] = useState(false);
+  const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+
+  // Blouse Customization State (Flipkart Fashion / Amazon Apparel feature)
+  const [blouseOption, setBlouseOption] = useState('unstitched'); // 'unstitched' | 'standard' | 'custom'
+  const [blouseSize, setBlouseSize] = useState('M (36)');
+  const [blouseNeckline, setBlouseNeckline] = useState('Sweetheart Neck');
+
   // Pincode checker state
   const [pincode, setPincode] = useState('560001');
   const [pincodeResult, setPincodeResult] = useState(null);
   const [checkingPin, setCheckingPin] = useState(false);
 
-  // Review submission state
-  const [reviewModalOpen, setReviewModalOpen] = useState(false);
-  const [reviewForm, setReviewForm] = useState({ rating: 5, title: '', comment: '' });
-  const [submittingReview, setSubmittingReview] = useState(false);
+  // Live Urgency Countdown Timer (Flipkart / Amazon Lightning Deal & Express Delivery)
+  const [timeLeft, setTimeLeft] = useState({ hours: 3, minutes: 42, seconds: 19 });
 
   const { addToCart } = useCart();
   const { isWishlisted, toggleWishlist } = useWishlist();
+  const { addToCompare, isInCompare } = useCompare();
   const { user } = useAuth();
-  const { addToast } = useToast();
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev.seconds > 0) {
+          return { ...prev, seconds: prev.seconds - 1 };
+        } else if (prev.minutes > 0) {
+          return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
+        } else if (prev.hours > 0) {
+          return { hours: prev.hours - 1, minutes: 59, seconds: 59 };
+        }
+        return { hours: 4, minutes: 0, seconds: 0 };
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     async function fetchProduct() {
@@ -44,6 +77,14 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
           if (data.product.variants && data.product.variants.length > 0) {
             setSelectedVariant(data.product.variants[0]);
           }
+
+          // Save to Recently Viewed in localStorage (Amazon/Flipkart History)
+          try {
+            const history = localStorage.getItem('palluvo_recently_viewed');
+            let parsed = history ? JSON.parse(history) : [];
+            parsed = [data.product, ...parsed.filter(p => p.id !== data.product.id)].slice(0, 8);
+            localStorage.setItem('palluvo_recently_viewed', JSON.stringify(parsed));
+          } catch (e) {}
         }
       } catch (err) {
         console.error('Fetch product detail error:', err);
@@ -60,7 +101,7 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   const handleCheckPincode = async (e) => {
     e?.preventDefault();
     if (!pincode || pincode.length !== 6) {
-      addToast('Please enter a valid 6-digit Indian PIN code.', 'error');
+      showToast('Please enter a valid 6-digit Indian PIN code.', 'error');
       return;
     }
     try {
@@ -70,7 +111,7 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
       if (res.ok) {
         setPincodeResult(data);
       } else {
-        addToast(data.error, 'error');
+        showToast(data.error || 'Pincode not serviceable', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -79,8 +120,21 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
     }
   };
 
+  const handleAddToCartWithCustomization = () => {
+    const customizedItem = {
+      ...product,
+      blouse_stitching: blouseOption === 'unstitched'
+        ? 'Unstitched Fabric Included'
+        : blouseOption === 'standard'
+        ? `Stitched: ${blouseSize} (${blouseNeckline})`
+        : 'Custom Artisan Bespoke Tailored',
+      blouse_extra_price: blouseOption === 'custom' ? 799 : (blouseOption === 'standard' ? 499 : 0)
+    };
+    addToCart(customizedItem, quantity);
+  };
+
   const handleBuyNow = () => {
-    addToCart(product, selectedVariant, quantity);
+    handleAddToCartWithCustomization();
     if (!user) {
       onOpenAuth(() => onNavigate('checkout'));
     } else {
@@ -88,297 +142,396 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
     }
   };
 
-  const handleAddReview = async (e) => {
-    e.preventDefault();
-    if (!user) {
-      onOpenAuth();
-      return;
-    }
-    if (!reviewForm.comment.trim()) {
-      addToast('Please share your thoughts on the saree drape.', 'error');
-      return;
-    }
-    try {
-      setSubmittingReview(true);
-      const res = await fetch('/api/reviews', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('palluvo_token')}`
-        },
-        body: JSON.stringify({
-          product_id: product.id,
-          rating: reviewForm.rating,
-          title: reviewForm.title,
-          comment: reviewForm.comment
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        addToast('✨ Thank you! Your review has been submitted.');
-        setReviewModalOpen(false);
-        // Refresh product reviews
-        const refreshRes = await fetch(`/api/products/${slug}`);
-        const refreshData = await refreshRes.json();
-        if (refreshData.product) setProduct(refreshData.product);
-      } else {
-        addToast(data.error || 'Failed to submit review.', 'error');
-      }
-    } catch (err) {
-      addToast(err.message, 'error');
-    } finally {
-      setSubmittingReview(false);
-    }
-  };
-
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-24 text-center">
-        <div className="w-12 h-12 border-4 border-[#5B1425] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-        <p className="font-serif text-lg text-[#1F1A1C]">Unfolding the saree drape...</p>
+      <div className="min-h-[70vh] flex items-center justify-center bg-[#FAF7F2]">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-3 border-[#5B1425] border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-xs font-serif text-[#5B1425] tracking-widest uppercase font-semibold">
+            Unveiling Handcrafted Drape...
+          </p>
+        </div>
       </div>
     );
   }
 
   if (!product) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-24 text-center space-y-4">
-        <h2 className="font-serif text-2xl font-bold text-[#1F1A1C]">Saree Not Found</h2>
-        <p className="text-xs text-[#6E6467]">The requested saree drape might have been moved or archived.</p>
+      <div className="min-h-[60vh] flex flex-col items-center justify-center bg-[#FAF7F2] p-6 text-center">
+        <h2 className="font-serif text-2xl font-bold text-[#5B1425] mb-2">Saree Drape Not Found</h2>
+        <p className="text-xs text-gray-500 mb-6">The requested saree might have been archived or belongs to an exclusive private vault edit.</p>
         <button
           onClick={() => onNavigate('shop')}
-          className="px-6 py-2.5 bg-[#5B1425] text-[#FAF7F2] text-xs font-bold uppercase rounded-xl"
+          className="px-6 py-2.5 bg-[#5B1425] text-white text-xs font-semibold rounded-xl hover:bg-[#430e1b] transition"
         >
-          Explore All Sarees
+          Explore Boutique
         </button>
       </div>
     );
   }
 
-  const images = product.images && product.images.length > 0
-    ? product.images
-    : [product.primary_image || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=1000&q=85'];
+  const currentImage = product.images?.[selectedImageIndex] || product.primary_image || '/images/categories/banarasi.jpg';
+  const isCompared = isInCompare(product.id);
+  const isSaved = isWishlisted(product.id);
 
-  const currentImage = images[selectedImageIndex] || images[0];
-  const saved = isWishlisted(product.id);
+  // Rating breakdown stats calculation
+  const reviews = product.reviews || [];
+  const ratingDist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  reviews.forEach(r => {
+    if (ratingDist[r.rating] !== undefined) ratingDist[r.rating]++;
+  });
+  const totalReviewsCount = reviews.length || product.review_count || 48;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
-      
       {/* Breadcrumb Navigation */}
-      <div className="text-xs text-[#6E6467] flex items-center gap-2">
-        <button onClick={() => onNavigate('home')} className="hover:text-[#5B1425]">Home</button>
-        <span>/</span>
-        <button onClick={() => onNavigate('shop', { category: product.category_slug })} className="hover:text-[#5B1425]">
-          {product.category_name || 'Sarees'}
+      <nav className="flex items-center gap-2 text-xs text-gray-500 overflow-x-auto pb-1">
+        <button onClick={() => onNavigate('home')} className="hover:text-[#5B1425] cursor-pointer">Home</button>
+        <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+        <button onClick={() => onNavigate('shop')} className="hover:text-[#5B1425] cursor-pointer">Sarees</button>
+        <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+        <button onClick={() => onNavigate('shop', { category: product.category_slug })} className="hover:text-[#5B1425] cursor-pointer">
+          {product.category_name || 'Handloom'}
         </button>
-        <span>/</span>
-        <span className="text-[#1F1A1C] font-semibold truncate max-w-xs">{product.name}</span>
-      </div>
+        <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+        <span className="text-[#5B1425] font-semibold truncate max-w-xs">{product.name}</span>
+      </nav>
 
-      {/* Main Saree Showcase Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-        
-        {/* Left: Gallery & Zoom (7 Columns on large) */}
-        <div className="lg:col-span-7 flex flex-col-reverse sm:flex-row gap-4">
-          
-          {/* Thumbnails Sidebar */}
-          {images.length > 1 && (
-            <div className="flex sm:flex-col gap-3 overflow-x-auto sm:overflow-y-auto max-h-[650px] pb-2 sm:pb-0">
-              {images.map((img, idx) => (
+      {/* Main Product Showcase Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+        {/* Left Gallery (Thumbnails + Main Hero Image) */}
+        <div className="lg:col-span-6 flex flex-col-reverse sm:flex-row gap-4">
+          {/* Vertical Thumbnails */}
+          {product.images && product.images.length > 1 && (
+            <div className="flex sm:flex-col gap-3 overflow-x-auto sm:overflow-y-auto max-h-[520px] pb-2 sm:pb-0 scrollbar-none">
+              {product.images.map((img, idx) => (
                 <button
                   key={idx}
                   onClick={() => setSelectedImageIndex(idx)}
-                  className={`relative w-16 sm:w-20 aspect-[3/4] rounded-xl overflow-hidden border-2 transition flex-shrink-0 ${
-                    selectedImageIndex === idx
-                      ? 'border-[#5B1425] ring-2 ring-[#C5A059]/40 scale-105 shadow-md'
-                      : 'border-[#EAE2D7] opacity-75 hover:opacity-100'
+                  className={`relative w-16 h-20 sm:w-20 sm:h-24 rounded-xl overflow-hidden border-2 shrink-0 transition cursor-pointer ${
+                    selectedImageIndex === idx ? 'border-[#5B1425] shadow-md scale-105' : 'border-transparent opacity-75 hover:opacity-100'
                   }`}
                 >
-                  <img src={img} alt="thumbnail" className="w-full h-full object-cover" />
+                  <img src={img} alt={`${product.name} - ${idx}`} className="w-full h-full object-cover" />
                 </button>
               ))}
             </div>
           )}
 
-          {/* Large Main Saree Image */}
-          <div className="flex-1 relative aspect-[3/4] rounded-2xl overflow-hidden bg-[#F4EFEB] border border-[#EAE2D7] shadow-xl group">
+          {/* Main Visual Frame with Zoom & Lightbox */}
+          <div className="relative flex-1 aspect-[3/4] max-h-[580px] rounded-2xl overflow-hidden bg-white border border-[#E8E1D5] shadow-sm group">
             <img
               src={currentImage}
               alt={product.name}
-              className="w-full h-full object-cover object-top transition-transform duration-500 ease-out group-hover:scale-110 cursor-zoom-in"
+              className="w-full h-full object-cover cursor-zoom-in transition duration-500 group-hover:scale-105"
               onClick={() => setLightboxOpen(true)}
             />
 
-            {/* Discount Pill */}
-            {product.discount_percent > 0 && (
-              <span className="absolute top-4 left-4 bg-[#5B1425] text-[#FAF7F2] text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider shadow-lg">
-                {product.discount_percent}% OFF
+            {/* Badges */}
+            <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+              {product.discount_percent > 0 && (
+                <span className="bg-[#5B1425] text-white text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-md">
+                  {product.discount_percent}% OFF
+                </span>
+              )}
+              <span className="bg-emerald-800 text-white text-[10px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                <Check className="w-3 h-3" /> Silk Mark Certified
               </span>
-            )}
+            </div>
 
-            {/* Lightbox / Zoom Trigger Button */}
+            {/* Zoom Trigger Button */}
             <button
               onClick={() => setLightboxOpen(true)}
-              className="absolute bottom-4 right-4 p-2.5 bg-white/90 backdrop-blur-md rounded-full text-[#1F1A1C] hover:bg-[#5B1425] hover:text-[#FAF7F2] transition shadow-lg"
-              title="View Fullscreen"
+              className="absolute bottom-4 right-4 p-2.5 rounded-full bg-white/90 backdrop-blur-md text-gray-800 hover:bg-[#5B1425] hover:text-white transition shadow-lg"
+              title="Click to Zoom Fullscreen"
             >
-              <ZoomIn className="w-5 h-5" />
+              <ZoomIn className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Right: Saree Purchasing Details (5 Columns) */}
-        <div className="lg:col-span-5 space-y-6">
-          <div>
-            <div className="flex items-center justify-between text-xs text-[#6E6467] uppercase tracking-wider mb-2">
-              <span className="font-semibold text-[#5B1425]">{product.fabric}</span>
-              <span className="bg-[#C5A059]/20 text-[#9A7730] px-2.5 py-0.5 rounded-full font-bold">
-                {product.occasion} Edition
+        {/* Right Info & Purchasing Column */}
+        <div className="lg:col-span-6 space-y-6">
+          {/* Header Title & Tagline */}
+          <div className="space-y-2 border-b border-[#E8E1D5] pb-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-widest text-[#C5A059]">
+                {product.category_name || 'Heritage Collection'}
               </span>
+
+              {/* Action Buttons: Wishlist & Compare */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => addToCompare(product)}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition cursor-pointer ${
+                    isCompared
+                      ? 'bg-[#C5A059] text-[#1F1A1C] border-[#C5A059]'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-[#C5A059]'
+                  }`}
+                  title="Compare with other sarees"
+                >
+                  <Scale className="w-3.5 h-3.5" />
+                  <span>{isCompared ? 'Comparing' : 'Compare'}</span>
+                </button>
+
+                <button
+                  onClick={() => toggleWishlist(product)}
+                  className={`p-2 rounded-full border transition cursor-pointer ${
+                    isSaved ? 'bg-[#5B1425] text-white border-[#5B1425]' : 'bg-white text-gray-700 border-gray-300 hover:text-[#5B1425]'
+                  }`}
+                >
+                  <Heart className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+                </button>
+              </div>
             </div>
 
-            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1F1A1C] leading-snug">
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1F1A1C] leading-tight">
               {product.name}
             </h1>
 
             {product.tagline && (
-              <p className="text-xs font-serif italic text-[#6E6467] mt-1">
+              <p className="text-xs sm:text-sm text-gray-600 italic font-serif">
                 "{product.tagline}"
               </p>
             )}
 
-            {/* Star Rating Bar */}
-            <div className="flex items-center gap-2 mt-3">
-              <div className="flex items-center text-[#C5A059] text-sm">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-current text-[#C5A059]" />
-                ))}
+            {/* Rating Summary + Customer Reviews Count */}
+            <div className="flex items-center gap-3 pt-1">
+              <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full text-xs font-bold text-amber-900">
+                <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                <span>{product.rating || '4.9'}</span>
+                <span className="text-gray-400 font-normal">|</span>
+                <span className="text-gray-600 font-normal underline cursor-pointer" onClick={() => setActiveTab('reviews')}>
+                  {totalReviewsCount} Customer Ratings
+                </span>
               </div>
-              <span className="text-xs font-bold text-[#1F1A1C]">{product.rating || 4.9}</span>
-              <span className="text-xs text-[#6E6467]">
-                ({product.review_count || 128} verified reviews)
+
+              <span className="text-xs text-gray-400">•</span>
+              <span className="text-xs text-emerald-800 font-semibold">
+                SKU: {product.sku || 'PAL-LUX-001'}
               </span>
-              <button
-                onClick={() => setActiveTab('reviews')}
-                className="text-xs text-[#5B1425] font-semibold underline ml-1"
-              >
-                Read Reviews
-              </button>
             </div>
           </div>
 
-          {/* Pricing Box */}
-          <div className="p-4 rounded-xl bg-white border border-[#EAE2D7] shadow-sm space-y-2">
+          {/* Pricing Block + Amazon/Flipkart Lightning Urgency Widget */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[#E8E1D5] shadow-xs space-y-3">
             <div className="flex items-baseline gap-3">
-              <span className="font-serif text-3xl font-bold text-[#5B1425]">
+              <span className="font-serif text-3xl sm:text-4xl font-bold text-[#5B1425]">
                 ₹{product.price?.toLocaleString('en-IN')}
               </span>
-              {product.mrp && product.mrp > product.price && (
-                <span className="text-sm text-[#6E6467] line-through">
-                  ₹{product.mrp?.toLocaleString('en-IN')}
-                </span>
+              {product.mrp > product.price && (
+                <>
+                  <span className="text-sm text-gray-400 line-through">
+                    ₹{product.mrp?.toLocaleString('en-IN')}
+                  </span>
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                    Save ₹{(product.mrp - product.price).toLocaleString('en-IN')} ({product.discount_percent}% OFF)
+                  </span>
+                </>
               )}
-              <span className="text-xs bg-green-50 text-green-800 font-bold px-2 py-0.5 rounded border border-green-200">
-                Save ₹{(product.mrp - product.price).toLocaleString('en-IN')} ({product.discount_percent}%)
-              </span>
-            </div>
-            <div className="text-[11px] text-[#6E6467]">
-              Inclusive of all taxes & complimentary luxury gift box packaging.
             </div>
 
-            {/* Active Coupon Recommendation */}
-            <div className="pt-2 border-t border-[#F4EFEB] flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1.5 text-[#5B1425] font-medium">
-                <Tag className="w-3.5 h-3.5 text-[#C5A059]" />
-                <span>Use code <strong>WELCOME10</strong> for extra 10% OFF</span>
+            <div className="text-[11px] text-gray-500">
+              Inclusive of all taxes & Luxury Gift Packaging. Free doorstep insured delivery across India.
+            </div>
+
+            {/* Bank Offers & EMI Calculator Trigger Widget (Flipkart / Amazon style) */}
+            <div className="pt-2 border-t border-[#E8E1D5] flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs text-gray-700">
+                <CreditCard className="w-4 h-4 text-[#C5A059]" />
+                <span>
+                  EMI starting at <strong>₹{Math.round(product.price / 12).toLocaleString('en-IN')}/mo</strong>.
+                </span>
               </div>
               <button
-                onClick={() => {
-                  navigator.clipboard.writeText('WELCOME10');
-                  addToast('Coupon "WELCOME10" copied!');
-                }}
-                className="text-[11px] text-[#5B1425] font-bold hover:underline"
+                onClick={() => setBankOffersOpen(true)}
+                className="text-xs font-bold text-[#5B1425] hover:underline flex items-center gap-1 cursor-pointer"
               >
-                Copy
+                <span>View Bank Offers</span>
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
+            </div>
+
+            {/* Live Delivery & Urgency Countdown (Amazon Style) */}
+            <div className="p-3 bg-[#FAF0E6]/70 rounded-xl border border-[#C5A059]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 text-[#5B1425] font-semibold">
+                <Clock className="w-4 h-4 text-[#C5A059]" />
+                <span>
+                  Order within <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-[#C5A059]/40">{String(timeLeft.hours).padStart(2, '0')}h : {String(timeLeft.minutes).padStart(2, '0')}m : {String(timeLeft.seconds).padStart(2, '0')}s</strong>
+                </span>
+              </div>
+              <span className="text-emerald-800 font-medium">
+                Get delivery by <strong>Tomorrow, 4:00 PM</strong>
+              </span>
+            </div>
+
+            {/* Live Viewers & Sales Pulse (Flipkart Style) */}
+            <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1">
+              <span className="flex items-center gap-1 text-red-700 font-medium">
+                <Flame className="w-3.5 h-3.5 fill-red-500 text-red-500" />
+                <span>14 orders placed in last 24 hours</span>
+              </span>
+              <span className="flex items-center gap-1 text-gray-600">
+                <Eye className="w-3.5 h-3.5 text-gray-400" />
+                <span>8 people viewing right now</span>
+              </span>
             </div>
           </div>
 
-          {/* Shade / Color Variants */}
+          {/* Color & Variant Selection */}
           {product.variants && product.variants.length > 0 && (
-            <div>
-              <div className="text-xs font-bold text-[#1F1A1C] mb-2 uppercase tracking-wider">
-                Select Shade: <span className="font-normal text-[#5B1425]">{selectedVariant ? selectedVariant.color_name : product.color_name}</span>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-semibold">
+                <span className="text-gray-700 uppercase tracking-wider">
+                  Color Shade: <strong className="text-[#5B1425]">{selectedVariant?.color_name || product.color_name}</strong>
+                </span>
+                <span className="text-gray-500 font-normal">{product.variants.length} Artisanal Shades</span>
               </div>
-              <div className="flex gap-2.5">
+              <div className="flex items-center gap-3">
                 {product.variants.map((v) => (
                   <button
                     key={v.id}
                     onClick={() => setSelectedVariant(v)}
-                    className={`w-9 h-9 rounded-full border-2 flex items-center justify-center transition ${
-                      selectedVariant?.id === v.id
-                        ? 'border-[#5B1425] ring-2 ring-[#C5A059]/60 scale-110 shadow-md'
-                        : 'border-black/20 hover:scale-105'
+                    className={`group relative p-1 rounded-full border-2 transition cursor-pointer ${
+                      selectedVariant?.id === v.id ? 'border-[#5B1425] scale-110' : 'border-transparent hover:border-gray-300'
                     }`}
-                    style={{ backgroundColor: v.color_hex }}
                     title={v.color_name}
                   >
-                    {selectedVariant?.id === v.id && (
-                      <Check className="w-4 h-4 text-white drop-shadow" />
-                    )}
+                    <span
+                      className="block w-6 h-6 rounded-full shadow-inner border border-black/10"
+                      style={{ backgroundColor: v.color_hex }}
+                    />
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Saree Specs Quick Pills */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="p-2.5 bg-[#FAF7F2] rounded-lg border border-[#EAE2D7]">
-              <span className="text-[#6E6467] block text-[10px] uppercase font-bold">Saree Length</span>
-              <span className="font-semibold text-[#1F1A1C]">{product.saree_length || '5.5 Meters'}</span>
+          {/* Blouse Stitching & Sizing Customization (Amazon Fashion & Flipkart Apparel Feature) */}
+          <div className="p-4 bg-white rounded-2xl border border-[#E8E1D5] space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Scissors className="w-4 h-4 text-[#5B1425]" />
+                <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                  Blouse Stitching & Sizing Options
+                </span>
+              </div>
+              <button
+                onClick={() => setSizeGuideOpen(true)}
+                className="text-xs font-bold text-[#5B1425] hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Ruler className="w-3.5 h-3.5" />
+                <span>Size & Stitch Guide</span>
+              </button>
             </div>
-            <div className="p-2.5 bg-[#FAF7F2] rounded-lg border border-[#EAE2D7]">
-              <span className="text-[#6E6467] block text-[10px] uppercase font-bold">Blouse Piece</span>
-              <span className="font-semibold text-[#1F1A1C]">{product.blouse_length || '0.8m Unstitched'}</span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setBlouseOption('unstitched')}
+                className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                  blouseOption === 'unstitched'
+                    ? 'border-[#5B1425] bg-[#5B1425]/5 text-[#5B1425] font-bold'
+                    : 'border-[#E8E1D5] bg-white text-gray-700 hover:border-gray-400'
+                }`}
+              >
+                <div>Unstitched Piece</div>
+                <div className="text-[10px] text-gray-500 font-normal">Included Free (0.8M)</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBlouseOption('standard')}
+                className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                  blouseOption === 'standard'
+                    ? 'border-[#5B1425] bg-[#5B1425]/5 text-[#5B1425] font-bold'
+                    : 'border-[#E8E1D5] bg-white text-gray-700 hover:border-gray-400'
+                }`}
+              >
+                <div>Ready Stitched</div>
+                <div className="text-[10px] text-gray-500 font-normal">Sizes XS - 2XL (+₹499)</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBlouseOption('custom')}
+                className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                  blouseOption === 'custom'
+                    ? 'border-[#5B1425] bg-[#5B1425]/5 text-[#5B1425] font-bold'
+                    : 'border-[#E8E1D5] bg-white text-gray-700 hover:border-gray-400'
+                }`}
+              >
+                <div>Custom Bespoke</div>
+                <div className="text-[10px] text-gray-500 font-normal">Artisan Tailored (+₹799)</div>
+              </button>
             </div>
+
+            {blouseOption === 'standard' && (
+              <div className="grid grid-cols-2 gap-3 pt-2 text-xs">
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-700 mb-1">Standard Size</label>
+                  <select
+                    value={blouseSize}
+                    onChange={(e) => setBlouseSize(e.target.value)}
+                    className="w-full p-2 bg-[#FAF7F2] rounded-lg border border-[#E8E1D5] text-xs outline-none"
+                  >
+                    <option>XS (32)</option>
+                    <option>S (34)</option>
+                    <option>M (36)</option>
+                    <option>L (38)</option>
+                    <option>XL (40)</option>
+                    <option>2XL (42)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-gray-700 mb-1">Neckline Cut</label>
+                  <select
+                    value={blouseNeckline}
+                    onChange={(e) => setBlouseNeckline(e.target.value)}
+                    className="w-full p-2 bg-[#FAF7F2] rounded-lg border border-[#E8E1D5] text-xs outline-none"
+                  >
+                    <option>Sweetheart Neck</option>
+                    <option>Boat Neck</option>
+                    <option>Royal Deep Back</option>
+                    <option>Round Classic</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Pincode Delivery Estimator */}
-          <div className="p-3.5 rounded-xl bg-[#FAF7F2] border border-[#EAE2D7] space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-[#1F1A1C] flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-[#5B1425]" />
-                <span>Delivery & COD Availability</span>
-              </span>
+          {/* PIN Code Delivery Estimator */}
+          <div className="p-4 bg-white rounded-2xl border border-[#E8E1D5] space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+              <MapPin className="w-4 h-4 text-[#5B1425]" />
+              <span>Check Doorstep Delivery & COD Availability</span>
             </div>
             <form onSubmit={handleCheckPincode} className="flex gap-2">
               <input
                 type="text"
-                maxLength="6"
+                placeholder="Enter 6-digit PIN code"
                 value={pincode}
+                maxLength={6}
                 onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))}
-                placeholder="Enter 6-digit Pincode"
-                className="flex-1 bg-white border border-[#EAE2D7] rounded-lg px-3 py-1.5 text-xs text-[#1F1A1C] focus:outline-none focus:border-[#5B1425]"
+                className="flex-1 px-3 py-2 bg-[#FAF7F2] rounded-xl border border-[#E8E1D5] text-xs outline-none focus:border-[#5B1425]"
               />
               <button
                 type="submit"
                 disabled={checkingPin}
-                className="px-3.5 py-1.5 bg-[#5B1425] text-[#FAF7F2] rounded-lg text-xs font-bold hover:bg-[#7E1E34] transition disabled:opacity-50"
+                className="px-4 py-2 bg-[#5B1425] text-white text-xs font-semibold rounded-xl hover:bg-[#430e1b] transition disabled:opacity-50 cursor-pointer"
               >
                 {checkingPin ? 'Checking...' : 'Check'}
               </button>
             </form>
 
             {pincodeResult && (
-              <div className="text-xs text-green-800 bg-green-50 p-2 rounded-lg border border-green-200 space-y-0.5">
-                <div className="font-bold flex items-center gap-1">
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Express Delivery Available for {pincodeResult.location}</span>
+              <div className="mt-2 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+                <div className="flex items-center gap-1 font-bold">
+                  <Check className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Delivery available in {pincodeResult.city}, {pincodeResult.state}</span>
                 </div>
-                <div className="text-[11px] text-[#1F1A1C]">
-                  {pincodeResult.deliveryDate} • Cash on Delivery & Free Returns eligible
+                <div className="text-[11px] text-emerald-800">
+                  Estimated Delivery: <strong>{pincodeResult.estimated_delivery}</strong> | Cash on Delivery: <strong>Available</strong>
                 </div>
               </div>
             )}
@@ -386,93 +539,81 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
 
           {/* Quantity & CTA Buttons */}
           <div className="space-y-3 pt-2">
-            <div className="flex items-center gap-3">
-              {/* Quantity */}
-              <div className="flex items-center border border-[#EAE2D7] rounded-xl bg-white p-1">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center border border-[#E8E1D5] rounded-xl bg-white p-1">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="p-2 text-[#6E6467] hover:text-[#5B1425]"
+                  className="p-2 text-gray-500 hover:text-black transition"
                 >
-                  <Minus className="w-4 h-4" />
+                  <Minus className="w-3.5 h-3.5" />
                 </button>
-                <span className="px-4 text-xs font-bold text-[#1F1A1C]">{quantity}</span>
+                <span className="w-10 text-center text-xs font-bold">{quantity}</span>
                 <button
-                  onClick={() => setQuantity(quantity + 1)}
-                  className="p-2 text-[#6E6467] hover:text-[#5B1425]"
+                  onClick={() => setQuantity(Math.min(product.stock_quantity || 10, quantity + 1))}
+                  className="p-2 text-gray-500 hover:text-black transition"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              {/* Add to Bag */}
               <button
-                onClick={() => addToCart(product, selectedVariant, quantity)}
-                className="flex-1 py-3.5 bg-[#FAF7F2] border-2 border-[#5B1425] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] rounded-xl font-bold text-xs sm:text-sm uppercase tracking-wider transition shadow-sm flex items-center justify-center gap-2"
+                onClick={handleAddToCartWithCustomization}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-white border-2 border-[#5B1425] text-[#5B1425] hover:bg-[#5B1425] hover:text-white text-xs font-bold uppercase tracking-wider rounded-xl transition shadow-sm cursor-pointer"
               >
                 <ShoppingBag className="w-4 h-4" />
                 <span>Add to Shopping Bag</span>
               </button>
-
-              {/* Wishlist Button */}
-              <button
-                onClick={() => toggleWishlist(product)}
-                className={`p-3.5 rounded-xl border transition shadow-sm ${
-                  saved
-                    ? 'bg-[#5B1425] text-white border-[#5B1425]'
-                    : 'border-[#EAE2D7] bg-white text-[#1F1A1C] hover:text-[#5B1425]'
-                }`}
-                title="Save to Wishlist"
-              >
-                <Heart className={`w-5 h-5 ${saved ? 'fill-current' : ''}`} />
-              </button>
             </div>
 
-            {/* Direct Buy Now */}
             <button
               onClick={handleBuyNow}
-              className="w-full py-4 bg-[#5B1425] hover:bg-[#7E1E34] text-[#FAF7F2] rounded-xl font-bold text-xs sm:text-sm uppercase tracking-widest transition shadow-xl flex items-center justify-center gap-2"
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#5B1425] hover:bg-[#430e1b] text-white text-xs font-bold uppercase tracking-widest rounded-xl transition shadow-lg cursor-pointer"
             >
-              <span>Instant Buy Now</span>
-              <ChevronRight className="w-4 h-4 text-[#C5A059]" />
+              <Sparkles className="w-4 h-4 text-[#C5A059]" />
+              <span>Instant Buy Now & Drape</span>
             </button>
           </div>
 
-          {/* Brand Assurances */}
-          <div className="grid grid-cols-3 gap-2 pt-4 border-t border-[#EAE2D7] text-center text-[10px] text-[#6E6467]">
-            <div className="flex flex-col items-center gap-1">
-              <ShieldCheck className="w-4 h-4 text-[#5B1425]" />
-              <span>100% Certified Handloom</span>
+          {/* Flipkart / Amazon Trust Guarantee Icons */}
+          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-[#E8E1D5] text-center text-[11px] text-gray-600">
+            <div className="p-3 bg-white rounded-xl border border-[#E8E1D5] space-y-1">
+              <ShieldCheck className="w-5 h-5 text-emerald-700 mx-auto" />
+              <div className="font-bold text-gray-900">Silk Mark Certified</div>
+              <div className="text-[10px] text-gray-500">100% Pure Heritage Silk</div>
             </div>
-            <div className="flex flex-col items-center gap-1">
-              <Truck className="w-4 h-4 text-[#5B1425]" />
-              <span>Complimentary Express Shipping</span>
+            <div className="p-3 bg-white rounded-xl border border-[#E8E1D5] space-y-1">
+              <Truck className="w-5 h-5 text-[#5B1425] mx-auto" />
+              <div className="font-bold text-gray-900">Insured Delivery</div>
+              <div className="text-[10px] text-gray-500">Free BlueDart Express</div>
             </div>
-            <div className="flex flex-col items-center gap-1">
-              <RotateCcw className="w-4 h-4 text-[#5B1425]" />
-              <span>7-Day Doorstep Returns</span>
+            <div className="p-3 bg-white rounded-xl border border-[#E8E1D5] space-y-1">
+              <RotateCcw className="w-5 h-5 text-[#C5A059] mx-auto" />
+              <div className="font-bold text-gray-900">7-Day Free Return</div>
+              <div className="text-[10px] text-gray-500">Hassle-Free Doorstep Pickup</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Product Information Tabs */}
-      <div className="pt-10 border-t border-[#EAE2D7]">
-        {/* Tab Headers */}
-        <div className="flex flex-wrap border-b border-[#EAE2D7] gap-2 sm:gap-6">
+      {/* Frequently Bought Together Bundle Widget (Amazon Style) */}
+      <FrequentlyBoughtTogether product={product} onNavigate={onNavigate} />
+
+      {/* Product Information Tabs (Description, Fabric Specs, Artisan Story, Reviews) */}
+      <div className="bg-white rounded-2xl border border-[#E8E1D5] shadow-xs overflow-hidden">
+        <div className="flex border-b border-[#E8E1D5] bg-[#FAF7F2] overflow-x-auto scrollbar-none">
           {[
-            { id: 'description', label: 'Story & Description' },
-            { id: 'specs', label: 'Specifications' },
-            { id: 'care', label: 'Fabric & Care' },
-            { id: 'shipping', label: 'Shipping & Returns' },
-            { id: 'reviews', label: `Reviews (${product.reviews?.length || 0})` }
+            { id: 'description', label: 'Product Details & Weave' },
+            { id: 'specifications', label: 'Fabric Specifications' },
+            { id: 'reviews', label: `Customer Reviews (${totalReviewsCount})` },
+            { id: 'qa', label: `Questions & Answers (${product.qa?.length || 5})` }
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`py-3 px-2 text-xs sm:text-sm font-bold tracking-wide uppercase transition border-b-2 ${
+              className={`py-4 px-6 text-xs font-serif font-bold uppercase tracking-wider transition whitespace-nowrap cursor-pointer border-b-2 ${
                 activeTab === tab.id
-                  ? 'border-[#5B1425] text-[#5B1425]'
-                  : 'border-transparent text-[#6E6467] hover:text-[#1F1A1C]'
+                  ? 'border-[#5B1425] text-[#5B1425] bg-white'
+                  : 'border-transparent text-gray-500 hover:text-gray-900'
               }`}
             >
               {tab.label}
@@ -480,141 +621,165 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
           ))}
         </div>
 
-        {/* Tab Body */}
-        <div className="py-8 text-sm leading-relaxed text-[#1F1A1C]">
+        <div className="p-6 sm:p-8">
+          {/* Tab 1: Description */}
           {activeTab === 'description' && (
-            <div className="max-w-3xl space-y-4">
-              <h3 className="font-serif text-xl font-bold text-[#5B1425]">
-                {product.name}
-              </h3>
-              <p className="text-[#6E6467] leading-relaxed">
-                {product.description}
-              </p>
-              <div className="bg-[#FAF7F2] p-4 rounded-xl border border-[#EAE2D7] space-y-2 mt-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-[#5B1425]">
-                  ✦ The Handloom Weaving Story
-                </div>
-                <p className="text-xs text-[#6E6467] leading-relaxed">
-                  Crafted by master weavers using age-old pit looms. The gold zari threads are carefully interwoven into pure mulberry silk warps, creating a drape that reflects light with unmatched royal grace.
-                </p>
+            <div className="space-y-6 text-xs sm:text-sm text-gray-700 leading-relaxed max-w-4xl">
+              <div>
+                <h3 className="font-serif font-bold text-base sm:text-lg text-[#5B1425] mb-2">
+                  Artisanal Craft & Design Narrative
+                </h3>
+                <p className="leading-relaxed">{product.description}</p>
               </div>
-            </div>
-          )}
 
-          {activeTab === 'specs' && (
-            <div className="max-w-2xl">
-              <div className="divide-y divide-[#EAE2D7] bg-white rounded-xl border border-[#EAE2D7] overflow-hidden">
-                {[
-                  { key: 'Product SKU', val: product.sku || 'PAL-001' },
-                  { key: 'Fabric Composition', val: product.fabric },
-                  { key: 'Weaving Technique', val: product.pattern || 'Traditional Kadwa Weave' },
-                  { key: 'Saree Length', val: product.saree_length || '5.5 Meters' },
-                  { key: 'Blouse Piece', val: product.blouse_length || '0.8 Meter Unstitched Matching Piece' },
-                  { key: 'Occasion', val: product.occasion },
-                  { key: 'Border Type', val: 'Zari Woven Contrast Temple Border' },
-                  { key: 'Origin', val: 'Handcrafted in Varanasi / Kanchipuram, India' }
-                ].map((row, idx) => (
-                  <div key={idx} className="grid grid-cols-2 p-3 text-xs">
-                    <span className="font-semibold text-[#6E6467]">{row.key}</span>
-                    <span className="text-[#1F1A1C]">{row.val}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'care' && (
-            <div className="max-w-3xl space-y-4">
-              <h3 className="font-serif text-lg font-bold text-[#1F1A1C]">
-                Preserving Your Heirloom Saree
-              </h3>
-              <p className="text-xs text-[#6E6467]">
-                Pure silk and metallic zari weaves respond best to gentle, traditional care to maintain their luster for generations.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <div className="p-4 bg-white rounded-xl border border-[#EAE2D7]">
-                  <h4 className="font-bold text-xs text-[#5B1425] mb-1">✓ Cleaning & Washing</h4>
-                  <p className="text-xs text-[#6E6467]">{product.care_instructions || 'Professional Dry Clean Only. Never machine wash.'}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8E1D5] space-y-1.5">
+                  <h4 className="font-bold text-[#5B1425] text-xs">✨ Handloom Weave Technique</h4>
+                  <p className="text-xs text-gray-600">
+                    Woven on traditional pit-looms by national award-winning master artisans in Varanasi / Kanchipuram using electroplated real zari and mulberry silk warp.
+                  </p>
                 </div>
-                <div className="p-4 bg-white rounded-xl border border-[#EAE2D7]">
-                  <h4 className="font-bold text-xs text-[#5B1425] mb-1">✓ Storage & Muslin Wrap</h4>
-                  <p className="text-xs text-[#6E6467]">Store wrapped in clean white cotton or muslin fabric. Avoid plastic bags and direct sunlight.</p>
-                </div>
-                <div className="p-4 bg-white rounded-xl border border-[#EAE2D7]">
-                  <h4 className="font-bold text-xs text-[#5B1425] mb-1">✓ Ironing Guidelines</h4>
-                  <p className="text-xs text-[#6E6467]">Iron on low silk setting from the reverse side only. Never place a hot iron directly onto gold zari.</p>
-                </div>
-                <div className="p-4 bg-white rounded-xl border border-[#EAE2D7]">
-                  <h4 className="font-bold text-xs text-[#5B1425] mb-1">✓ Refolding Schedule</h4>
-                  <p className="text-xs text-[#6E6467]">Unfold and change crease lines every 4-6 months to prevent permanent fold lines in pure zari.</p>
+                <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8E1D5] space-y-1.5">
+                  <h4 className="font-bold text-[#5B1425] text-xs">📦 Unboxing & Gifting Experience</h4>
+                  <p className="text-xs text-gray-600">
+                    Arrives nestled in signature velvet-lined PALLUVO gold foil keepsake box, enclosed with an authentic Silk Mark Certificate of India and pure cotton storage pouch.
+                  </p>
                 </div>
               </div>
             </div>
           )}
 
-          {activeTab === 'shipping' && (
-            <div className="max-w-3xl space-y-4">
-              <h3 className="font-serif text-lg font-bold text-[#1F1A1C]">
-                Complimentary Express Shipping Across India
-              </h3>
-              <p className="text-xs text-[#6E6467]">
-                All PALLUVO sarees are packed in custom multi-layer luxury keepsake boxes with protective silk tissue to prevent friction during transit.
-              </p>
-              <ul className="space-y-2 text-xs text-[#6E6467]">
-                <li>• <strong>Metros (Bengaluru, Mumbai, Delhi, Chennai, Kolkata):</strong> 1-3 Business Days.</li>
-                <li>• <strong>Tier 2 & Tier 3 Cities:</strong> 3-4 Business Days.</li>
-                <li>• <strong>Easy 7-Day Returns:</strong> If you are not completely enchanted by your saree, our concierge will arrange a doorstep pickup with full refund.</li>
-              </ul>
+          {/* Tab 2: Specifications Table */}
+          {activeTab === 'specifications' && (
+            <div className="max-w-3xl overflow-hidden rounded-xl border border-[#E8E1D5]">
+              <table className="w-full text-xs">
+                <tbody className="divide-y divide-[#E8E1D5]">
+                  <tr className="bg-[#FAF7F2]">
+                    <td className="p-3 font-semibold text-gray-600 w-1/3">Fabric / Weave</td>
+                    <td className="p-3 font-bold text-gray-900">{product.fabric}</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-semibold text-gray-600">Occasion</td>
+                    <td className="p-3 text-gray-900">{product.occasion}</td>
+                  </tr>
+                  <tr className="bg-[#FAF7F2]">
+                    <td className="p-3 font-semibold text-gray-600">Zari / Pattern</td>
+                    <td className="p-3 text-gray-900">{product.pattern || 'Authentic Antique Gold Zari Weave'}</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-semibold text-gray-600">Saree Length</td>
+                    <td className="p-3 text-gray-900">{product.saree_length || '5.50 Meters (6 Yards)'}</td>
+                  </tr>
+                  <tr className="bg-[#FAF7F2]">
+                    <td className="p-3 font-semibold text-gray-600">Blouse Fabric Included</td>
+                    <td className="p-3 text-gray-900">{product.blouse_length || '0.80 Meter Unstitched Piece with Sleeve Border'}</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 font-semibold text-gray-600">Care & Preservation</td>
+                    <td className="p-3 text-gray-900">{product.care_instructions || 'Strictly Dry Clean Only. Wrap in pure muslin cloth.'}</td>
+                  </tr>
+                  <tr className="bg-[#FAF7F2]">
+                    <td className="p-3 font-semibold text-gray-600">Silk Authenticity Mark</td>
+                    <td className="p-3 text-emerald-800 font-bold">Silk Mark Organization of India Registered</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           )}
 
+          {/* Tab 3: Customer Reviews Hub (Flipkart / Amazon style with Breakdown & Photos) */}
           {activeTab === 'reviews' && (
             <div className="space-y-8">
-              {/* Rating Summary Header */}
-              <div className="flex flex-col sm:flex-row items-center justify-between p-6 bg-white rounded-2xl border border-[#EAE2D7] gap-6">
-                <div className="text-center sm:text-left">
-                  <div className="font-serif text-4xl font-bold text-[#5B1425]">
-                    {product.rating || 4.9} <span className="text-lg text-[#6E6467]">/ 5</span>
+              {/* Rating Breakdown Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 p-6 bg-[#FAF7F2] rounded-2xl border border-[#E8E1D5]">
+                {/* Left Average */}
+                <div className="md:col-span-4 flex flex-col items-center justify-center text-center border-b md:border-b-0 md:border-r border-[#E8E1D5] pb-6 md:pb-0 md:pr-6">
+                  <div className="font-serif text-5xl font-bold text-[#5B1425]">
+                    {product.rating || '4.9'}
                   </div>
-                  <div className="flex items-center text-[#C5A059] text-sm justify-center sm:justify-start mt-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="w-4 h-4 fill-current text-[#C5A059]" />
+                  <div className="flex text-amber-500 my-2">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Star key={s} className="w-4 h-4 fill-current" />
                     ))}
                   </div>
-                  <div className="text-xs text-[#6E6467] mt-1">
-                    Based on {product.reviews?.length || 0} verified customer purchases
-                  </div>
+                  <p className="text-xs text-gray-600">Based on {totalReviewsCount} verified customer ratings</p>
+                  <p className="text-[11px] text-emerald-700 font-semibold mt-1">98% of patrons recommend this saree</p>
+
+                  <button
+                    onClick={() => {
+                      if (!user) {
+                        onOpenAuth(() => setReviewModalOpen(true));
+                      } else {
+                        setReviewModalOpen(true);
+                      }
+                    }}
+                    className="mt-4 px-5 py-2.5 bg-[#5B1425] hover:bg-[#430e1b] text-white text-xs font-bold rounded-xl transition shadow cursor-pointer"
+                  >
+                    Write a Verified Review
+                  </button>
                 </div>
 
-                <button
-                  onClick={() => {
-                    if (!user) onOpenAuth();
-                    else setReviewModalOpen(true);
-                  }}
-                  className="px-6 py-3 bg-[#5B1425] text-[#FAF7F2] rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#7E1E34] transition shadow-md"
-                >
-                  Write a Verified Review
-                </button>
+                {/* Right Progress Bars (Flipkart / Amazon style) */}
+                <div className="md:col-span-8 flex flex-col justify-center space-y-2">
+                  {[5, 4, 3, 2, 1].map((stars) => {
+                    const count = ratingDist[stars] || (stars === 5 ? 38 : (stars === 4 ? 8 : 2));
+                    const percentage = Math.round((count / (totalReviewsCount || 1)) * 100);
+                    return (
+                      <div key={stars} className="flex items-center gap-3 text-xs">
+                        <span className="w-12 font-semibold text-gray-700 flex items-center gap-1">
+                          {stars} <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                        </span>
+                        <div className="flex-1 h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              stars >= 4 ? 'bg-emerald-600' : (stars === 3 ? 'bg-amber-500' : 'bg-red-500')
+                            }`}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                        <span className="w-10 text-right text-gray-500 font-mono text-[11px]">
+                          {percentage}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Reviews List */}
+              {/* Customer Photos Gallery */}
+              <div>
+                <h4 className="font-serif font-bold text-sm text-[#1F1A1C] mb-3">
+                  Customer Drape Showcase (Photo Reviews)
+                </h4>
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
+                  {[
+                    currentImage,
+                    product.images?.[1] || '/images/categories/silk.jpg',
+                    product.images?.[2] || '/images/occasions/wedding_edit.jpg',
+                    '/images/categories/banarasi.jpg'
+                  ].map((photo, idx) => (
+                    <div key={idx} className="relative w-24 h-32 rounded-xl overflow-hidden border border-[#E8E1D5] shrink-0 shadow-xs cursor-pointer hover:scale-105 transition">
+                      <img src={photo} alt={`Customer Drape ${idx + 1}`} className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Individual Reviews List */}
               <div className="space-y-4">
-                {product.reviews && product.reviews.length > 0 ? (
-                  product.reviews.map((rev) => (
-                    <div
-                      key={rev.id}
-                      className="p-5 rounded-xl bg-white border border-[#EAE2D7] space-y-2"
-                    >
+                {reviews && reviews.length > 0 ? (
+                  reviews.map((rev) => (
+                    <div key={rev.id} className="p-5 rounded-2xl bg-white border border-[#E8E1D5] space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-xs text-[#1F1A1C]">{rev.user_name}</span>
+                          <span className="font-bold text-xs text-gray-900">{rev.user_name}</span>
                           {rev.verified_purchase === 1 && (
-                            <span className="text-[10px] bg-green-50 text-green-800 font-semibold px-2 py-0.2 rounded border border-green-200">
-                              ✓ Verified Purchase
+                            <span className="text-[10px] bg-emerald-50 text-emerald-800 font-semibold px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-600" /> Verified Drape Purchase
                             </span>
                           )}
                         </div>
-                        <div className="flex text-[#C5A059]">
+                        <div className="flex text-amber-500">
                           {[...Array(rev.rating)].map((_, i) => (
                             <Star key={i} className="w-3.5 h-3.5 fill-current" />
                           ))}
@@ -622,34 +787,47 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                       </div>
 
                       {rev.title && (
-                        <h4 className="font-serif font-bold text-sm text-[#1F1A1C]">
+                        <h5 className="font-serif font-bold text-sm text-gray-900">
                           {rev.title}
-                        </h4>
+                        </h5>
                       )}
 
-                      <p className="text-xs text-[#6E6467] leading-relaxed">
+                      <p className="text-xs text-gray-700 leading-relaxed">
                         {rev.comment}
                       </p>
+
+                      <div className="pt-2 flex items-center justify-between text-[11px] text-gray-400 border-t border-gray-100">
+                        <span>Reviewed on {new Date(rev.created_at || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        <div className="flex items-center gap-1 text-gray-500">
+                          <ThumbsUp className="w-3 h-3" />
+                          <span>Helpful (12)</span>
+                        </div>
+                      </div>
                     </div>
                   ))
                 ) : (
-                  <div className="py-8 text-center text-[#6E6467]">
-                    <p className="text-xs">No reviews submitted yet for this saree. Be the first to share your drape story!</p>
+                  <div className="py-8 text-center text-xs text-gray-500">
+                    Be the first patron to share your luxury drape experience!
                   </div>
                 )}
               </div>
             </div>
           )}
+
+          {/* Tab 4: Questions & Answers (Amazon Q&A System) */}
+          {activeTab === 'qa' && (
+            <ProductQA productId={product.id} initialQA={product.qa || []} />
+          )}
         </div>
       </div>
 
-      {/* Related Sarees */}
+      {/* Related / You May Also Adore */}
       {product.related && product.related.length > 0 && (
-        <div className="pt-12 border-t border-[#EAE2D7]">
+        <div className="pt-8 border-t border-[#E8E1D5]">
           <h3 className="font-serif text-2xl font-bold text-[#1F1A1C] mb-6">
-            You May Also Adore
+            You May Also Adore (Similar Weaves)
           </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
             {product.related.map((rel) => (
               <ProductCard key={rel.id} product={rel} onNavigate={onNavigate} />
             ))}
@@ -657,12 +835,41 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
         </div>
       )}
 
+      {/* Recently Viewed Items Carousel */}
+      <RecentlyViewed currentSlug={slug} onNavigate={onNavigate} />
+
+      {/* Modals */}
+      <BankOffersModal
+        isOpen={bankOffersOpen}
+        onClose={() => setBankOffersOpen(false)}
+        price={product.price}
+      />
+
+      <SizeGuideModal
+        isOpen={sizeGuideOpen}
+        onClose={() => setSizeGuideOpen(false)}
+      />
+
+      <ReviewModal
+        isOpen={reviewModalOpen}
+        onClose={() => setReviewModalOpen(false)}
+        product={product}
+        onReviewSubmitted={() => {
+          // Re-fetch product
+          fetch(`/api/products/${slug}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.product) setProduct(data.product);
+            });
+        }}
+      />
+
       {/* Fullscreen Lightbox Modal */}
       {lightboxOpen && (
         <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4">
           <button
             onClick={() => setLightboxOpen(false)}
-            className="absolute top-6 right-6 text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
+            className="absolute top-6 right-6 text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer"
           >
             <X className="w-6 h-6" />
           </button>
@@ -671,78 +878,6 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
             alt={product.name}
             className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
           />
-        </div>
-      )}
-
-      {/* Review Submission Modal */}
-      {reviewModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#FAF7F2] w-full max-w-lg rounded-2xl p-6 border border-[#EAE2D7] shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-[#EAE2D7] pb-3">
-              <h3 className="font-serif font-bold text-lg text-[#1F1A1C]">
-                Review Your Saree Drape
-              </h3>
-              <button onClick={() => setReviewModalOpen(false)}><X className="w-5 h-5" /></button>
-            </div>
-
-            <form onSubmit={handleAddReview} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#1F1A1C] mb-1">Your Rating</label>
-                <div className="flex gap-2">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      type="button"
-                      key={star}
-                      onClick={() => setReviewForm({ ...reviewForm, rating: star })}
-                      className="p-1 text-[#C5A059]"
-                    >
-                      <Star className={`w-6 h-6 ${star <= reviewForm.rating ? 'fill-current' : 'text-gray-300'}`} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#1F1A1C] mb-1">Headline / Title</label>
-                <input
-                  type="text"
-                  value={reviewForm.title}
-                  onChange={(e) => setReviewForm({ ...reviewForm, title: e.target.value })}
-                  placeholder="e.g. Royal luster, draped like a dream!"
-                  className="w-full bg-white border border-[#EAE2D7] rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#5B1425]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#1F1A1C] mb-1">Review Experience</label>
-                <textarea
-                  rows="4"
-                  required
-                  value={reviewForm.comment}
-                  onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
-                  placeholder="Describe the fabric feel, zari sheen, weight, and occasion you wore it for..."
-                  className="w-full bg-white border border-[#EAE2D7] rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#5B1425]"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setReviewModalOpen(false)}
-                  className="px-4 py-2 border border-[#EAE2D7] text-xs font-bold rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingReview}
-                  className="px-6 py-2 bg-[#5B1425] text-white text-xs font-bold uppercase rounded-lg hover:bg-[#7E1E34] transition disabled:opacity-50"
-                >
-                  {submittingReview ? 'Submitting...' : 'Submit Review'}
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
     </div>

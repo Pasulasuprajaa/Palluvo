@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { User, Package, MapPin, Heart, Shield, LogOut, Truck, Edit3, Trash2, Plus, Sparkles, Check } from 'lucide-react';
+import { User, Package, MapPin, Heart, Shield, LogOut, Truck, Edit3, Trash2, Plus, Sparkles, Check, FileText, RotateCcw, Printer } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import InvoiceModal from '../components/InvoiceModal';
+import ReturnModal from '../components/ReturnModal';
 
 export default function AccountPage({ onNavigate }) {
   const { user, token, logout, updateProfile, isAdmin } = useAuth();
-  const { addToast } = useToast();
+  const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'profile', 'addresses'
   const [orders, setOrders] = useState([]);
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Modals for Amazon & Flipkart features
+  const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState(null);
+  const [selectedReturnOrder, setSelectedReturnOrder] = useState(null);
 
   // Profile edit
   const [profileName, setProfileName] = useState(user?.name || '');
@@ -78,14 +84,14 @@ export default function AccountPage({ onNavigate }) {
       });
       const data = await res.json();
       if (res.ok) {
-        addToast('Address added.');
+        showToast('Address added successfully.', 'success');
         setShowAddressModal(false);
         fetchAccountData();
       } else {
-        addToast(data.error, 'error');
+        showToast(data.error || 'Failed to save address.', 'error');
       }
     } catch (err) {
-      addToast('Failed to save address.', 'error');
+      showToast('Failed to save address.', 'error');
     }
   };
 
@@ -97,11 +103,11 @@ export default function AccountPage({ onNavigate }) {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
-        addToast('Address deleted.');
+        showToast('Address deleted.', 'info');
         fetchAccountData();
       }
     } catch (err) {
-      addToast('Failed to delete address.', 'error');
+      showToast('Failed to delete address.', 'error');
     }
   };
 
@@ -114,24 +120,24 @@ export default function AccountPage({ onNavigate }) {
       });
       const data = await res.json();
       if (res.ok) {
-        addToast('Order cancelled successfully.');
+        showToast(data.message || 'Order cancelled successfully.', 'success');
         fetchAccountData();
       } else {
-        addToast(data.error || 'Failed to cancel order.', 'error');
+        showToast(data.error || 'Failed to cancel order.', 'error');
       }
     } catch (err) {
-      addToast('Failed to cancel order.', 'error');
+      showToast('Failed to cancel order.', 'error');
     }
   };
 
   if (!user) {
     return (
-      <div className="max-w-md mx-auto px-4 py-20 text-center space-y-4">
-        <h2 className="font-serif text-2xl font-bold">Please Sign In</h2>
-        <p className="text-xs text-[#6E6467]">Sign in to access your orders, profile, and saved addresses.</p>
+      <div className="max-w-md mx-auto my-16 p-8 bg-white rounded-2xl border border-[#EAE2D7] text-center space-y-4 shadow-sm">
+        <h2 className="font-serif text-2xl font-bold text-[#5B1425]">Please Sign In</h2>
+        <p className="text-xs text-gray-500">Sign in to access your orders, profile, and saved addresses.</p>
         <button
           onClick={() => onNavigate('home')}
-          className="px-6 py-2.5 bg-[#5B1425] text-white rounded-xl text-xs font-bold uppercase"
+          className="px-6 py-2.5 bg-[#5B1425] text-white rounded-xl text-xs font-bold uppercase transition hover:bg-[#430e1b]"
         >
           Return Home
         </button>
@@ -141,17 +147,16 @@ export default function AccountPage({ onNavigate }) {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8 animate-fade-in">
-      
       {/* Header Banner */}
-      <div className="bg-[#5B1425] text-[#FAF7F2] p-6 sm:p-8 rounded-2xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-[#5B1425] text-[#FAF7F2] p-6 sm:p-8 rounded-2xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-[#C5A059]/30">
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-serif text-2xl sm:text-3xl font-bold">
+            <span className="font-serif text-2xl sm:text-3xl font-bold text-[#E5D3B3]">
               Namaste, {user.name}
             </span>
             <span className="text-[#C5A059] text-xl">✦</span>
           </div>
-          <p className="text-xs text-[#FAF7F2]/80 mt-1">
+          <p className="text-xs text-white/80 mt-1">
             {user.email} {user.phone ? `• ${user.phone}` : ''}
           </p>
         </div>
@@ -160,14 +165,14 @@ export default function AccountPage({ onNavigate }) {
           {isAdmin && (
             <button
               onClick={() => onNavigate('admin')}
-              className="px-4 py-2 bg-[#C5A059] text-[#1F1A1C] rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#E0C07F] transition shadow-md"
+              className="px-4 py-2 bg-[#C5A059] text-[#1F1A1C] rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#E0C07F] transition shadow-md cursor-pointer"
             >
               Admin Dashboard ⚙️
             </button>
           )}
           <button
             onClick={logout}
-            className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center gap-1.5"
+            className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
             <span>Sign Out</span>
@@ -177,12 +182,11 @@ export default function AccountPage({ onNavigate }) {
 
       {/* Main Grid: Navigation Tabs + Content */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
         {/* Navigation Tabs (3 Cols) */}
         <div className="lg:col-span-3 space-y-2 bg-white p-3 rounded-2xl border border-[#EAE2D7] shadow-sm">
           <button
             onClick={() => setActiveTab('orders')}
-            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-between ${
+            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-between cursor-pointer ${
               activeTab === 'orders' ? 'bg-[#5B1425] text-white shadow-sm' : 'text-[#1F1A1C] hover:bg-[#FAF7F2]'
             }`}
           >
@@ -194,7 +198,7 @@ export default function AccountPage({ onNavigate }) {
 
           <button
             onClick={() => setActiveTab('profile')}
-            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-between ${
+            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-between cursor-pointer ${
               activeTab === 'profile' ? 'bg-[#5B1425] text-white shadow-sm' : 'text-[#1F1A1C] hover:bg-[#FAF7F2]'
             }`}
           >
@@ -206,7 +210,7 @@ export default function AccountPage({ onNavigate }) {
 
           <button
             onClick={() => setActiveTab('addresses')}
-            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-between ${
+            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-between cursor-pointer ${
               activeTab === 'addresses' ? 'bg-[#5B1425] text-white shadow-sm' : 'text-[#1F1A1C] hover:bg-[#FAF7F2]'
             }`}
           >
@@ -218,7 +222,7 @@ export default function AccountPage({ onNavigate }) {
 
           <button
             onClick={() => onNavigate('wishlist')}
-            className="w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-[#1F1A1C] hover:bg-[#FAF7F2] transition flex items-center justify-between"
+            className="w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-[#1F1A1C] hover:bg-[#FAF7F2] transition flex items-center justify-between cursor-pointer"
           >
             <div className="flex items-center gap-2.5">
               <Heart className="w-4 h-4 text-[#5B1425]" />
@@ -229,13 +233,17 @@ export default function AccountPage({ onNavigate }) {
 
         {/* Content Area (9 Cols) */}
         <div className="lg:col-span-9">
-          
           {/* TAB 1: ORDERS */}
           {activeTab === 'orders' && (
             <div className="space-y-4">
-              <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
-                Your Order History
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-serif text-xl font-bold text-[#1F1A1C]">
+                  Your Order History
+                </h3>
+                <span className="text-xs text-gray-500">
+                  Total Orders: <strong>{orders.length}</strong>
+                </span>
+              </div>
 
               {orders.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-[#EAE2D7] p-12 text-center space-y-3">
@@ -244,7 +252,7 @@ export default function AccountPage({ onNavigate }) {
                   <p className="text-xs text-[#6E6467]">Browse our luxury handwoven sarees to make your first purchase.</p>
                   <button
                     onClick={() => onNavigate('shop')}
-                    className="px-6 py-2.5 bg-[#5B1425] text-white rounded-xl text-xs font-bold uppercase"
+                    className="px-6 py-2.5 bg-[#5B1425] text-white rounded-xl text-xs font-bold uppercase hover:bg-[#430e1b] transition"
                   >
                     Explore Sarees
                   </button>
@@ -258,7 +266,12 @@ export default function AccountPage({ onNavigate }) {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#F4EFEB] pb-3 text-xs">
                       <div>
                         <span className="font-bold text-[#1F1A1C]">Order #{order.order_number}</span>
-                        <span className="text-[#6E6467] ml-2">Placed on {order.created_at?.split(' ')[0]}</span>
+                        <span className="text-gray-500 ml-2">Placed on {order.created_at?.split(' ')[0]}</span>
+                        {order.return_status && (
+                          <span className="ml-2 bg-amber-100 text-amber-900 px-2 py-0.5 rounded text-[10px] font-bold">
+                            {order.return_status}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider text-[10px] ${
@@ -268,7 +281,7 @@ export default function AccountPage({ onNavigate }) {
                         }`}>
                           ● {order.status}
                         </span>
-                        <span className="font-bold text-[#5B1425]">
+                        <span className="font-bold text-[#5B1425] font-mono text-sm">
                           ₹{order.total_amount?.toLocaleString('en-IN')}
                         </span>
                       </div>
@@ -279,35 +292,59 @@ export default function AccountPage({ onNavigate }) {
                       {order.items && order.items.map((item, idx) => (
                         <div key={idx} className="flex items-center gap-4 py-2.5">
                           <img
-                            src={item.image_url || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=200&q=80'}
+                            src={item.image_url || '/images/categories/banarasi.jpg'}
                             alt={item.product_name}
-                            className="w-12 h-16 object-cover rounded-lg"
+                            className="w-12 h-16 object-cover rounded-lg shadow-xs"
                           />
                           <div className="flex-1 text-xs">
                             <h4 className="font-semibold text-[#1F1A1C] line-clamp-1">{item.product_name}</h4>
-                            <div className="text-[#6E6467]">Qty: {item.quantity} {item.variant_name ? `• ${item.variant_name}` : ''}</div>
+                            <div className="text-gray-500">Qty: {item.quantity} {item.variant_name ? `• Color: ${item.variant_name}` : ''}</div>
                           </div>
-                          <div className="text-xs font-bold text-[#1F1A1C]">
+                          <div className="text-xs font-bold text-[#1F1A1C] font-mono">
                             ₹{(item.price * item.quantity).toLocaleString('en-IN')}
                           </div>
                         </div>
                       ))}
                     </div>
 
-                    {/* Actions */}
+                    {/* Actions Toolbar (Flipkart & Amazon Order Management) */}
                     <div className="pt-3 border-t border-[#F4EFEB] flex flex-wrap items-center justify-between gap-3 text-xs">
-                      <button
-                        onClick={() => onNavigate('track-order', { trackingId: order.order_number })}
-                        className="px-4 py-2 bg-[#FAF7F2] border border-[#5B1425] text-[#5B1425] rounded-xl font-bold uppercase tracking-wider hover:bg-[#5B1425] hover:text-white transition flex items-center gap-1.5"
-                      >
-                        <Truck className="w-3.5 h-3.5" />
-                        <span>Track Shipment</span>
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Track Button */}
+                        <button
+                          onClick={() => onNavigate('track-order', { trackingId: order.order_number })}
+                          className="px-3.5 py-2 bg-[#FAF7F2] border border-[#5B1425] text-[#5B1425] rounded-xl font-bold uppercase tracking-wider hover:bg-[#5B1425] hover:text-white transition flex items-center gap-1.5 cursor-pointer text-[11px]"
+                        >
+                          <Truck className="w-3.5 h-3.5" />
+                          <span>Track Delivery</span>
+                        </button>
 
-                      {order.status === 'Placed' && (
+                        {/* Tax Invoice Download Button (Amazon / Flipkart feature) */}
+                        <button
+                          onClick={() => setSelectedInvoiceOrder(order)}
+                          className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 hover:border-[#5B1425] hover:text-[#5B1425] rounded-xl font-semibold transition flex items-center gap-1.5 cursor-pointer text-[11px]"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>Download Tax Invoice</span>
+                        </button>
+
+                        {/* 7-Day Return / Exchange Request Button (Amazon / Flipkart feature) */}
+                        {order.status !== 'Cancelled' && (
+                          <button
+                            onClick={() => setSelectedReturnOrder(order)}
+                            className="px-3.5 py-2 bg-white border border-gray-300 text-gray-700 hover:border-[#C5A059] hover:text-[#5B1425] rounded-xl font-semibold transition flex items-center gap-1.5 cursor-pointer text-[11px]"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Return / Exchange</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Cancel Order Action */}
+                      {(order.status === 'Placed' || order.status === 'Processing') && (
                         <button
                           onClick={() => handleCancelOrder(order.id)}
-                          className="text-xs text-red-600 font-bold hover:underline"
+                          className="text-xs text-red-600 font-bold hover:underline cursor-pointer"
                         >
                           Cancel Order
                         </button>
@@ -362,7 +399,7 @@ export default function AccountPage({ onNavigate }) {
 
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-[#5B1425] text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#7E1E34]"
+                  className="px-6 py-2.5 bg-[#5B1425] text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#7E1E34] transition"
                 >
                   Save Profile Changes
                 </button>
@@ -379,140 +416,177 @@ export default function AccountPage({ onNavigate }) {
                 </h3>
                 <button
                   onClick={() => setShowAddressModal(true)}
-                  className="px-4 py-2 bg-[#5B1425] text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#7E1E34] flex items-center gap-1.5"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#5B1425] text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#430e1b] transition shadow-xs cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add New Address</span>
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {addresses.map((addr) => (
-                  <div
-                    key={addr.id}
-                    className="p-5 rounded-2xl bg-white border border-[#EAE2D7] shadow-sm flex flex-col justify-between space-y-3"
-                  >
-                    <div>
+              {addresses.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-[#EAE2D7] p-8 text-center text-xs text-gray-500">
+                  No saved addresses found. Click "Add New Address" above.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {addresses.map((addr) => (
+                    <div
+                      key={addr.id}
+                      className="bg-white p-5 rounded-2xl border border-[#EAE2D7] shadow-xs space-y-3 relative"
+                    >
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs text-[#1F1A1C]">{addr.name}</span>
-                        <span className="text-[10px] font-bold uppercase bg-gray-100 text-[#6E6467] px-2 py-0.5 rounded">
+                        <span className="font-bold text-sm text-[#1F1A1C]">{addr.name}</span>
+                        <span className="px-2 py-0.5 bg-[#FAF7F2] border border-[#E8E1D5] rounded text-[10px] uppercase font-semibold text-gray-600">
                           {addr.address_type}
                         </span>
                       </div>
-                      <p className="text-xs text-[#6E6467] mt-2 leading-relaxed">
-                        {addr.house_flat}, {addr.area} <br />
-                        {addr.city}, {addr.state} - <strong>{addr.pincode}</strong>
-                      </p>
-                      <p className="text-xs text-[#1F1A1C] mt-1 font-medium">
-                        Phone: {addr.phone}
-                      </p>
-                    </div>
 
-                    <div className="pt-3 border-t border-[#F4EFEB] flex justify-end">
-                      <button
-                        onClick={() => handleDeleteAddress(addr.id)}
-                        className="text-xs text-red-600 font-bold hover:underline flex items-center gap-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      <div className="text-xs text-gray-600 space-y-0.5">
+                        <p>{addr.house_flat}, {addr.area}</p>
+                        <p>{addr.city}, {addr.state} - <strong>{addr.pincode}</strong></p>
+                        {addr.landmark && <p className="text-gray-500">Landmark: {addr.landmark}</p>}
+                        <p className="font-semibold text-gray-800 pt-1">Phone: {addr.phone}</p>
+                      </div>
 
-              {/* Add Address Modal */}
-              {showAddressModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                  <div className="bg-[#FAF7F2] w-full max-w-lg rounded-2xl p-6 border border-[#EAE2D7] shadow-2xl space-y-4">
-                    <h3 className="font-serif font-bold text-lg text-[#1F1A1C]">
-                      Add New Shipping Address
-                    </h3>
-                    <form onSubmit={handleSaveAddress} className="space-y-3 text-xs">
-                      <div className="grid grid-cols-2 gap-3">
-                        <input
-                          type="text"
-                          required
-                          placeholder="Recipient Name"
-                          value={addressForm.name}
-                          onChange={(e) => setAddressForm({ ...addressForm, name: e.target.value })}
-                          className="p-2 bg-white border rounded-xl"
-                        />
-                        <input
-                          type="tel"
-                          required
-                          placeholder="Mobile Number"
-                          value={addressForm.phone}
-                          onChange={(e) => setAddressForm({ ...addressForm, phone: e.target.value })}
-                          className="p-2 bg-white border rounded-xl"
-                        />
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        placeholder="House / Flat No."
-                        value={addressForm.house_flat}
-                        onChange={(e) => setAddressForm({ ...addressForm, house_flat: e.target.value })}
-                        className="w-full p-2 bg-white border rounded-xl"
-                      />
-                      <input
-                        type="text"
-                        required
-                        placeholder="Street / Area"
-                        value={addressForm.area}
-                        onChange={(e) => setAddressForm({ ...addressForm, area: e.target.value })}
-                        className="w-full p-2 bg-white border rounded-xl"
-                      />
-                      <div className="grid grid-cols-3 gap-3">
-                        <input
-                          type="text"
-                          required
-                          maxLength="6"
-                          placeholder="Pincode"
-                          value={addressForm.pincode}
-                          onChange={(e) => setAddressForm({ ...addressForm, pincode: e.target.value })}
-                          className="p-2 bg-white border rounded-xl"
-                        />
-                        <input
-                          type="text"
-                          required
-                          placeholder="City"
-                          value={addressForm.city}
-                          onChange={(e) => setAddressForm({ ...addressForm, city: e.target.value })}
-                          className="p-2 bg-white border rounded-xl"
-                        />
-                        <input
-                          type="text"
-                          required
-                          placeholder="State"
-                          value={addressForm.state}
-                          onChange={(e) => setAddressForm({ ...addressForm, state: e.target.value })}
-                          className="p-2 bg-white border rounded-xl"
-                        />
-                      </div>
-                      <div className="flex justify-end gap-2 pt-2">
+                      <div className="pt-2 border-t border-gray-100 flex justify-end">
                         <button
-                          type="button"
-                          onClick={() => setShowAddressModal(false)}
-                          className="px-4 py-2 border rounded-xl"
+                          onClick={() => handleDeleteAddress(addr.id)}
+                          className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 cursor-pointer"
                         >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-6 py-2 bg-[#5B1425] text-white font-bold rounded-xl uppercase"
-                        >
-                          Save Address
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete</span>
                         </button>
                       </div>
-                    </form>
-                  </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Address Create Modal */}
+      {showAddressModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#FAF7F2] w-full max-w-lg rounded-2xl p-6 border border-[#EAE2D7] shadow-2xl space-y-4">
+            <h3 className="font-serif font-bold text-lg text-[#1F1A1C]">
+              Add New Delivery Address
+            </h3>
+            <form onSubmit={handleSaveAddress} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">Recipient Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={addressForm.name}
+                    onChange={(e) => setAddressForm({ ...addressForm, name: e.target.value })}
+                    className="w-full bg-white border border-[#E8E1D5] rounded-xl p-2.5 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Mobile Phone *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={addressForm.phone}
+                    onChange={(e) => setAddressForm({ ...addressForm, phone: e.target.value })}
+                    className="w-full bg-white border border-[#E8E1D5] rounded-xl p-2.5 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1">House / Flat / Building *</label>
+                <input
+                  type="text"
+                  required
+                  value={addressForm.house_flat}
+                  onChange={(e) => setAddressForm({ ...addressForm, house_flat: e.target.value })}
+                  className="w-full bg-white border border-[#E8E1D5] rounded-xl p-2.5 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1">Street / Area / Colony *</label>
+                <input
+                  type="text"
+                  required
+                  value={addressForm.area}
+                  onChange={(e) => setAddressForm({ ...addressForm, area: e.target.value })}
+                  className="w-full bg-white border border-[#E8E1D5] rounded-xl p-2.5 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">PIN Code *</label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={addressForm.pincode}
+                    onChange={(e) => setAddressForm({ ...addressForm, pincode: e.target.value })}
+                    className="w-full bg-white border border-[#E8E1D5] rounded-xl p-2.5 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">City *</label>
+                  <input
+                    type="text"
+                    required
+                    value={addressForm.city}
+                    onChange={(e) => setAddressForm({ ...addressForm, city: e.target.value })}
+                    className="w-full bg-white border border-[#E8E1D5] rounded-xl p-2.5 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">State *</label>
+                  <input
+                    type="text"
+                    required
+                    value={addressForm.state}
+                    onChange={(e) => setAddressForm({ ...addressForm, state: e.target.value })}
+                    className="w-full bg-white border border-[#E8E1D5] rounded-xl p-2.5 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddressModal(false)}
+                  className="px-4 py-2 border rounded-xl text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-[#5B1425] text-white rounded-xl text-xs font-semibold hover:bg-[#430e1b]"
+                >
+                  Save Address
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Tax Invoice Modal */}
+      <InvoiceModal
+        isOpen={Boolean(selectedInvoiceOrder)}
+        onClose={() => setSelectedInvoiceOrder(null)}
+        order={selectedInvoiceOrder}
+      />
+
+      {/* Return / Exchange Modal */}
+      <ReturnModal
+        isOpen={Boolean(selectedReturnOrder)}
+        onClose={() => setSelectedReturnOrder(null)}
+        order={selectedReturnOrder}
+        onReturnSuccess={() => fetchAccountData()}
+      />
     </div>
   );
 }

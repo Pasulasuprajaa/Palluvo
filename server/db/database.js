@@ -221,6 +221,20 @@ function initSchema() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    -- Product Questions & Answers (Q&A) Table
+    CREATE TABLE IF NOT EXISTS product_qa (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      user_id INTEGER,
+      user_name TEXT NOT NULL,
+      question TEXT NOT NULL,
+      answer TEXT,
+      answered_by TEXT DEFAULT 'PALLUVO Master Weaver Concierge',
+      helpful_votes INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    );
+
     -- Indexes for performance
     CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
     CREATE INDEX IF NOT EXISTS idx_products_fabric ON products(fabric);
@@ -229,7 +243,22 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
     CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
     CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
+    CREATE INDEX IF NOT EXISTS idx_product_qa_product ON product_qa(product_id);
   `);
+
+  // Migration: Add return columns to orders if not exist
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN return_status TEXT DEFAULT NULL;`);
+  } catch (e) {}
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN return_reason TEXT DEFAULT NULL;`);
+  } catch (e) {}
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN gift_wrap INTEGER DEFAULT 0;`);
+  } catch (e) {}
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN gift_message TEXT DEFAULT NULL;`);
+  } catch (e) {}
 }
 
 initSchema();

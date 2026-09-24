@@ -252,6 +252,9 @@ router.get('/:slugOrId', (req, res) => {
     // Reviews
     const reviews = db.prepare('SELECT * FROM reviews WHERE product_id = ? ORDER BY created_at DESC').all(product.id);
 
+    // Q&A
+    const qa = db.prepare('SELECT * FROM product_qa WHERE product_id = ? ORDER BY helpful_votes DESC, created_at DESC').all(product.id);
+
     // Related Products (Same category or fabric)
     const related = db.prepare(`
       SELECT p.id, p.name, p.slug, p.price, p.mrp, p.discount_percent, p.rating, p.review_count,
@@ -269,12 +272,62 @@ router.get('/:slugOrId', (req, res) => {
         imageObjects: images,
         variants,
         reviews,
+        qa,
         related
       }
     });
   } catch (err) {
     console.error('Product detail error:', err);
     res.status(500).json({ error: 'Failed to fetch saree details.' });
+  }
+});
+
+// GET /api/products/:productId/qa (Get Q&As for a product)
+router.get('/:productId/qa', (req, res) => {
+  try {
+    const qas = db.prepare('SELECT * FROM product_qa WHERE product_id = ? ORDER BY helpful_votes DESC, created_at DESC').all(req.params.productId);
+    res.json({ qa: qas });
+  } catch (err) {
+    console.error('QA fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch questions.' });
+  }
+});
+
+// POST /api/products/:productId/qa (Ask a new question)
+router.post('/:productId/qa', (req, res) => {
+  try {
+    const { question, user_name } = req.body;
+    if (!question || !question.trim()) {
+      return res.status(400).json({ error: 'Question cannot be empty.' });
+    }
+
+    const name = user_name && user_name.trim() ? user_name.trim() : 'PALLUVO Patron';
+    const insert = db.prepare(`
+      INSERT INTO product_qa (product_id, user_name, question, answer, answered_by, helpful_votes)
+      VALUES (?, ?, ?, ?, ?, 0)
+    `);
+
+    // Auto generate concierge answer simulator
+    const answer = 'Namaste! Thank you for inquiring. Our artisan concierge team has verified that this piece complies with authentic weaving standards and comes carefully inspected in signature luxury packaging.';
+    const result = insert.run(req.params.productId, name, question.trim(), answer, 'PALLUVO Master Weaver Concierge');
+
+    const newQA = db.prepare('SELECT * FROM product_qa WHERE id = ?').get(result.lastInsertRowid);
+    res.status(201).json({ qa: newQA, message: 'Your question has been answered by our Master Weaver Concierge.' });
+  } catch (err) {
+    console.error('Post QA error:', err);
+    res.status(500).json({ error: 'Failed to post question.' });
+  }
+});
+
+// POST /api/products/qa/:id/helpful (Upvote helpfulness)
+router.post('/qa/:id/helpful', (req, res) => {
+  try {
+    db.prepare('UPDATE product_qa SET helpful_votes = helpful_votes + 1 WHERE id = ?').run(req.params.id);
+    const item = db.prepare('SELECT * FROM product_qa WHERE id = ?').get(req.params.id);
+    res.json({ success: true, helpful_votes: item ? item.helpful_votes : 1 });
+  } catch (err) {
+    console.error('Helpful vote error:', err);
+    res.status(500).json({ error: 'Failed to record vote.' });
   }
 });
 

@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import { Heart, Eye, ShoppingBag, Star, Sparkles } from 'lucide-react';
+import { Heart, Eye, ShoppingBag, Star, Sparkles, Scale, Check } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
+import { useCompare } from '../context/CompareContext';
 
 export default function ProductCard({ product, onNavigate }) {
   const [isHovered, setIsHovered] = useState(false);
   const { isWishlisted, toggleWishlist } = useWishlist();
   const { addToCart, setQuickViewProduct } = useCart();
+  const { isInCompare, addToCompare } = useCompare();
 
   const saved = isWishlisted(product.id);
+  const compared = isInCompare(product.id);
   const primaryImg = product.primary_image || (product.images && product.images[0]) || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=600&q=80';
   const secondaryImg = product.secondary_image || (product.images && product.images[1]) || primaryImg;
 
@@ -26,6 +29,11 @@ export default function ProductCard({ product, onNavigate }) {
     toggleWishlist(product);
   };
 
+  const handleCompareClick = (e) => {
+    e.stopPropagation();
+    addToCompare(product);
+  };
+
   const handleAddToCart = (e) => {
     e.stopPropagation();
     addToCart(product);
@@ -36,7 +44,7 @@ export default function ProductCard({ product, onNavigate }) {
       onClick={handleCardClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="group relative bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col cursor-pointer"
+      className="group relative bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col cursor-pointer"
     >
       {/* Image Container */}
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#F4EFEB]">
@@ -54,7 +62,7 @@ export default function ProductCard({ product, onNavigate }) {
             </span>
           )}
           {product.is_best_seller === 1 && (
-            <span className="bg-[#C5A059] text-[#3F0D19] text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm">
+            <span className="bg-[#C5A059] text-[#3F0D19] text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
               Best Seller
             </span>
           )}
@@ -65,24 +73,40 @@ export default function ProductCard({ product, onNavigate }) {
           )}
         </div>
 
-        {/* Wishlist Button */}
-        <button
-          onClick={handleWishlistClick}
-          aria-label="Wishlist saree"
-          className={`absolute top-3 right-3 p-2 rounded-full backdrop-blur-md transition-transform duration-200 z-10 shadow-md ${
-            saved
-              ? 'bg-[#5B1425] text-white scale-110'
-              : 'bg-white/80 text-[#1F1A1C] hover:bg-white hover:text-[#5B1425] hover:scale-110'
-          }`}
-        >
-          <Heart className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
-        </button>
+        {/* Wishlist & Compare Buttons */}
+        <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-10">
+          <button
+            onClick={handleWishlistClick}
+            aria-label="Wishlist saree"
+            title={saved ? 'Remove from Wishlist' : 'Add to Wishlist'}
+            className={`p-2 rounded-full backdrop-blur-md transition-transform duration-200 shadow-md ${
+              saved
+                ? 'bg-[#5B1425] text-white scale-110'
+                : 'bg-white/85 text-[#1F1A1C] hover:bg-white hover:text-[#5B1425] hover:scale-110'
+            }`}
+          >
+            <Heart className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
+          </button>
+
+          <button
+            onClick={handleCompareClick}
+            aria-label="Compare saree"
+            title={compared ? 'Remove from Comparison' : 'Add to Compare'}
+            className={`p-2 rounded-full backdrop-blur-md transition-transform duration-200 shadow-md ${
+              compared
+                ? 'bg-[#C5A059] text-[#1F1A1C] scale-110 font-bold'
+                : 'bg-white/85 text-[#1F1A1C] hover:bg-white hover:text-[#C5A059] hover:scale-110'
+            }`}
+          >
+            <Scale className="w-4 h-4" />
+          </button>
+        </div>
 
         {/* Quick View Hover Button */}
         <div className="absolute inset-x-3 bottom-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex gap-2 z-10">
           <button
             onClick={handleQuickView}
-            className="flex-1 py-2 bg-white/95 backdrop-blur-md text-[#1F1A1C] text-xs font-semibold rounded-xl hover:bg-[#5B1425] hover:text-[#FAF7F2] transition shadow-lg flex items-center justify-center gap-1.5"
+            className="flex-1 py-2 bg-white/95 backdrop-blur-md text-[#1F1A1C] text-xs font-semibold rounded-xl hover:bg-[#5B1425] hover:text-[#FAF7F2] transition shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <Eye className="w-3.5 h-3.5" />
             <span>Quick View</span>
@@ -91,12 +115,12 @@ export default function ProductCard({ product, onNavigate }) {
       </div>
 
       {/* Product Details */}
-      <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+      <div className="p-4 flex-1 flex flex-col justify-between space-y-2.5">
         <div>
           {/* Fabric & Occasion Tag */}
           <div className="flex items-center justify-between text-[11px] text-[#6E6467] mb-1">
             <span className="font-medium tracking-wide">{product.fabric}</span>
-            <span className="text-[#C5A059] font-medium">{product.occasion}</span>
+            <span className="text-[#C5A059] font-semibold">{product.occasion}</span>
           </div>
 
           {/* Product Title */}
@@ -104,14 +128,19 @@ export default function ProductCard({ product, onNavigate }) {
             {product.name}
           </h3>
 
-          {/* Rating */}
-          <div className="flex items-center gap-1.5 mt-1.5">
-            <div className="flex items-center text-[#C5A059] text-xs">
-              <Star className="w-3.5 h-3.5 fill-current text-[#C5A059]" />
-              <span className="font-bold text-[#1F1A1C] ml-1">{product.rating || 4.8}</span>
+          {/* Rating & Silk Mark Certification */}
+          <div className="flex items-center justify-between mt-1.5">
+            <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-xs">
+              <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+              <span className="font-bold text-[#1F1A1C]">{product.rating || 4.8}</span>
+              <span className="text-[10px] text-gray-500">
+                ({product.review_count || 45})
+              </span>
             </div>
-            <span className="text-[11px] text-[#6E6467]">
-              ({product.review_count || 45})
+
+            <span className="text-[10px] text-emerald-800 font-semibold flex items-center gap-0.5">
+              <Check className="w-3 h-3 text-emerald-600" />
+              <span>Silk Mark</span>
             </span>
           </div>
         </div>
@@ -129,11 +158,14 @@ export default function ProductCard({ product, onNavigate }) {
                 </span>
               )}
             </div>
+            <div className="text-[10px] text-emerald-700 font-medium">
+              Free Express Delivery
+            </div>
           </div>
 
           <button
             onClick={handleAddToCart}
-            className="p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] rounded-xl transition shadow-sm group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2]"
+            className="p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer"
             title="Add to Bag"
           >
             <ShoppingBag className="w-4 h-4" />

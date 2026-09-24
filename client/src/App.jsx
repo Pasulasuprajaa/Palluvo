@@ -3,6 +3,7 @@ import { ToastProvider } from './context/ToastContext';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
+import { CompareProvider } from './context/CompareContext';
 
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -10,6 +11,7 @@ import SearchModal from './components/SearchModal';
 import CartDrawer from './components/CartDrawer';
 import QuickViewModal from './components/QuickViewModal';
 import AuthModal from './components/AuthModal';
+import CompareDrawer from './components/CompareDrawer';
 
 import HomePage from './pages/HomePage';
 import ShopPage from './pages/ShopPage';
@@ -163,6 +165,7 @@ function AppContent() {
       <SearchModal onNavigate={navigate} />
       <CartDrawer onNavigate={navigate} onOpenAuth={handleOpenAuth} />
       <QuickViewModal onNavigate={navigate} />
+      <CompareDrawer onNavigate={navigate} />
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
@@ -178,7 +181,9 @@ export default function App() {
       <AuthProvider>
         <CartProvider>
           <WishlistProvider>
-            <AppContent />
+            <CompareProvider>
+              <AppContent />
+            </CompareProvider>
           </WishlistProvider>
         </CartProvider>
       </AuthProvider>

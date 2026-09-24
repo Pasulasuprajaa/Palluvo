@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Search, Heart, ShoppingBag, User, Menu, X, Sparkles, ChevronDown, ShieldCheck, Tag } from 'lucide-react';
+import { Search, Heart, ShoppingBag, User, Menu, X, Sparkles, ChevronDown, ShieldCheck, Tag, Scale } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useCompare } from '../context/CompareContext';
 
 export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -12,6 +13,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
   const { user, isAdmin, logout } = useAuth();
   const { itemCount, setIsCartOpen, setIsSearchOpen } = useCart();
   const { wishlistCount } = useWishlist();
+  const { compareItems, setIsCompareOpen } = useCompare();
 
   const handleNav = (page, params = {}) => {
     setMobileMenuOpen(false);
@@ -187,11 +189,27 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
                 onClick={() => handleNav('wishlist')}
                 className="relative p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition"
                 aria-label="Wishlist"
+                title="Wishlist"
               >
                 <Heart className="w-5 h-5" />
                 {wishlistCount > 0 && (
                   <span className="absolute top-1 right-1 bg-[#5B1425] text-[#FAF7F2] text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
                     {wishlistCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Compare Sarees (Flipkart/Amazon style) */}
+              <button
+                onClick={() => setIsCompareOpen(true)}
+                className="relative p-2 text-[#1F1A1C] hover:text-[#C5A059] hover:bg-[#F4EFEB] rounded-full transition"
+                aria-label="Compare Sarees"
+                title="Compare Sarees"
+              >
+                <Scale className="w-5 h-5" />
+                {compareItems.length > 0 && (
+                  <span className="absolute top-1 right-1 bg-[#C5A059] text-[#1F1A1C] text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold shadow">
+                    {compareItems.length}
                   </span>
                 )}
               </button>

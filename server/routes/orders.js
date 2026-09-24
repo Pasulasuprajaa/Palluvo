@@ -177,4 +177,32 @@ router.post('/cancel/:id', authenticateToken, (req, res) => {
   }
 });
 
+// POST /api/orders/return/:id (Flipkart/Amazon style hassle-free 7-day return/exchange request)
+router.post('/return/:id', authenticateToken, (req, res) => {
+  try {
+    const { reason, return_type = 'Return & Refund', pickup_date } = req.body;
+    const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'Please select a reason for return or exchange.' });
+    }
+
+    const returnStatus = return_type === 'Exchange' ? 'Exchange Requested' : 'Return Requested';
+    db.prepare('UPDATE orders SET return_status = ?, return_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(returnStatus, `${reason.trim()} (Pickup requested on ${pickup_date || 'next business day'})`, order.id);
+
+    res.json({
+      message: `Your ${return_type.toLowerCase()} request has been scheduled. Our luxury courier concierge will pick up the parcel from your address on ${pickup_date || 'the next business day'}.`,
+      return_status: returnStatus
+    });
+  } catch (err) {
+    console.error('Order return request error:', err);
+    res.status(500).json({ error: 'Failed to process return request.' });
+  }
+});
+
 module.exports = router;
