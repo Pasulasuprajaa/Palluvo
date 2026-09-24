@@ -179,20 +179,20 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
             {/* Right: Actions (Search, Wishlist, Compare, Account, Cart) */}
             <div className="flex items-center space-x-1.5 sm:space-x-3">
-              {/* Search Trigger */}
+              {/* Search Trigger (Desktop only - mobile uses dedicated search bar below) */}
               <button
                 onClick={() => setIsSearchOpen(true)}
-                className="p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition flex items-center gap-1 cursor-pointer"
+                className="hidden lg:flex p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition items-center gap-1 cursor-pointer"
                 aria-label="Search sarees"
               >
                 <Search className="w-5 h-5" />
                 <span className="hidden xl:inline text-xs text-[#6E6467] font-normal pl-1">Search...</span>
               </button>
 
-              {/* Wishlist */}
+              {/* Wishlist (Desktop only - mobile uses bottom navigation) */}
               <button
                 onClick={() => handleNav('wishlist')}
-                className="relative p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer"
+                className="hidden lg:inline-flex relative p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer"
                 aria-label="Wishlist"
                 title="Wishlist"
               >
