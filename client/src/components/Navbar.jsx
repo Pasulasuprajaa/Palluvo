@@ -56,13 +56,13 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
       {/* Main Sticky Navbar */}
       <header className="sticky top-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#EAE2D7] shadow-xs">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-5 xl:px-8">
           
           {/* Top Row */}
-          <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
+          <div className="flex items-center justify-between h-16 sm:h-20 gap-2 lg:gap-3 xl:gap-4">
             
             {/* Left: Mobile Hamburger & Logo */}
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0 mr-2 sm:mr-4 lg:mr-4 xl:mr-8">
+            <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 shrink-0 mr-1 sm:mr-2 lg:mr-3 xl:mr-6">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="lg:hidden p-2 -ml-1 text-[#1F1A1C] hover:text-[#5B1425] rounded-xl hover:bg-[#F4EFEB] transition cursor-pointer"
@@ -75,23 +75,23 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
                 onClick={() => handleNav('home')}
                 className="cursor-pointer group flex flex-col items-start select-none"
               >
-                <div className="flex items-center gap-1.5">
-                  <span className="font-cinzel text-2xl sm:text-3xl font-bold tracking-[0.18em] sm:tracking-[0.2em] text-[#5B1425] group-hover:text-[#7E1E34] transition whitespace-nowrap">
+                <div className="flex items-center gap-1">
+                  <span className="font-cinzel text-xl sm:text-2xl lg:text-[26px] xl:text-3xl font-bold tracking-[0.16em] sm:tracking-[0.18em] xl:tracking-[0.2em] text-[#5B1425] group-hover:text-[#7E1E34] transition whitespace-nowrap">
                     PALLUVO
                   </span>
-                  <span className="text-[#C5A059] text-base sm:text-lg -mt-1 group-hover:rotate-12 transition transform">✦</span>
+                  <span className="text-[#C5A059] text-sm sm:text-base xl:text-lg -mt-1 group-hover:rotate-12 transition transform">✦</span>
                 </div>
-                <span className="text-[9px] sm:text-[10px] font-serif tracking-[0.15em] text-[#6E6467] -mt-1 uppercase italic block whitespace-nowrap">
+                <span className="text-[8.5px] sm:text-[9px] xl:text-[10px] font-serif tracking-[0.12em] sm:tracking-[0.15em] text-[#6E6467] -mt-1 uppercase italic block whitespace-nowrap">
                   Every drape, a little magic
                 </span>
               </div>
             </div>
 
-            {/* Center: Desktop Navigation — Single-Line Non-Wrapping Layout */}
-            <nav className="hidden lg:flex items-center justify-center gap-3.5 xl:gap-6 2xl:gap-8 text-xs xl:text-sm font-medium tracking-wide flex-1 h-full shrink-0">
+            {/* Center: Desktop Navigation — Compact Single-Line Layout */}
+            <nav className="hidden lg:flex items-center justify-center gap-2 lg:gap-2.5 xl:gap-5 2xl:gap-7 text-xs xl:text-sm font-medium tracking-wide flex-1 h-full shrink-0">
               <button
                 onClick={() => handleNav('home')}
-                className={`h-full inline-flex items-center transition-colors px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
                   currentPage === 'home'
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
                     : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
@@ -102,7 +102,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
               <button
                 onClick={() => handleNav('shop')}
-                className={`h-full inline-flex items-center transition-colors px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
                   currentPage === 'shop'
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
                     : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
@@ -113,10 +113,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
               <button
                 onClick={() => handleNav('shop', { filter: 'new_arrival' })}
-                className="h-full inline-flex items-center transition-colors px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                className="h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-1 cursor-pointer whitespace-nowrap shrink-0"
               >
                 <span>New Arrivals</span>
-                <span className="bg-[#5B1425] text-[#FAF7F2] text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0">New</span>
+                <span className="bg-[#5B1425] text-[#FAF7F2] text-[8.5px] xl:text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0">New</span>
               </button>
 
               {/* Collections Dropdown */}
@@ -127,7 +127,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
               >
                 <button
                   onClick={() => handleNav('shop')}
-                  className="h-full inline-flex items-center transition-colors px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                  className="h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-0.5 xl:gap-1 cursor-pointer whitespace-nowrap shrink-0"
                 >
                   <span>Collections</span>
                   <ChevronDown className="w-3.5 h-3.5 text-[#6E6467] shrink-0" />
@@ -163,42 +163,42 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
               <button
                 onClick={() => handleNav('shop', { filter: 'best_seller' })}
-                className="h-full inline-flex items-center transition-colors px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] cursor-pointer whitespace-nowrap shrink-0"
+                className="h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] cursor-pointer whitespace-nowrap shrink-0"
               >
                 Best Sellers
               </button>
 
               <button
                 onClick={() => handleNav('offers')}
-                className="h-full inline-flex items-center transition-colors px-1.5 xl:px-2 border-b-2 border-transparent text-[#9A7730] font-semibold hover:text-[#5B1425] gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                className="h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 border-transparent text-[#9A7730] font-semibold hover:text-[#5B1425] gap-1 cursor-pointer whitespace-nowrap shrink-0"
               >
                 <Sparkles className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
                 <span>Offers</span>
               </button>
             </nav>
 
-            {/* Right: Actions (Search, Wishlist, Compare, Account, Cart) */}
-            <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
+            {/* Right: Actions (Search, Wishlist, Compare, Account, Cart) — Contained Inside Header */}
+            <div className="flex items-center space-x-1 lg:space-x-1.5 xl:space-x-2.5 shrink-0">
               {/* Search Trigger (Desktop only - mobile uses dedicated search bar below) */}
               <button
                 onClick={() => setIsSearchOpen(true)}
-                className="hidden lg:flex p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition items-center gap-1 cursor-pointer shrink-0"
+                className="hidden lg:flex p-1.5 xl:p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition items-center gap-1 cursor-pointer shrink-0"
                 aria-label="Search sarees"
               >
-                <Search className="w-5 h-5" />
-                <span className="hidden xl:inline text-xs text-[#6E6467] font-normal pl-1">Search...</span>
+                <Search className="w-4 h-4 xl:w-5 xl:h-5" />
+                <span className="hidden 2xl:inline text-xs text-[#6E6467] font-normal pl-1">Search...</span>
               </button>
 
               {/* Wishlist (Desktop only - mobile uses bottom navigation) */}
               <button
                 onClick={() => handleNav('wishlist')}
-                className="hidden lg:inline-flex relative p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer shrink-0"
+                className="hidden lg:inline-flex relative p-1.5 xl:p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer shrink-0"
                 aria-label="Wishlist"
                 title="Wishlist"
               >
-                <Heart className="w-5 h-5" />
+                <Heart className="w-4 h-4 xl:w-5 xl:h-5" />
                 {wishlistCount > 0 && (
-                  <span className="absolute top-1 right-1 bg-[#5B1425] text-[#FAF7F2] text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                  <span className="absolute top-0.5 right-0.5 bg-[#5B1425] text-[#FAF7F2] text-[9px] xl:text-[10px] w-3.5 h-3.5 xl:w-4 xl:h-4 rounded-full flex items-center justify-center font-bold">
                     {wishlistCount}
                   </span>
                 )}
@@ -207,13 +207,13 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
               {/* Compare Sarees (Desktop & Tablet) */}
               <button
                 onClick={() => setIsCompareOpen(true)}
-                className="hidden sm:inline-flex relative p-2 text-[#1F1A1C] hover:text-[#C5A059] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer shrink-0"
+                className="hidden sm:inline-flex relative p-1.5 xl:p-2 text-[#1F1A1C] hover:text-[#C5A059] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer shrink-0"
                 aria-label="Compare Sarees"
                 title="Compare Sarees"
               >
-                <Scale className="w-5 h-5" />
+                <Scale className="w-4 h-4 xl:w-5 xl:h-5" />
                 {compareItems.length > 0 && (
-                  <span className="absolute top-1 right-1 bg-[#C5A059] text-[#1F1A1C] text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold shadow-xs">
+                  <span className="absolute top-0.5 right-0.5 bg-[#C5A059] text-[#1F1A1C] text-[9px] xl:text-[10px] w-3.5 h-3.5 xl:w-4 xl:h-4 rounded-full flex items-center justify-center font-bold shadow-xs">
                     {compareItems.length}
                   </span>
                 )}
@@ -229,12 +229,12 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
                       onOpenAuth();
                     }
                   }}
-                  className="p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition flex items-center gap-1 cursor-pointer"
+                  className="p-1.5 xl:p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition flex items-center gap-1 cursor-pointer"
                   aria-label="Account"
                 >
-                  <User className="w-5 h-5" />
+                  <User className="w-4 h-4 xl:w-5 xl:h-5" />
                   {user && (
-                    <span className="text-xs font-medium max-w-[80px] truncate">
+                    <span className="text-xs font-medium max-w-[70px] xl:max-w-[80px] truncate">
                       {user.name.split(' ')[0]}
                     </span>
                   )}
@@ -292,16 +292,16 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
                 )}
               </div>
 
-              {/* Shopping Bag Button */}
+              {/* Shopping Bag Button — Fully Visible Inside 1280px */}
               <button
                 onClick={() => setIsCartOpen(true)}
-                className="relative p-2 bg-[#5B1425] text-[#FAF7F2] hover:bg-[#7E1E34] rounded-full transition shadow-md flex items-center gap-1.5 px-3 cursor-pointer shrink-0"
+                className="relative py-1.5 px-2.5 sm:px-3 sm:py-2 bg-[#5B1425] text-[#FAF7F2] hover:bg-[#7E1E34] rounded-full transition shadow-md flex items-center gap-1 sm:gap-1.5 cursor-pointer shrink-0"
                 aria-label="Shopping Bag"
               >
-                <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 text-[#C5A059]" />
+                <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 xl:w-5 xl:h-5 text-[#C5A059]" />
                 <span className="text-xs font-bold hidden sm:inline">Bag</span>
                 {itemCount > 0 && (
-                  <span className="bg-[#C5A059] text-[#3F0D19] text-[10px] sm:text-[11px] font-bold px-1.5 py-0.2 rounded-full">
+                  <span className="bg-[#C5A059] text-[#3F0D19] text-[9.5px] sm:text-[10px] xl:text-[11px] font-bold px-1.5 py-0.2 rounded-full">
                     {itemCount}
                   </span>
                 )}
