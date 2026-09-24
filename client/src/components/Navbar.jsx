@@ -471,13 +471,15 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
             <span>Categories</span>
           </button>
 
-          {/* 3. Search */}
+          {/* 3. Offers */}
           <button
-            onClick={() => setIsSearchOpen(true)}
-            className="flex-1 flex flex-col items-center justify-center py-1 text-[10px] text-[#6E6467] hover:text-[#5B1425] transition-colors cursor-pointer"
+            onClick={() => handleNav('offers')}
+            className={`flex-1 flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
+              currentPage === 'offers' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
+            }`}
           >
-            <Search className="w-5 h-5 mb-0.5 text-[#C5A059]" />
-            <span>Search</span>
+            <Tag className="w-5 h-5 mb-0.5 text-[#C5A059]" />
+            <span>Offers</span>
           </button>
 
           {/* 4. Wishlist */}
