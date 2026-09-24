@@ -96,7 +96,7 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FAF7F2] text-[#1F1A1C] font-sans pb-16 lg:pb-0">
+    <div className="min-h-screen flex flex-col bg-[#FAF7F2] text-[#1F1A1C] font-sans pb-20 lg:pb-0">
       {/* Sticky Top Luxury Header */}
       <Navbar
         currentPage={currentPage}

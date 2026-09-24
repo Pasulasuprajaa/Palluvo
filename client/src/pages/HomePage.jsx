@@ -122,105 +122,115 @@ export default function HomePage({ onNavigate }) {
   return (
     <div className="space-y-16 sm:space-y-24">
       {/* 1. HERO SECTION */}
-      <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2]">
+      <section className="relative min-h-[75vh] sm:min-h-[85vh] flex items-center justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2]">
         {/* Background Image with Warm Luxury Overlay */}
         <div className="absolute inset-0 z-0">
-          <img
-            src="/images/occasions/wedding_edit.jpg"
-            alt="PALLUVO Saree Hero"
-            className="w-full h-full object-cover object-center opacity-45 scale-105 transition-transform duration-1000 ease-out"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#1F1A1C] via-[#1F1A1C]/80 to-transparent" />
+          <picture>
+            <source media="(max-width: 640px)" srcSet="/images/occasions/wedding_edit.jpg" />
+            <img
+              src="/images/occasions/wedding_edit.jpg"
+              alt="PALLUVO Luxury Saree Hero"
+              className="w-full h-full object-cover object-top sm:object-center opacity-45 scale-105 transition-transform duration-1000 ease-out"
+            />
+          </picture>
+          <div className="absolute inset-0 bg-gradient-to-t sm:bg-gradient-to-r from-[#1F1A1C] via-[#1F1A1C]/85 to-[#1F1A1C]/40 sm:to-transparent" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-transparent to-transparent" />
         </div>
 
         {/* Hero Content */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28 flex flex-col items-start max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#FAF7F2]/10 backdrop-blur-md border border-[#C5A059]/40 text-[#C5A059] text-xs font-semibold uppercase tracking-widest mb-6 animate-fade-in">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>The Festive & Bridal Heirloom Edit 2026</span>
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-28 flex flex-col items-start max-w-2xl w-full">
+          <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#FAF7F2]/10 backdrop-blur-md border border-[#C5A059]/40 text-[#C5A059] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-4 sm:mb-6 animate-fade-in">
+            <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            <span>The Festive & Bridal Heirloom Edit</span>
           </div>
 
-          <h1 className="font-serif text-4xl sm:text-6xl lg:text-7xl font-bold leading-[1.1] tracking-tight text-[#FAF7F2] animate-slide-up">
+          <h1 className="font-serif text-3.5xl sm:text-6xl lg:text-7xl font-bold leading-[1.15] sm:leading-[1.1] tracking-tight text-[#FAF7F2] animate-slide-up">
             Every drape, <br />
             <span className="italic font-normal gold-gradient-text">a little magic.</span>
           </h1>
 
-          <p className="mt-6 text-base sm:text-lg text-[#FAF7F2]/80 leading-relaxed font-sans max-w-lg">
-            Discover handwoven Banarasi, pure Kanjivaram, and ethereal organza sarees crafted to make your most memorable moments eternal.
+          <p className="mt-3.5 sm:mt-6 text-sm sm:text-lg text-[#FAF7F2]/85 leading-relaxed font-sans max-w-lg">
+            Handcrafted Banarasi, pure Kanjivaram, and ethereal organza sarees designed to make your celebratory moments unforgettable.
           </p>
 
-          <div className="mt-8 flex flex-wrap items-center gap-4">
+          <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
             <button
               onClick={() => onNavigate('shop')}
-              className="px-8 py-4 bg-[#5B1425] hover:bg-[#7E1E34] text-[#FAF7F2] font-bold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 shadow-2xl flex items-center gap-3 border border-[#C5A059]/30 hover:scale-105"
+              className="px-6 sm:px-8 py-3.5 sm:py-4 bg-[#5B1425] hover:bg-[#7E1E34] text-[#FAF7F2] font-bold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 shadow-2xl flex items-center justify-center gap-2.5 border border-[#C5A059]/30 active:scale-95 cursor-pointer"
             >
-              <span>Shop All Sarees</span>
+              <span>Explore Sarees</span>
               <ArrowRight className="w-4 h-4 text-[#C5A059]" />
             </button>
 
             <button
               onClick={() => onNavigate('shop', { occasion: 'Wedding' })}
-              className="px-8 py-4 bg-[#FAF7F2]/10 hover:bg-[#FAF7F2]/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 border border-white/20 hover:border-[#C5A059]"
+              className="px-6 sm:px-8 py-3.5 sm:py-4 bg-[#FAF7F2]/10 hover:bg-[#FAF7F2]/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 border border-white/20 hover:border-[#C5A059] active:scale-95 text-center cursor-pointer"
             >
-              Explore Bridal Edit
+              Bridal Edit
             </button>
           </div>
 
           {/* Micro Trust Stats */}
-          <div className="mt-12 pt-8 border-t border-white/10 grid grid-cols-3 gap-6 text-left">
+          <div className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-white/15 grid grid-cols-3 gap-3 sm:gap-6 text-left w-full">
             <div>
-              <div className="font-serif text-xl sm:text-2xl font-bold text-[#C5A059]">100%</div>
-              <div className="text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Pure Handloom</div>
+              <div className="font-serif text-lg sm:text-2xl font-bold text-[#C5A059]">100%</div>
+              <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Pure Handloom</div>
             </div>
             <div>
-              <div className="font-serif text-xl sm:text-2xl font-bold text-[#C5A059]">15,000+</div>
-              <div className="text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Drapes Cherished</div>
+              <div className="font-serif text-lg sm:text-2xl font-bold text-[#C5A059]">15k+</div>
+              <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Drapes Loved</div>
             </div>
             <div>
-              <div className="font-serif text-xl sm:text-2xl font-bold text-[#C5A059]">4.9 ★</div>
-              <div className="text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Customer Rating</div>
+              <div className="font-serif text-lg sm:text-2xl font-bold text-[#C5A059]">4.9 ★</div>
+              <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Verified Reviews</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 2. CATEGORY SECTION */}
+      {/* 2. CATEGORY SECTION (Horizontal Swipeable Carousel on Mobile) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12">
-          <span className="text-xs font-semibold text-[#5B1425] uppercase tracking-widest">
-            Artisanal Heritage
-          </span>
-          <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C] mt-1">
-            Shop by Weave & Fabric
-          </h2>
-          <div className="w-16 h-0.5 bg-[#C5A059] mx-auto mt-3" />
+        <div className="flex items-end justify-between mb-6 sm:mb-10">
+          <div>
+            <span className="text-[11px] sm:text-xs font-semibold text-[#5B1425] uppercase tracking-widest">
+              Artisanal Heritage
+            </span>
+            <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C] mt-1">
+              Shop by Weave & Fabric
+            </h2>
+          </div>
+          <button
+            onClick={() => onNavigate('shop')}
+            className="text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] hidden sm:inline-flex items-center gap-1 cursor-pointer"
+          >
+            <span>View All</span>
+            <ArrowRight className="w-3.5 h-3.5 text-[#C5A059]" />
+          </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+        {/* Mobile Horizontal Carousel / Desktop 4-Col Grid */}
+        <div className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-4 md:gap-6 pb-2">
           {categories.map((cat) => (
             <div
               key={cat.id}
               onClick={() => onNavigate('shop', { category: cat.slug })}
-              className="group relative aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-md hover:shadow-2xl transition-all duration-500"
+              className="group relative w-36 sm:w-44 md:w-auto shrink-0 snap-item aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300"
             >
               <img
                 src={cat.image_url}
                 alt={cat.name}
-                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+                loading="lazy"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent group-hover:from-[#5B1425]/90 transition-colors duration-500" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent group-hover:from-[#5B1425]/90 transition-colors duration-300" />
               
-              <div className="absolute inset-x-4 bottom-4 text-center text-white">
-                <h3 className="font-serif text-lg sm:text-xl font-bold tracking-wide group-hover:text-[#E0C07F] transition">
+              <div className="absolute inset-x-3 bottom-3 sm:bottom-4 text-center text-white">
+                <h3 className="font-serif text-sm sm:text-lg font-bold tracking-wide group-hover:text-[#E0C07F] transition line-clamp-1">
                   {cat.name}
                 </h3>
-                <p className="text-[11px] text-white/80 mt-1 line-clamp-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  {cat.description}
-                </p>
-                <div className="mt-2 text-[10px] font-bold uppercase tracking-wider text-[#C5A059] inline-flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                  <span>Explore Weaves</span>
-                  <ChevronRight className="w-3 h-3" />
+                <div className="mt-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-[#C5A059] inline-flex items-center gap-0.5">
+                  <span>Explore</span>
+                  <ChevronRight className="w-2.5 h-2.5" />
                 </div>
               </div>
             </div>

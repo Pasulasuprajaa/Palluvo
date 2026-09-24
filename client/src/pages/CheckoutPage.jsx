@@ -140,25 +140,26 @@ export default function CheckoutPage({ onNavigate }) {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
       
       {/* Checkout Steps Bar */}
-      <div className="flex items-center justify-between max-w-2xl mx-auto border-b border-[#EAE2D7] pb-4">
+      <div className="flex items-center justify-between max-w-2xl mx-auto border-b border-[#EAE2D7] pb-3 gap-2">
         {[
-          { step: 1, title: '1. Shipping Address' },
-          { step: 2, title: '2. Packaging & Delivery' },
-          { step: 3, title: '3. Razorpay Payment' }
+          { step: 1, title: '1. Address', fullTitle: '1. Shipping Address' },
+          { step: 2, title: '2. Delivery', fullTitle: '2. Packaging & Delivery' },
+          { step: 3, title: '3. Payment', fullTitle: '3. Razorpay Payment' }
         ].map((s) => (
           <button
             key={s.step}
             onClick={() => {
               if (s.step < currentStep) setCurrentStep(s.step);
             }}
-            className={`text-xs sm:text-sm font-bold tracking-wide uppercase transition flex items-center gap-2 ${
+            className={`text-[11px] sm:text-xs font-bold tracking-wide uppercase transition flex items-center gap-1 sm:gap-1.5 cursor-pointer ${
               currentStep === s.step
                 ? 'text-[#5B1425] border-b-2 border-[#5B1425] pb-1'
                 : (currentStep > s.step ? 'text-green-800' : 'text-[#6E6467]/60')
             }`}
           >
-            {currentStep > s.step && <CheckCircle2 className="w-4 h-4 text-green-700" />}
-            <span>{s.title}</span>
+            {currentStep > s.step && <CheckCircle2 className="w-3.5 h-3.5 text-green-700 shrink-0" />}
+            <span className="sm:hidden truncate">{s.title}</span>
+            <span className="hidden sm:inline">{s.fullTitle}</span>
           </button>
         ))}
       </div>

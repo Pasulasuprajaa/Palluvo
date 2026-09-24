@@ -180,10 +180,47 @@ export default function AccountPage({ onNavigate }) {
         </div>
       </div>
 
-      {/* Main Grid: Navigation Tabs + Content */}
+      {/* Mobile Account Quick Action Cards (Specified in Mobile Spec) */}
+      <div className="lg:hidden grid grid-cols-2 gap-2.5">
+        {[
+          { label: 'My Orders', icon: '📦', count: orders.length, tab: 'orders' },
+          { label: 'My Profile', icon: '👤', tab: 'profile' },
+          { label: 'Track Order', icon: '🚚', action: () => onNavigate('track-order') },
+          { label: 'My Wishlist', icon: '♡', action: () => onNavigate('wishlist') },
+          { label: 'Saved Addresses', icon: '📍', count: addresses.length, tab: 'addresses' },
+          { label: 'Account Settings', icon: '⚙️', tab: 'profile' },
+        ].map((item, idx) => (
+          <button
+            key={idx}
+            onClick={() => {
+              if (item.action) item.action();
+              else if (item.tab) setActiveTab(item.tab);
+            }}
+            className={`p-3.5 rounded-2xl border text-left transition flex items-center justify-between shadow-2xs cursor-pointer ${
+              activeTab === item.tab
+                ? 'bg-[#5B1425] text-white border-[#5B1425]'
+                : 'bg-white border-[#EAE2D7] text-[#1F1A1C] hover:border-[#5B1425]'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-lg">{item.icon}</span>
+              <span className="text-xs font-bold">{item.label}</span>
+            </div>
+            {item.count !== undefined && (
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                activeTab === item.tab ? 'bg-[#C5A059] text-[#1F1A1C]' : 'bg-[#FAF7F2] text-[#5B1425]'
+              }`}>
+                {item.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Main Grid: Desktop Navigation Tabs + Content */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Navigation Tabs (3 Cols) */}
-        <div className="lg:col-span-3 space-y-2 bg-white p-3 rounded-2xl border border-[#EAE2D7] shadow-sm">
+        {/* Desktop Navigation Tabs (3 Cols) */}
+        <div className="hidden lg:block lg:col-span-3 space-y-2 bg-white p-3 rounded-2xl border border-[#EAE2D7] shadow-sm">
           <button
             onClick={() => setActiveTab('orders')}
             className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition flex items-center justify-between cursor-pointer ${
@@ -227,6 +264,16 @@ export default function AccountPage({ onNavigate }) {
             <div className="flex items-center gap-2.5">
               <Heart className="w-4 h-4 text-[#5B1425]" />
               <span>My Wishlist</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => onNavigate('track-order')}
+            className="w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-[#1F1A1C] hover:bg-[#FAF7F2] transition flex items-center justify-between cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5">
+              <Truck className="w-4 h-4 text-[#5B1425]" />
+              <span>Track Order</span>
             </div>
           </button>
         </div>

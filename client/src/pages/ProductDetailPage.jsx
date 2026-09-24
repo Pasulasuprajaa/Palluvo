@@ -880,6 +880,48 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
           />
         </div>
       )}
+
+      {/* Mobile Sticky Purchase Bar (Always within reach on smartphones) */}
+      <div className="lg:hidden fixed bottom-14 left-0 right-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md border-t border-[#EAE2D7] p-3 shadow-2xl flex items-center justify-between gap-2 safe-area-pb">
+        <div className="flex flex-col pl-1 min-w-[75px]">
+          <div className="font-serif text-base font-bold text-[#5B1425] leading-tight">
+            ₹{product.price?.toLocaleString('en-IN')}
+          </div>
+          {product.mrp && product.mrp > product.price && (
+            <div className="text-[10px] text-gray-500 line-through">
+              ₹{product.mrp?.toLocaleString('en-IN')}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 flex-1 justify-end">
+          <button
+            onClick={() => toggleWishlist(product)}
+            className={`p-2.5 rounded-xl border transition cursor-pointer shrink-0 ${
+              isSaved ? 'bg-[#5B1425] text-white border-[#5B1425]' : 'bg-white text-[#1F1A1C] border-[#EAE2D7]'
+            }`}
+            aria-label="Wishlist saree"
+          >
+            <Heart className={`w-4 h-4 ${isSaved ? 'fill-current' : ''}`} />
+          </button>
+
+          <button
+            onClick={handleAddToCartWithCustomization}
+            className="flex-1 max-w-[130px] py-2.5 bg-white border border-[#5B1425] text-[#5B1425] text-[11px] font-bold uppercase rounded-xl transition shadow-2xs flex items-center justify-center gap-1 cursor-pointer active:scale-95 truncate"
+          >
+            <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Add to Cart</span>
+          </button>
+
+          <button
+            onClick={handleBuyNow}
+            className="flex-1 max-w-[125px] py-2.5 bg-[#5B1425] text-white text-[11px] font-bold uppercase rounded-xl transition shadow-md flex items-center justify-center gap-1 cursor-pointer active:scale-95 truncate"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+            <span className="truncate">Buy Now</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
