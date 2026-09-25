@@ -5,8 +5,17 @@ const morgan = require('morgan');
 const path = require('path');
 
 // Initialize database schema and auto-seed if needed
-require('./db/database');
+const db = require('./db/database');
 const seedDatabase = require('./db/seed');
+
+try {
+  const count = db.prepare('SELECT COUNT(*) as count FROM products').get()?.count || 0;
+  if (count === 0) {
+    seedDatabase();
+  }
+} catch (e) {
+  console.log('Auto-seed note:', e.message);
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
