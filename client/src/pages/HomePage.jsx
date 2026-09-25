@@ -79,26 +79,30 @@ export default function HomePage({ onNavigate }) {
     }
   ];
 
+  const weaveCategories = categories.filter((cat) =>
+    !['designer-sarees', 'party-wear', 'bridal-collection'].includes(cat.slug)
+  );
+
   const testimonials = [
     {
       name: 'Dr. Radhika Sen',
       role: 'Kolkata, WB',
       rating: 5,
-      comment: 'The Royal Crimson Banarasi exceeded every expectation. The kadwa gold zari work is dense yet remarkably lightweight. Draped it for my daughter’s sangeet and received endless compliments.',
+      comment: 'The Royal Crimson Banarasi exceeded every expectation. The kadwa gold zari work is dense yet remarkably lightweight.',
       saree: 'Royal Crimson Banarasi Katan'
     },
     {
       name: 'Meera Nambiar',
       role: 'Bengaluru, KA',
       rating: 5,
-      comment: 'PALLUVO’s Kanjivaram silk has that true authentic heavy korvai luster that is so rare online. The packaging in the burgundy luxury box made unboxing feel like a celebration.',
+      comment: 'Authentic heavy korvai luster with a royal drape. The luxury burgundy packaging made unboxing feel like a celebration.',
       saree: 'Vaidarbhi Pure Kanjivaram Gold'
     },
     {
       name: 'Shweta Singhania',
       role: 'Mumbai, MH',
       rating: 5,
-      comment: 'The Noor rose gold organza saree is pure poetry. Featherlight, soft on the skin, and the scalloped border is cut with unmatched precision.',
+      comment: 'The Noor rose gold organza saree is pure poetry. Featherlight on the skin with an exquisite scalloped border.',
       saree: 'Noor Rose Gold Organza'
     }
   ];
@@ -216,9 +220,9 @@ export default function HomePage({ onNavigate }) {
           </button>
         </div>
 
-        {/* Mobile Horizontal Carousel / Desktop 4-Col Grid */}
-        <div className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-4 md:gap-6 pb-2">
-          {categories.map((cat) => (
+        {/* Mobile Horizontal Carousel / Desktop 5-Col Grid */}
+        <div className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2">
+          {weaveCategories.map((cat) => (
             <button
               type="button"
               key={cat.id}
