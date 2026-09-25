@@ -126,11 +126,14 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
                 onMouseLeave={() => setCollectionsDropdown(false)}
               >
                 <button
-                  onClick={() => handleNav('shop')}
+                  type="button"
+                  onClick={() => setCollectionsDropdown((prev) => !prev)}
                   className="h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-0.5 xl:gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                  aria-expanded={collectionsDropdown}
+                  aria-haspopup="true"
                 >
                   <span>Collections</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-[#6E6467] shrink-0" />
+                  <ChevronDown className={`w-3.5 h-3.5 text-[#6E6467] shrink-0 transition-transform ${collectionsDropdown ? 'rotate-180' : ''}`} />
                 </button>
 
                 {collectionsDropdown && (
@@ -157,6 +160,14 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
                         <div className="text-[11px] text-[#6E6467]">{item.desc}</div>
                       </button>
                     ))}
+                    <div className="pt-2 mt-1 border-t border-[#EAE2D7]/60 px-2">
+                      <button
+                        onClick={() => handleNav('shop')}
+                        className="w-full text-center py-1.5 text-xs font-bold text-[#5B1425] hover:bg-[#F4EFEB] rounded-lg transition cursor-pointer"
+                      >
+                        Explore All Sarees →
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

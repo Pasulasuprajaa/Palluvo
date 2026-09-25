@@ -20,10 +20,18 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
   const [filterTag, setFilterTag] = useState(initialFilters.filter || '');
 
   useEffect(() => {
-    if (initialFilters.category !== undefined) setSelectedCategory(initialFilters.category);
-    if (initialFilters.occasion !== undefined) setSelectedOccasion(initialFilters.occasion);
-    if (initialFilters.search !== undefined) setSearchQuery(initialFilters.search);
-    if (initialFilters.filter !== undefined) setFilterTag(initialFilters.filter);
+    setSelectedCategory(initialFilters.category || '');
+    setSelectedOccasion(initialFilters.occasion || '');
+    setSelectedFabric(initialFilters.fabric || '');
+    setSelectedColor(initialFilters.color || '');
+    setPriceRange(initialFilters.priceRange || { min: '', max: '' });
+    setSelectedRating(initialFilters.min_rating || '');
+    setInStockOnly(Boolean(initialFilters.in_stock));
+    setSearchQuery(initialFilters.search || '');
+    setFilterTag(initialFilters.filter || '');
+    if (initialFilters.sort) {
+      setSortOption(initialFilters.sort);
+    }
   }, [initialFilters]);
 
   useEffect(() => {
@@ -135,11 +143,21 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
             <button onClick={() => onNavigate('home')} className="hover:text-[#5B1425] cursor-pointer">Home</button>
             <span>/</span>
             <span className="text-[#1F1A1C] font-semibold truncate">
-              {selectedCategory ? selectedCategory.replace('-', ' ').toUpperCase() : (selectedOccasion ? `${selectedOccasion} Sarees` : 'Sarees Collection')}
+              {filterTag === 'new_arrival'
+                ? 'NEW ARRIVALS'
+                : filterTag === 'best_seller'
+                ? 'BEST SELLERS'
+                : selectedCategory
+                ? selectedCategory.replace('-', ' ').toUpperCase()
+                : (selectedOccasion ? `${selectedOccasion} Sarees` : 'Sarees Collection')}
             </span>
           </div>
           <h1 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C]">
-            {selectedCategory
+            {filterTag === 'new_arrival'
+              ? 'New Arrivals — Fresh off the Loom'
+              : filterTag === 'best_seller'
+              ? 'Best Selling Sarees'
+              : selectedCategory
               ? categoriesList.find(c => c.value === selectedCategory)?.label || 'Curated Sarees'
               : selectedOccasion
               ? `${selectedOccasion} Saree Collection`

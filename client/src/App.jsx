@@ -111,7 +111,7 @@ function AppContent() {
         )}
 
         {currentPage === 'shop' && (
-          <ShopPage onNavigate={navigate} initialFilters={pageParams} />
+          <ShopPage onNavigate={navigate} initialFilters={pageParams} key={JSON.stringify(pageParams)} />
         )}
 
         {currentPage === 'product' && (
