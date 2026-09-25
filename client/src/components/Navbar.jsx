@@ -8,7 +8,7 @@ import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useCompare } from '../context/CompareContext';
 
-export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
+export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams = {} }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [collectionsDropdown, setCollectionsDropdown] = useState(false);
   const [userDropdown, setUserDropdown] = useState(false);
@@ -17,6 +17,11 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
   const { itemCount, setIsCartOpen, setIsSearchOpen } = useCart();
   const { wishlistCount } = useWishlist();
   const { compareItems, setIsCompareOpen } = useCompare();
+
+  const isAllSareesActive = currentPage === 'shop' && !pageParams.filter && !pageParams.occasion && !pageParams.category;
+  const isNewArrivalActive = currentPage === 'shop' && pageParams.filter === 'new_arrival';
+  const isCollectionsActive = currentPage === 'shop' && (Boolean(pageParams.occasion) || (Boolean(pageParams.category) && pageParams.category !== ''));
+  const isBestSellerActive = currentPage === 'shop' && pageParams.filter === 'best_seller';
 
   const handleNav = (page, params = {}) => {
     setMobileMenuOpen(false);
@@ -103,7 +108,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
               <button
                 onClick={() => handleNav('shop')}
                 className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
-                  currentPage === 'shop'
+                  isAllSareesActive
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
                     : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
                 }`}
@@ -113,7 +118,11 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
               <button
                 onClick={() => handleNav('shop', { filter: 'new_arrival' })}
-                className="h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-1 cursor-pointer whitespace-nowrap shrink-0 ${
+                  isNewArrivalActive
+                    ? 'border-[#5B1425] text-[#5B1425] font-bold'
+                    : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
+                }`}
               >
                 <span>New Arrivals</span>
                 <span className="bg-[#5B1425] text-[#FAF7F2] text-[8.5px] xl:text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0">New</span>
@@ -128,7 +137,11 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
                 <button
                   type="button"
                   onClick={() => setCollectionsDropdown((prev) => !prev)}
-                  className="h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] gap-0.5 xl:gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                  className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-0.5 xl:gap-1 cursor-pointer whitespace-nowrap shrink-0 ${
+                    isCollectionsActive
+                      ? 'border-[#5B1425] text-[#5B1425] font-bold'
+                      : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
+                  }`}
                   aria-expanded={collectionsDropdown}
                   aria-haspopup="true"
                 >
@@ -174,7 +187,11 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
 
               <button
                 onClick={() => handleNav('shop', { filter: 'best_seller' })}
-                className="h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 border-transparent text-[#1F1A1C] hover:text-[#5B1425] cursor-pointer whitespace-nowrap shrink-0"
+                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
+                  isBestSellerActive
+                    ? 'border-[#5B1425] text-[#5B1425] font-bold'
+                    : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
+                }`}
               >
                 Best Sellers
               </button>

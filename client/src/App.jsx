@@ -100,6 +100,7 @@ function AppContent() {
       {/* Sticky Top Luxury Header */}
       <Navbar
         currentPage={currentPage}
+        pageParams={pageParams}
         onNavigate={navigate}
         onOpenAuth={() => handleOpenAuth()}
       />
