@@ -895,8 +895,7 @@ function seedDatabase() {
       color_hex: '#4A0E17',
       images: [
         '/images/sarees/velvet_zardozi.jpg',
-        '/images/categories/bridal.jpg',
-        '/images/occasions/wedding_edit.jpg'
+        '/images/sarees/velvet_zardozi_detail.jpg'
       ],
       variants: [
         { color_name: 'Imperial Maroon Velvet', color_hex: '#4A0E17', stock: 3, sku: 'PAL-BRI-024-MR' },

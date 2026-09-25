@@ -260,43 +260,38 @@ function initSchema() {
     db.exec(`ALTER TABLE orders ADD COLUMN gift_message TEXT DEFAULT NULL;`);
   } catch (e) {}
 
-  // Migration: Ensure distinct primary images for all best-seller records across existing databases
+  // Migration: Ensure distinct primary and gallery images for all best-seller records across existing databases
   try {
     const productFixes = [
       {
         slug: 'jahanara-royal-velvet-zardozi-bridal-masterpiece',
-        primaryImage: '/images/sarees/velvet_zardozi.jpg'
+        images: ['/images/sarees/velvet_zardozi.jpg', '/images/sarees/velvet_zardozi_detail.jpg']
       },
       {
         slug: 'samrajni-grand-muhurtham-24k-gold-korvai-kanjivaram',
-        primaryImage: '/images/sarees/kanjivaram_gold.jpg'
+        images: ['/images/sarees/kanjivaram_gold.jpg', '/images/categories/kanjivaram.jpg']
       },
       {
         slug: 'rajkumari-heritage-sindoor-bridal-banarasi-saree',
-        primaryImage: '/images/sarees/bridal_sindoor.jpg'
+        images: ['/images/sarees/bridal_sindoor.jpg', '/images/categories/banarasi.jpg']
       },
       {
         slug: 'arundhati-pure-silver-tissue-muhurtham-kanjivaram',
-        primaryImage: '/images/sarees/chanderi_tissue.jpg'
+        images: ['/images/sarees/chanderi_tissue.jpg', '/images/occasions/festive_glow.jpg']
       }
     ];
 
     const getProduct = db.prepare('SELECT id FROM products WHERE slug = ?');
-    const updatePrimary = db.prepare('UPDATE product_images SET is_primary = 0 WHERE product_id = ?');
-    const setPrimary = db.prepare('UPDATE product_images SET is_primary = 1 WHERE product_id = ? AND image_url = ?');
-    const insertImage = db.prepare('INSERT INTO product_images (product_id, image_url, is_primary, display_order) VALUES (?, ?, 1, 1)');
-    const checkImage = db.prepare('SELECT id FROM product_images WHERE product_id = ? AND image_url = ?');
+    const deleteImages = db.prepare('DELETE FROM product_images WHERE product_id = ?');
+    const insertImage = db.prepare('INSERT INTO product_images (product_id, image_url, is_primary, display_order) VALUES (?, ?, ?, ?)');
 
     for (const fix of productFixes) {
       const prod = getProduct.get(fix.slug);
       if (prod) {
-        updatePrimary.run(prod.id);
-        const existing = checkImage.get(prod.id, fix.primaryImage);
-        if (existing) {
-          setPrimary.run(prod.id, fix.primaryImage);
-        } else {
-          insertImage.run(prod.id, fix.primaryImage);
-        }
+        deleteImages.run(prod.id);
+        fix.images.forEach((img, idx) => {
+          insertImage.run(prod.id, img, idx === 0 ? 1 : 0, idx + 1);
+        });
       }
     }
     // Flush WAL to disk

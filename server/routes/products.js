@@ -27,7 +27,7 @@ router.get('/', (req, res) => {
     let query = `
       SELECT p.*, c.name as category_name, c.slug as category_slug,
         (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) as primary_image,
-        (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 0 ORDER BY display_order ASC LIMIT 1) as secondary_image
+        (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1 OFFSET 1) as secondary_image
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
       WHERE 1=1
@@ -161,7 +161,7 @@ router.get('/', (req, res) => {
 
     // Attach all images and variants to each item
     const formattedProducts = products.map(p => {
-      const images = db.prepare('SELECT id, image_url, is_primary FROM product_images WHERE product_id = ? ORDER BY display_order ASC').all(p.id);
+      const images = db.prepare('SELECT id, image_url, is_primary FROM product_images WHERE product_id = ? ORDER BY is_primary DESC, display_order ASC').all(p.id);
       const variants = db.prepare('SELECT id, color_name, color_hex, stock_quantity, sku FROM product_variants WHERE product_id = ?').all(p.id);
       return {
         ...p,
