@@ -134,7 +134,7 @@ export default function HomePage({ onNavigate }) {
             />
           </picture>
           {/* Bottom-anchored gradient on mobile leaves the model's face & upper saree 100% unobstructed, while providing solid contrast for bottom copy */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/80 via-45% to-transparent sm:bg-gradient-to-r sm:from-[#1F1A1C]/90 sm:via-[#1F1A1C]/40 sm:via-35% sm:to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/75 via-40% to-transparent sm:bg-gradient-to-r sm:from-[#1F1A1C]/75 sm:via-[#1F1A1C]/25 sm:via-40% sm:to-transparent pointer-events-none" />
         </div>
 
         {/* Hero Content — Seamless Luxury Typography Positioned Below Subject on Mobile */}

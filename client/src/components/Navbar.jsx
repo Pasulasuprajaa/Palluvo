@@ -502,22 +502,21 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
             <span>Wishlist</span>
           </button>
 
-          {/* 5. Cart */}
+          {/* 5. Account / Profile */}
           <button
-            onClick={() => setIsCartOpen(true)}
-            className={`flex-1 relative flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
-              currentPage === 'cart' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
+            onClick={() => {
+              if (user) {
+                handleNav('account');
+              } else {
+                onOpenAuth();
+              }
+            }}
+            className={`flex-1 flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
+              currentPage === 'account' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
             }`}
           >
-            <div className="relative">
-              <ShoppingBag className="w-5 h-5 mb-0.5" />
-              {itemCount > 0 && (
-                <span className="absolute -top-1 -right-2 bg-[#C5A059] text-[#3F0D19] text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold">
-                  {itemCount}
-                </span>
-              )}
-            </div>
-            <span>Cart</span>
+            <User className="w-5 h-5 mb-0.5" />
+            <span>{user ? 'Account' : 'Sign In'}</span>
           </button>
         </div>
       </nav>
