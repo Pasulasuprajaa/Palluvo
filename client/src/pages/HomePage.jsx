@@ -73,7 +73,7 @@ export default function HomePage({ onNavigate }) {
     {
       title: 'Temple & Heritage',
       subtitle: 'Sacred auspicious motifs and sanctified pure silk zari borders.',
-      image: '/images/occasions/festive_glow.jpg',
+      image: '/images/occasions/temple_heritage.jpg',
       filter: { occasion: 'Festive', category: 'kanjivaram-sarees' },
       tag: 'Sacred Rituals'
     }

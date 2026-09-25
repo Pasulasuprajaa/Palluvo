@@ -108,9 +108,10 @@ export default function Footer({ onNavigate }) {
           <div className="border-b border-white/10 pb-2">
             <button
               onClick={() => toggleSection('shop')}
-              className="w-full flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059]"
+              aria-expanded={openSection === 'shop'}
+              className="w-full flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059] cursor-pointer"
             >
-              <span>▼ Shop Sarees & Collections</span>
+              <span>Shop Sarees & Collections</span>
               {openSection === 'shop' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             {openSection === 'shop' && (
@@ -130,9 +131,10 @@ export default function Footer({ onNavigate }) {
           <div className="border-b border-white/10 pb-2">
             <button
               onClick={() => toggleSection('care')}
-              className="w-full flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059]"
+              aria-expanded={openSection === 'care'}
+              className="w-full flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059] cursor-pointer"
             >
-              <span>▼ Customer Care</span>
+              <span>Customer Care</span>
               {openSection === 'care' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             {openSection === 'care' && (
@@ -152,9 +154,10 @@ export default function Footer({ onNavigate }) {
           <div className="border-b border-white/10 pb-2">
             <button
               onClick={() => toggleSection('about')}
-              className="w-full flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059]"
+              aria-expanded={openSection === 'about'}
+              className="w-full flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059] cursor-pointer"
             >
-              <span>▼ About PALLUVO</span>
+              <span>About PALLUVO</span>
               {openSection === 'about' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             {openSection === 'about' && (
@@ -171,9 +174,10 @@ export default function Footer({ onNavigate }) {
           <div className="border-b border-white/10 pb-2">
             <button
               onClick={() => toggleSection('policies')}
-              className="w-full flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059]"
+              aria-expanded={openSection === 'policies'}
+              className="w-full flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059] cursor-pointer"
             >
-              <span>▼ Policies & Legal</span>
+              <span>Policies & Legal</span>
               {openSection === 'policies' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             {openSection === 'policies' && (
