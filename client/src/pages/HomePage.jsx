@@ -112,25 +112,25 @@ export default function HomePage({ onNavigate }) {
       image: '/images/social/social_1.jpg',
       handle: '@ananya_drapes',
       text: 'Wrapped in timeless Banarasi magic.',
-      url: 'https://www.instagram.com/palluvo_official'
+      url: 'https://www.instagram.com/ananya_drapes/'
     },
     {
       image: '/images/social/social_2.jpg',
       handle: '@priyasharma_weddings',
       text: 'The bridal glow in pure Kanjivaram gold.',
-      url: 'https://www.instagram.com/palluvo_official'
+      url: 'https://www.instagram.com/priyasharma_weddings/'
     },
     {
       image: '/images/social/social_3.jpg',
       handle: '@tarini_lifestyle',
       text: 'Festive radiance in emerald silk.',
-      url: 'https://www.instagram.com/palluvo_official'
+      url: 'https://www.instagram.com/tarini_lifestyle/'
     },
     {
       image: '/images/social/social_4.jpg',
       handle: '@palluvo_official',
       text: 'Featherlight organza blossoms.',
-      url: 'https://www.instagram.com/palluvo_official'
+      url: 'https://www.instagram.com/palluvo_official/'
     }
   ];
 
@@ -440,18 +440,18 @@ export default function HomePage({ onNavigate }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group relative aspect-square rounded-2xl overflow-hidden shadow-sm text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2 block cursor-pointer"
-                aria-label={`View Instagram post by ${post.handle} on Instagram (opens in new tab)`}
+                aria-label={`View Instagram post and profile for ${post.handle} (opens in new tab)`}
               >
                 <img
                   src={post.image}
-                  alt={`Saree drape by ${post.handle}`}
+                  alt={`Saree drape styling by ${post.handle}`}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center p-4 text-center text-white">
                   <span className="text-xs font-bold text-[#C5A059]">{post.handle}</span>
                   <p className="text-[11px] text-white/90 mt-1">{post.text}</p>
                   <span className="mt-2 text-[10px] text-[#FAF7F2]/80 uppercase tracking-widest underline decoration-[#C5A059]">
-                    View on Instagram ↗
+                    View {post.handle} ↗
                   </span>
                 </div>
               </a>
