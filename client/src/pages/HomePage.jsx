@@ -105,22 +105,22 @@ export default function HomePage({ onNavigate }) {
 
   const instagramPosts = [
     {
-      image: '/images/categories/banarasi.jpg',
+      image: '/images/social/social_1.jpg',
       handle: '@ananya_drapes',
       text: 'Wrapped in timeless Banarasi magic.'
     },
     {
-      image: '/images/categories/kanjivaram.jpg',
+      image: '/images/social/social_2.jpg',
       handle: '@priyasharma_weddings',
       text: 'The bridal glow in pure Kanjivaram gold.'
     },
     {
-      image: '/images/occasions/festive_glow.jpg',
+      image: '/images/social/social_3.jpg',
       handle: '@tarini_lifestyle',
       text: 'Festive radiance in emerald silk.'
     },
     {
-      image: '/images/categories/organza.jpg',
+      image: '/images/social/social_4.jpg',
       handle: '@palluvo_official',
       text: 'Featherlight organza blossoms.'
     }
