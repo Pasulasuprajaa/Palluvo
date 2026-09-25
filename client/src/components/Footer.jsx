@@ -83,21 +83,31 @@ export default function Footer({ onNavigate }) {
             PALLUVO honors India’s centuries of textile artistry. From regal Banarasi weaves to ethereal organza silhouettes, each saree is handcrafted to make your most cherished memories unforgettable.
           </p>
 
-          <form onSubmit={handleSubscribe} className="pt-2 flex max-w-md">
-            <input
-              type="email"
-              value={newsletterEmail}
-              onChange={(e) => setNewsletterEmail(e.target.value)}
-              placeholder="Enter your email for ₹500 off..."
-              className="flex-1 bg-white/10 border border-white/20 rounded-l-xl px-3.5 py-2.5 text-xs text-[#FAF7F2] placeholder-white/40 focus:outline-none focus:border-[#C5A059]"
-            />
-            <button
-              type="submit"
-              className="bg-[#C5A059] text-[#1F1A1C] font-bold text-xs px-4 py-2.5 rounded-r-xl hover:bg-[#E0C07F] transition flex items-center gap-1 shrink-0 cursor-pointer"
-            >
-              <span>Join</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+          <form onSubmit={handleSubscribe} className="pt-2 max-w-md space-y-1.5">
+            <label htmlFor="footer-newsletter-email" className="block text-xs font-semibold text-[#C5A059] tracking-wide">
+              Subscribe to the PALLUVO Circle (Get ₹500 OFF)
+            </label>
+            <div className="flex">
+              <input
+                id="footer-newsletter-email"
+                name="email"
+                type="email"
+                required
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
+                placeholder="Enter your email address..."
+                aria-label="Email address for newsletter and ₹500 welcome coupon"
+                className="flex-1 bg-white/10 border border-white/20 rounded-l-xl px-3.5 py-2.5 text-xs text-[#FAF7F2] placeholder-white/40 focus:outline-none focus:border-[#C5A059]"
+              />
+              <button
+                type="submit"
+                aria-label="Subscribe to newsletter"
+                className="bg-[#C5A059] text-[#1F1A1C] font-bold text-xs px-4 py-2.5 rounded-r-xl hover:bg-[#E0C07F] transition flex items-center gap-1 shrink-0 cursor-pointer"
+              >
+                <span>Join</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </form>
         </div>
 

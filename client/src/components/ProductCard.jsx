@@ -54,23 +54,17 @@ export default function ProductCard({ product, onNavigate }) {
           className="w-full h-full object-cover object-top transition-transform duration-700 ease-out group-hover:scale-105"
         />
 
-        {/* Badges */}
-        <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
-          {product.discount_percent > 0 && (
+        {/* Single Prioritized Image Badge */}
+        <div className="absolute top-3 left-3 z-10">
+          {product.discount_percent > 0 ? (
             <span className="bg-[#5B1425] text-[#FAF7F2] text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow-md">
               {product.discount_percent}% OFF
             </span>
-          )}
-          {product.is_best_seller === 1 && (
-            <span className="bg-[#C5A059] text-[#3F0D19] text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
-              Best Seller
-            </span>
-          )}
-          {product.is_new_arrival === 1 && (
-            <span className="bg-[#1F1A1C] text-[#FAF7F2] text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+          ) : product.is_new_arrival === 1 ? (
+            <span className="bg-[#1F1A1C] text-[#FAF7F2] text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-md">
               New
             </span>
-          )}
+          ) : null}
         </div>
 
         {/* Wishlist & Compare Buttons */}
@@ -119,8 +113,15 @@ export default function ProductCard({ product, onNavigate }) {
         <div>
           {/* Fabric & Occasion Tag */}
           <div className="flex items-center justify-between text-[11px] text-[#6E6467] mb-1">
-            <span className="font-medium tracking-wide">{product.fabric}</span>
-            <span className="text-[#C5A059] font-semibold">{product.occasion}</span>
+            <span className="font-medium tracking-wide truncate max-w-[130px]">{product.fabric}</span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {product.is_best_seller === 1 && (
+                <span className="text-[9px] font-bold uppercase tracking-wider text-[#9A7730] bg-[#FDF8EE] px-1.5 py-0.5 rounded border border-[#C5A059]/30">
+                  Best Seller
+                </span>
+              )}
+              <span className="text-[#C5A059] font-semibold">{product.occasion}</span>
+            </div>
           </div>
 
           {/* Product Title */}
