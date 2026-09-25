@@ -113,15 +113,8 @@ export default function ProductCard({ product, onNavigate }) {
         <div>
           {/* Fabric & Occasion Tag */}
           <div className="flex items-center justify-between text-[11px] text-[#6E6467] mb-1">
-            <span className="font-medium tracking-wide truncate max-w-[130px]">{product.fabric}</span>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {product.is_best_seller === 1 && (
-                <span className="text-[9px] font-bold uppercase tracking-wider text-[#9A7730] bg-[#FDF8EE] px-1.5 py-0.5 rounded border border-[#C5A059]/30">
-                  Best Seller
-                </span>
-              )}
-              <span className="text-[#C5A059] font-semibold">{product.occasion}</span>
-            </div>
+            <span className="font-medium tracking-wide text-[#6E6467]">{product.fabric}</span>
+            <span className="text-[#C5A059] font-semibold shrink-0 ml-2">{product.occasion}</span>
           </div>
 
           {/* Product Title */}
