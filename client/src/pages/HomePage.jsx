@@ -69,6 +69,13 @@ export default function HomePage({ onNavigate }) {
       image: '/images/occasions/everyday_grace.jpg',
       filter: { category: 'cotton-sarees' },
       tag: 'Pure Comfort'
+    },
+    {
+      title: 'Temple & Heritage',
+      subtitle: 'Sacred auspicious motifs and sanctified pure silk zari borders.',
+      image: '/images/occasions/festive_glow.jpg',
+      filter: { occasion: 'Festive', category: 'kanjivaram-sarees' },
+      tag: 'Sacred Rituals'
     }
   ];
 

@@ -28,12 +28,12 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth }) {
   return (
     <>
       {/* Top Luxury Announcement Bar */}
-      <div className="bg-[#3F0D19] text-[#FAF7F2] text-[11px] sm:text-xs font-medium tracking-wide py-1.5 sm:py-2 px-3 sm:px-4 border-b border-[#C5A059]/30">
+      <div className="bg-[#3F0D19] text-[#FAF7F2] text-[10.5px] sm:text-xs font-medium tracking-wide py-1.5 sm:py-2 px-2.5 sm:px-4 border-b border-[#C5A059]/30">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-1.5 sm:gap-2 mx-auto sm:mx-0 text-center sm:text-left truncate">
-            <Sparkles className="w-3.5 h-3.5 text-[#C5A059] shrink-0 animate-pulse" />
-            <span className="truncate">Complimentary Express Delivery on orders &gt; ₹1,999</span>
-            <span className="hidden md:inline text-[#C5A059] font-semibold ml-2">| Use Code WELCOME10 for 10% OFF</span>
+          <div className="flex items-center gap-1 sm:gap-2 mx-auto sm:mx-0 text-center sm:text-left flex-wrap justify-center sm:justify-start">
+            <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#C5A059] shrink-0 animate-pulse" />
+            <span>Free Express Delivery &gt; ₹1,999</span>
+            <span className="text-[#C5A059] font-semibold">| Code <strong className="text-white bg-[#5B1425] px-1 py-0.5 rounded border border-[#C5A059]/40 tracking-wider">WELCOME10</strong> (10% OFF)</span>
           </div>
           <div className="hidden sm:flex items-center gap-4 text-[11px] text-[#FAF7F2]/80 shrink-0">
             <button onClick={() => handleNav('offers')} className="hover:text-[#C5A059] transition flex items-center gap-1 cursor-pointer">
