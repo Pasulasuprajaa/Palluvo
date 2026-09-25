@@ -551,7 +551,8 @@ function seedDatabase() {
       color_name: 'Shimmer Silver Champagne',
       color_hex: '#D9D2C7',
       images: [
-        '/images/sarees/kanjivaram_gold.jpg',
+        '/images/sarees/chanderi_tissue.jpg',
+        '/images/occasions/wedding_edit.jpg',
         '/images/categories/kanjivaram.jpg'
       ],
       variants: [
@@ -644,8 +645,8 @@ function seedDatabase() {
       color_name: '24K Royal Gilded Gold',
       color_hex: '#C5A059',
       images: [
-        '/images/sarees/kanjivaram_gold.jpg',
         '/images/sarees/bridal_sindoor.jpg',
+        '/images/sarees/kanjivaram_gold.jpg',
         '/images/categories/bridal.jpg'
       ],
       variants: [

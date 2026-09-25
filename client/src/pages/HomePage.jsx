@@ -122,7 +122,7 @@ export default function HomePage({ onNavigate }) {
   return (
     <div className="flex flex-col">
       {/* 1. HERO SECTION */}
-      <section className="relative min-h-[92vh] sm:min-h-[85vh] flex flex-col justify-end sm:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2]">
+      <section className="relative flex flex-col justify-end sm:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] sm:min-h-[85vh]">
         {/* Background Image — Full 100% Brightness with Top-Aligned Portrait Crop on Mobile */}
         <div className="absolute inset-0 z-0">
           <picture>
@@ -130,16 +130,16 @@ export default function HomePage({ onNavigate }) {
             <img
               src="/images/occasions/wedding_edit.jpg"
               alt="PALLUVO Luxury Saree Hero"
-              className="w-full h-full object-cover object-[center_5%] sm:object-right md:object-[75%_center] opacity-100 scale-100 transition-transform duration-1000 ease-out"
+              className="w-full h-full object-cover object-[center_12%] sm:object-right md:object-[75%_center] opacity-100 scale-100 transition-transform duration-1000 ease-out"
             />
           </picture>
           {/* Bottom-anchored gradient on mobile leaves the model's face & upper saree 100% unobstructed, while providing solid contrast for bottom copy */}
           <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/75 via-40% to-transparent sm:bg-gradient-to-r sm:from-[#1F1A1C]/75 sm:via-[#1F1A1C]/25 sm:via-40% sm:to-transparent pointer-events-none" />
         </div>
 
-        {/* Hero Content — Seamless Luxury Typography Positioned Below Subject on Mobile */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-36 pb-6 sm:py-28 flex flex-col items-start max-w-2xl w-full mt-auto sm:mt-0">
-          <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#FAF7F2]/10 backdrop-blur-md border border-[#C5A059]/40 text-[#C5A059] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-3 sm:mb-6 animate-fade-in shadow-sm">
+        {/* Hero Content — Seamless Luxury Typography Positioned Below Subject with Full Bottom Safe Area */}
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-24 sm:py-28 flex flex-col items-start max-w-2xl w-full mt-auto sm:mt-0">
+          <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#FAF7F2]/10 backdrop-blur-md border border-[#C5A059]/40 text-[#C5A059] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-2.5 sm:mb-6 animate-fade-in shadow-sm">
             <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
             <span>The Festive & Bridal Heirloom Edit</span>
           </div>
@@ -149,40 +149,41 @@ export default function HomePage({ onNavigate }) {
             <span className="italic font-normal gold-gradient-text">a little magic.</span>
           </h1>
 
-          <p className="mt-2.5 sm:mt-6 text-xs sm:text-lg text-[#FAF7F2]/85 leading-relaxed font-sans max-w-lg drop-shadow-xs">
+          <p className="mt-2 sm:mt-6 text-xs sm:text-lg text-[#FAF7F2]/85 leading-relaxed font-sans max-w-lg drop-shadow-xs">
             Handcrafted Banarasi, pure Kanjivaram, and ethereal organza sarees designed to make your celebratory moments unforgettable.
           </p>
 
-          <div className="mt-5 sm:mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
+          {/* Action CTAs: Side-by-side on mobile to eliminate vertical height overflow */}
+          <div className="mt-4 sm:mt-8 flex flex-row items-center gap-2.5 sm:gap-4 w-full sm:w-auto">
             <button
               onClick={() => onNavigate('shop')}
-              className="px-6 sm:px-8 py-3.5 sm:py-4 bg-[#5B1425] hover:bg-[#7E1E34] text-[#FAF7F2] font-bold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 shadow-2xl flex items-center justify-center gap-2.5 border border-[#C5A059]/30 active:scale-95 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
+              className="flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 bg-[#5B1425] hover:bg-[#7E1E34] text-[#FAF7F2] font-bold text-[11px] sm:text-xs uppercase tracking-widest rounded-xl transition-all duration-300 shadow-2xl flex items-center justify-center gap-1.5 sm:gap-2.5 border border-[#C5A059]/30 active:scale-95 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none whitespace-nowrap"
             >
               <span>Explore Sarees</span>
-              <ArrowRight className="w-4 h-4 text-[#C5A059]" />
+              <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#C5A059]" />
             </button>
 
             <button
               onClick={() => onNavigate('shop', { occasion: 'Wedding' })}
-              className="px-6 sm:px-8 py-3.5 sm:py-4 bg-[#FAF7F2]/10 hover:bg-[#FAF7F2]/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 border border-white/20 hover:border-[#C5A059] active:scale-95 text-center cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
+              className="flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 bg-[#FAF7F2]/10 hover:bg-[#FAF7F2]/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-[11px] sm:text-xs uppercase tracking-widest rounded-xl transition-all duration-300 border border-white/20 hover:border-[#C5A059] active:scale-95 text-center cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none whitespace-nowrap"
             >
               Bridal Edit
             </button>
           </div>
 
           {/* Micro Trust Stats */}
-          <div className="mt-6 sm:mt-12 pt-4 sm:pt-8 border-t border-white/15 grid grid-cols-3 gap-3 sm:gap-6 text-left w-full">
+          <div className="mt-4 sm:mt-12 pt-3 sm:pt-8 border-t border-white/15 grid grid-cols-3 gap-2 sm:gap-6 text-left w-full">
             <div>
-              <div className="font-serif text-lg sm:text-2xl font-bold text-[#C5A059]">100%</div>
-              <div className="text-[9.5px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Pure Handloom</div>
+              <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">100%</div>
+              <div className="text-[9px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Pure Handloom</div>
             </div>
             <div>
-              <div className="font-serif text-lg sm:text-2xl font-bold text-[#C5A059]">15k+</div>
-              <div className="text-[9.5px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Drapes Loved</div>
+              <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">15k+</div>
+              <div className="text-[9px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Drapes Loved</div>
             </div>
             <div>
-              <div className="font-serif text-lg sm:text-2xl font-bold text-[#C5A059]">4.9 ★</div>
-              <div className="text-[9.5px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Verified Reviews</div>
+              <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">4.9 ★</div>
+              <div className="text-[9px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Verified Reviews</div>
             </div>
           </div>
         </div>
