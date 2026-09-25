@@ -645,9 +645,9 @@ function seedDatabase() {
       color_name: '24K Royal Gilded Gold',
       color_hex: '#C5A059',
       images: [
-        '/images/sarees/bridal_sindoor.jpg',
         '/images/sarees/kanjivaram_gold.jpg',
-        '/images/categories/bridal.jpg'
+        '/images/categories/bridal.jpg',
+        '/images/occasions/wedding_edit.jpg'
       ],
       variants: [
         { color_name: '24K Royal Gilded Gold', color_hex: '#C5A059', stock: 4, sku: 'PAL-BRI-016-GL' },
@@ -894,8 +894,9 @@ function seedDatabase() {
       color_name: 'Imperial Maroon Velvet',
       color_hex: '#4A0E17',
       images: [
-        '/images/sarees/bridal_sindoor.jpg',
-        '/images/categories/bridal.jpg'
+        '/images/sarees/velvet_zardozi.jpg',
+        '/images/categories/bridal.jpg',
+        '/images/occasions/wedding_edit.jpg'
       ],
       variants: [
         { color_name: 'Imperial Maroon Velvet', color_hex: '#4A0E17', stock: 3, sku: 'PAL-BRI-024-MR' },
