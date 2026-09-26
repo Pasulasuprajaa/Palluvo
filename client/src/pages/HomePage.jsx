@@ -202,10 +202,7 @@ export default function HomePage({ onNavigate }) {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full">
         <div className="flex items-end justify-between mb-6 sm:mb-8">
           <div>
-            <span className="text-[11px] sm:text-xs font-semibold text-[#5B1425] uppercase tracking-widest">
-              Artisanal Heritage
-            </span>
-            <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C] mt-1">
+            <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C]">
               Shop by Weave & Fabric
             </h2>
           </div>
@@ -317,10 +314,7 @@ export default function HomePage({ onNavigate }) {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
           <div>
-            <span className="text-xs font-semibold text-[#5B1425] uppercase tracking-widest">
-              Most Adored Drapes
-            </span>
-            <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C] mt-1">
+            <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C]">
               Best Sellers of the Season
             </h2>
           </div>
@@ -368,10 +362,7 @@ export default function HomePage({ onNavigate }) {
       {/* 6. TESTIMONIALS */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full">
         <div className="text-center max-w-2xl mx-auto mb-10">
-          <span className="text-xs font-semibold text-[#5B1425] uppercase tracking-widest">
-            Loved Across India
-          </span>
-          <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C] mt-1">
+          <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C]">
             Voices of the PALLUVO Circle
           </h2>
           <div className="w-16 h-0.5 bg-[#C5A059] mx-auto mt-3" />
@@ -412,14 +403,11 @@ export default function HomePage({ onNavigate }) {
       <section className="bg-[#FAF7F2] py-8 sm:py-12 border-t border-[#EAE2D7] w-full">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-8">
-            <span className="text-xs font-semibold text-[#5B1425] uppercase tracking-widest">
-              @PALLUVO_OFFICIAL
-            </span>
-            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#1F1A1C] mt-1">
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#1F1A1C]">
               Follow the PALLUVO Journey
             </h2>
-            <p className="text-xs text-[#6E6467] mt-1">
-              Tag #EveryDrapeMagic to be featured on our luxury editorial wall
+            <p className="text-xs text-[#6E6467] mt-1.5">
+              Tag @palluvo_official and #EveryDrapeMagic to be featured on our luxury editorial wall
             </p>
           </div>
 

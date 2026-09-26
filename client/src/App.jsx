@@ -24,6 +24,7 @@ import AccountPage from './pages/AccountPage';
 import WishlistPage from './pages/WishlistPage';
 import OffersPage from './pages/OffersPage';
 import AdminPage from './pages/AdminPage';
+import PolicyPage from './pages/PolicyPage';
 
 function AppContent() {
   const [currentPage, setCurrentPage] = useState('home');
@@ -57,6 +58,10 @@ function AppContent() {
         setCurrentPage('track-order');
       } else if (path === '/admin') {
         setCurrentPage('admin');
+      } else if (path === '/privacy' || path === '/terms' || path === '/shipping' || path === '/refund' || path === '/policies' || path === '/policy') {
+        const tab = path === '/policies' || path === '/policy' ? 'privacy' : path.replace('/', '');
+        setCurrentPage('policy');
+        setPageParams({ tab });
       }
     };
 
@@ -79,6 +84,7 @@ function AppContent() {
     else if (page === 'offers') urlPath = '/offers';
     else if (page === 'track-order') urlPath = '/track-order';
     else if (page === 'admin') urlPath = '/admin';
+    else if (page === 'policy') urlPath = `/${params.tab || 'privacy'}`;
 
     window.history.pushState({}, '', urlPath);
   };
@@ -156,6 +162,10 @@ function AppContent() {
 
         {currentPage === 'admin' && (
           <AdminPage onNavigate={navigate} />
+        )}
+
+        {currentPage === 'policy' && (
+          <PolicyPage initialTab={pageParams.tab || 'privacy'} onNavigate={navigate} />
         )}
       </main>
 

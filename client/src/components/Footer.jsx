@@ -192,10 +192,10 @@ export default function Footer({ onNavigate }) {
             </button>
             {openSection === 'policies' && (
               <ul className="space-y-2.5 text-xs text-[#FAF7F2]/80 pb-3 pl-2 animate-fade-in">
-                <li><a href="#privacy" className="hover:text-[#C5A059]">Privacy Policy</a></li>
-                <li><a href="#terms" className="hover:text-[#C5A059]">Terms & Conditions</a></li>
-                <li><a href="#shipping" className="hover:text-[#C5A059]">Shipping Policy</a></li>
-                <li><a href="#refund" className="hover:text-[#C5A059]">7-Day Return Policy</a></li>
+                <li><button onClick={() => onNavigate('policy', { tab: 'privacy' })} className="hover:text-[#C5A059] text-left">Privacy Policy</button></li>
+                <li><button onClick={() => onNavigate('policy', { tab: 'terms' })} className="hover:text-[#C5A059] text-left">Terms & Conditions</button></li>
+                <li><button onClick={() => onNavigate('policy', { tab: 'shipping' })} className="hover:text-[#C5A059] text-left">Shipping Policy</button></li>
+                <li><button onClick={() => onNavigate('policy', { tab: 'refund' })} className="hover:text-[#C5A059] text-left">7-Day Return Policy</button></li>
               </ul>
             )}
           </div>
@@ -254,10 +254,10 @@ export default function Footer({ onNavigate }) {
               Policies
             </h4>
             <ul className="space-y-2 text-xs text-[#FAF7F2]/80">
-              <li><a href="#privacy" className="hover:text-[#C5A059] transition">Privacy Policy</a></li>
-              <li><a href="#terms" className="hover:text-[#C5A059] transition">Terms & Conditions</a></li>
-              <li><a href="#shipping" className="hover:text-[#C5A059] transition">Shipping Policy</a></li>
-              <li><a href="#refund" className="hover:text-[#C5A059] transition">7-Day Refund Policy</a></li>
+              <li><button onClick={() => onNavigate('policy', { tab: 'privacy' })} className="hover:text-[#C5A059] transition text-left">Privacy Policy</button></li>
+              <li><button onClick={() => onNavigate('policy', { tab: 'terms' })} className="hover:text-[#C5A059] transition text-left">Terms & Conditions</button></li>
+              <li><button onClick={() => onNavigate('policy', { tab: 'shipping' })} className="hover:text-[#C5A059] transition text-left">Shipping Policy</button></li>
+              <li><button onClick={() => onNavigate('policy', { tab: 'refund' })} className="hover:text-[#C5A059] transition text-left">7-Day Refund Policy</button></li>
             </ul>
           </div>
         </div>
@@ -320,10 +320,10 @@ export default function Footer({ onNavigate }) {
           © {new Date().getFullYear()} <strong>PALLUVO LUXURY FASHION PVT. LTD.</strong> All Rights Reserved.
         </div>
         <div className="flex gap-4 text-[11px]">
-          <a href="#privacy" className="hover:text-[#C5A059] transition">Privacy</a>
-          <a href="#terms" className="hover:text-[#C5A059] transition">Terms</a>
-          <a href="#shipping" className="hover:text-[#C5A059] transition">Shipping</a>
-          <a href="#refund" className="hover:text-[#C5A059] transition">Returns</a>
+          <button onClick={() => onNavigate('policy', { tab: 'privacy' })} className="hover:text-[#C5A059] transition cursor-pointer">Privacy</button>
+          <button onClick={() => onNavigate('policy', { tab: 'terms' })} className="hover:text-[#C5A059] transition cursor-pointer">Terms</button>
+          <button onClick={() => onNavigate('policy', { tab: 'shipping' })} className="hover:text-[#C5A059] transition cursor-pointer">Shipping</button>
+          <button onClick={() => onNavigate('policy', { tab: 'refund' })} className="hover:text-[#C5A059] transition cursor-pointer">Returns</button>
         </div>
       </div>
     </footer>
