@@ -38,7 +38,7 @@ export default function HomePage({ onNavigate }) {
     {
       title: 'Wedding Edit',
       subtitle: 'Heirloom bridal and trousseau masterworks woven with pure zari.',
-      image: '/images/occasions/wedding_edit.jpg',
+      image: '/images/categories/bridal.jpg',
       filter: { occasion: 'Wedding' }
     },
     {
@@ -138,7 +138,7 @@ export default function HomePage({ onNavigate }) {
             <source media="(max-width: 640px)" srcSet="/images/occasions/wedding_edit.jpg" />
             <img
               src="/images/occasions/wedding_edit.jpg"
-              alt="PALLUVO Luxury Saree Hero"
+              alt="Indian bride adorned in an ornate crimson and gold handcrafted silk saree"
               className="w-full h-full object-cover object-[center_12%] sm:object-right md:object-[75%_center] opacity-100 scale-100 transition-transform duration-1000 ease-out"
             />
           </picture>
