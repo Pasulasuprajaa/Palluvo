@@ -38,7 +38,7 @@ export default function HomePage({ onNavigate }) {
     {
       title: 'Wedding Edit',
       subtitle: 'Heirloom bridal and trousseau masterworks woven with pure zari.',
-      image: '/images/categories/bridal.jpg',
+      image: '/images/occasions/wedding_collection.jpg',
       filter: { occasion: 'Wedding' }
     },
     {
@@ -237,7 +237,7 @@ export default function HomePage({ onNavigate }) {
               <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent group-hover:from-[#5B1425]/90 transition-colors duration-300" />
               
               <div className="absolute inset-x-3 bottom-3 sm:bottom-4 text-center text-white">
-                <h3 className="font-serif text-sm sm:text-lg font-bold tracking-wide group-hover:text-[#E0C07F] transition line-clamp-1">
+                <h3 className="font-serif text-xs sm:text-lg font-bold tracking-wide leading-snug sm:leading-normal group-hover:text-[#E0C07F] transition line-clamp-2">
                   {cat.name}
                 </h3>
                 <div className="mt-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-[#C5A059] inline-flex items-center gap-0.5">
