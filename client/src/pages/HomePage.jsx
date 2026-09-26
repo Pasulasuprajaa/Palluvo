@@ -39,43 +39,37 @@ export default function HomePage({ onNavigate }) {
       title: 'Wedding Edit',
       subtitle: 'Heirloom bridal and trousseau masterworks woven with pure zari.',
       image: '/images/occasions/wedding_edit.jpg',
-      filter: { occasion: 'Wedding' },
-      tag: 'Bridal Heritage'
+      filter: { occasion: 'Wedding' }
     },
     {
       title: 'Festive Glow',
       subtitle: 'Rich jewel tones and radiant weaves for Diwali, Durga Puja & festivities.',
       image: '/images/occasions/festive_glow.jpg',
-      filter: { occasion: 'Festive' },
-      tag: 'Festive Weaves'
+      filter: { occasion: 'Festive' }
     },
     {
       title: 'Evening Glam',
       subtitle: 'Glamorous shimmer georgettes and sequins for cocktail celebrations.',
       image: '/images/occasions/evening_glam.jpg',
-      filter: { occasion: 'Party' },
-      tag: 'Cocktail & Party'
+      filter: { occasion: 'Party' }
     },
     {
       title: 'Office Elegance',
       subtitle: 'Crisp organic French linen and breathable 100s mulmul cotton.',
       image: '/images/occasions/office_elegance.jpg',
-      filter: { occasion: 'Workwear' },
-      tag: 'Sophisticated Daily'
+      filter: { occasion: 'Workwear' }
     },
     {
       title: 'Everyday Grace',
       subtitle: 'Effortless lightweight drapes designed for gentle comfort.',
       image: '/images/occasions/everyday_grace.jpg',
-      filter: { category: 'cotton-sarees' },
-      tag: 'Pure Comfort'
+      filter: { category: 'cotton-sarees' }
     },
     {
       title: 'Temple & Heritage',
       subtitle: 'Sacred auspicious motifs and sanctified pure silk zari borders.',
       image: '/images/occasions/temple_heritage.jpg',
-      filter: { occasion: 'Festive', category: 'kanjivaram-sarees' },
-      tag: 'Sacred Rituals'
+      filter: { occasion: 'Festive', category: 'kanjivaram-sarees' }
     }
   ];
 
@@ -232,7 +226,7 @@ export default function HomePage({ onNavigate }) {
               key={cat.id}
               onClick={() => onNavigate('shop', { category: cat.slug })}
               className="group relative w-36 sm:w-44 md:w-auto shrink-0 snap-item aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
-              aria-label={`Explore ${cat.name} Sarees`}
+              aria-label={/sarees?$/i.test(cat.name.trim()) ? `Explore ${cat.name}` : `Explore ${cat.name} Sarees`}
             >
               <img
                 src={cat.image_url}
@@ -286,15 +280,12 @@ export default function HomePage({ onNavigate }) {
                 className="group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
                 aria-label={`Explore ${col.title} Collection`}
               >
-                <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#FAF7F2]">
+                <div className="aspect-[4/3] w-full overflow-hidden bg-[#FAF7F2]">
                   <img
                     src={col.image}
                     alt={col.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                   />
-                  <span className="absolute top-3 left-3 bg-[#5B1425] text-[#FAF7F2] text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow">
-                    {col.tag}
-                  </span>
                 </div>
 
                 <div className="p-5 flex-1 flex flex-col justify-between w-full">
