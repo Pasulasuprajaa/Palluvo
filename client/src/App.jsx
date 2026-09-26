@@ -26,45 +26,63 @@ import OffersPage from './pages/OffersPage';
 import AdminPage from './pages/AdminPage';
 import PolicyPage from './pages/PolicyPage';
 
+function getRouteFromPath(pathname = window.location.pathname, search = window.location.search) {
+  const path = pathname.toLowerCase();
+  const searchParams = new URLSearchParams(search);
+
+  if (path === '/' || path === '') {
+    return { page: 'home', params: {} };
+  } else if (path.startsWith('/sarees/') || path.startsWith('/product/')) {
+    const slug = pathname.split('/')[2];
+    return { page: 'product', params: { slug } };
+  } else if (path === '/sarees' || path === '/shop') {
+    const filters = {};
+    if (searchParams.get('category')) filters.category = searchParams.get('category');
+    if (searchParams.get('occasion')) filters.occasion = searchParams.get('occasion');
+    if (searchParams.get('fabric')) filters.fabric = searchParams.get('fabric');
+    if (searchParams.get('filter')) filters.filter = searchParams.get('filter');
+    return { page: 'shop', params: filters };
+  } else if (path === '/cart') {
+    return { page: 'cart', params: {} };
+  } else if (path === '/checkout') {
+    return { page: 'checkout', params: {} };
+  } else if (path === '/account') {
+    return { page: 'account', params: {} };
+  } else if (path === '/wishlist') {
+    return { page: 'wishlist', params: {} };
+  } else if (path === '/offers') {
+    return { page: 'offers', params: {} };
+  } else if (path === '/track-order') {
+    const trackingId = searchParams.get('trackingId') || searchParams.get('id') || '';
+    return { page: 'track-order', params: { trackingId } };
+  } else if (path === '/admin') {
+    return { page: 'admin', params: {} };
+  } else if (path === '/privacy' || path === '/terms' || path === '/shipping' || path === '/refund' || path === '/policies' || path === '/policy') {
+    const tab = path === '/policies' || path === '/policy' ? (searchParams.get('tab') || 'privacy') : path.replace('/', '');
+    return { page: 'policy', params: { tab } };
+  }
+  return { page: 'home', params: {} };
+}
+
 function AppContent() {
-  const [currentPage, setCurrentPage] = useState('home');
-  const [pageParams, setPageParams] = useState({});
+  const initialRoute = typeof window !== 'undefined'
+    ? getRouteFromPath(window.location.pathname, window.location.search)
+    : { page: 'home', params: {} };
+
+  const [currentPage, setCurrentPage] = useState(initialRoute.page);
+  const [pageParams, setPageParams] = useState(initialRoute.params);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authSuccessCallback, setAuthSuccessCallback] = useState(null);
 
-  // Sync with browser URL / history for deep linking
+  // Sync with browser URL / history for deep linking on mount and popstate
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname;
-      if (path === '/' || path === '') {
-        setCurrentPage('home');
-      } else if (path.startsWith('/sarees/') || path.startsWith('/product/')) {
-        const slug = path.split('/')[2];
-        setCurrentPage('product');
-        setPageParams({ slug });
-      } else if (path === '/sarees' || path === '/shop') {
-        setCurrentPage('shop');
-      } else if (path === '/cart') {
-        setCurrentPage('cart');
-      } else if (path === '/checkout') {
-        setCurrentPage('checkout');
-      } else if (path === '/account') {
-        setCurrentPage('account');
-      } else if (path === '/wishlist') {
-        setCurrentPage('wishlist');
-      } else if (path === '/offers') {
-        setCurrentPage('offers');
-      } else if (path === '/track-order') {
-        setCurrentPage('track-order');
-      } else if (path === '/admin') {
-        setCurrentPage('admin');
-      } else if (path === '/privacy' || path === '/terms' || path === '/shipping' || path === '/refund' || path === '/policies' || path === '/policy') {
-        const tab = path === '/policies' || path === '/policy' ? 'privacy' : path.replace('/', '');
-        setCurrentPage('policy');
-        setPageParams({ tab });
-      }
+      const { page, params } = getRouteFromPath(window.location.pathname, window.location.search);
+      setCurrentPage(page);
+      setPageParams(params);
     };
 
+    handlePopState();
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
