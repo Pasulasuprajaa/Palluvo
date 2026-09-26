@@ -96,11 +96,12 @@ export default function ProductCard({ product, onNavigate }) {
           </button>
         </div>
 
-        {/* Quick View Hover Button */}
-        <div className="absolute inset-x-3 bottom-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex gap-2 z-10">
+        {/* Quick View Button (Visible on touch, revealed on hover/focus on desktop) */}
+        <div className="absolute inset-x-3 bottom-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-300 flex gap-2 z-10">
           <button
             onClick={handleQuickView}
-            className="flex-1 py-2 bg-white/95 backdrop-blur-md text-[#1F1A1C] text-xs font-semibold rounded-xl hover:bg-[#5B1425] hover:text-[#FAF7F2] transition shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
+            aria-label={`Quick view ${product.name}`}
+            className="flex-1 py-2 bg-white/95 backdrop-blur-md text-[#1F1A1C] text-xs font-semibold rounded-xl hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none transition shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <Eye className="w-3.5 h-3.5" />
             <span>Quick View</span>

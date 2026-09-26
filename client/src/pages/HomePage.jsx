@@ -411,27 +411,44 @@ export default function HomePage({ onNavigate }) {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {instagramPosts.map((post, idx) => (
               <a
                 key={idx}
                 href={post.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group relative aspect-square rounded-2xl overflow-hidden shadow-sm text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2 block cursor-pointer"
+                className="group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2 cursor-pointer"
                 aria-label={`View Instagram post and profile for ${post.handle} (opens in new tab)`}
               >
-                <img
-                  src={post.image}
-                  alt={`Saree drape styling by ${post.handle}`}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center p-4 text-center text-white">
-                  <span className="text-xs font-bold text-[#C5A059]">{post.handle}</span>
-                  <p className="text-[11px] text-white/90 mt-1">{post.text}</p>
-                  <span className="mt-2 text-[10px] text-[#FAF7F2]/80 uppercase tracking-widest underline decoration-[#C5A059]">
-                    View {post.handle} ↗
-                  </span>
+                <div className="relative aspect-square w-full overflow-hidden bg-[#FAF7F2]">
+                  <img
+                    src={post.image}
+                    alt={`Saree drape styling by ${post.handle}`}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-black/40 backdrop-blur-md text-white shadow-sm">
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect width="20" height="20" x="2" y="2" rx="5" ry="5"/>
+                      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between bg-white">
+                  <div>
+                    <span className="text-xs font-bold text-[#5B1425] group-hover:text-[#7E1E34] transition">
+                      {post.handle}
+                    </span>
+                    <p className="text-[11px] sm:text-xs text-[#6E6467] mt-1 line-clamp-2 leading-relaxed">
+                      {post.text}
+                    </p>
+                  </div>
+                  <div className="mt-2.5 pt-2 border-t border-[#F4EFEB] flex items-center justify-between text-[10px] sm:text-[11px] font-semibold text-[#C5A059] uppercase tracking-wider">
+                    <span>View Post</span>
+                    <span>↗</span>
+                  </div>
                 </div>
               </a>
             ))}
