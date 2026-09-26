@@ -552,8 +552,7 @@ function seedDatabase() {
       color_hex: '#D9D2C7',
       images: [
         '/images/sarees/chanderi_tissue.jpg',
-        '/images/occasions/wedding_edit.jpg',
-        '/images/categories/kanjivaram.jpg'
+        '/images/sarees/chanderi_tissue_detail.jpg'
       ],
       variants: [
         { color_name: 'Shimmer Silver Champagne', color_hex: '#D9D2C7', stock: 5, sku: 'PAL-KAN-013-SV' },

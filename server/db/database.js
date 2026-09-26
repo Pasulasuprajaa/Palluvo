@@ -277,7 +277,7 @@ function initSchema() {
       },
       {
         slug: 'arundhati-pure-silver-tissue-muhurtham-kanjivaram',
-        images: ['/images/sarees/chanderi_tissue.jpg', '/images/occasions/festive_glow.jpg']
+        images: ['/images/sarees/chanderi_tissue.jpg', '/images/sarees/chanderi_tissue_detail.jpg']
       }
     ];
 
