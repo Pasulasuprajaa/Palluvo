@@ -48,14 +48,25 @@ export default function ProductCard({ product, onNavigate }) {
     >
       {/* Image Container */}
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#F4EFEB]">
-        <img
-          src={isHovered ? secondaryImg : primaryImg}
-          alt={product.name}
-          className="w-full h-full object-cover object-top transition-transform duration-700 ease-out group-hover:scale-105"
-        />
+        <a
+          href={`/sarees/${product.slug}`}
+          onClick={(e) => {
+            e.preventDefault();
+            handleCardClick();
+          }}
+          tabIndex={-1}
+          aria-hidden="true"
+          className="block w-full h-full cursor-pointer"
+        >
+          <img
+            src={isHovered ? secondaryImg : primaryImg}
+            alt={product.name}
+            className="w-full h-full object-cover object-top transition-transform duration-700 ease-out group-hover:scale-105"
+          />
+        </a>
 
         {/* Single Prioritized Image Badge */}
-        <div className="absolute top-3 left-3 z-10">
+        <div className="absolute top-3 left-3 z-10 pointer-events-none">
           {product.discount_percent > 0 ? (
             <span className="bg-[#5B1425] text-[#FAF7F2] text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow-md">
               {product.discount_percent}% OFF
@@ -71,9 +82,9 @@ export default function ProductCard({ product, onNavigate }) {
         <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-10">
           <button
             onClick={handleWishlistClick}
-            aria-label="Wishlist saree"
+            aria-label={saved ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
             title={saved ? 'Remove from Wishlist' : 'Add to Wishlist'}
-            className={`p-2 rounded-full backdrop-blur-md transition-transform duration-200 shadow-md ${
+            className={`p-2 rounded-full backdrop-blur-md transition-transform duration-200 shadow-md focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none ${
               saved
                 ? 'bg-[#5B1425] text-white scale-110'
                 : 'bg-white/85 text-[#1F1A1C] hover:bg-white hover:text-[#5B1425] hover:scale-110'
@@ -84,9 +95,9 @@ export default function ProductCard({ product, onNavigate }) {
 
           <button
             onClick={handleCompareClick}
-            aria-label="Compare saree"
+            aria-label={compared ? `Remove ${product.name} from comparison` : `Add ${product.name} to comparison`}
             title={compared ? 'Remove from Comparison' : 'Add to Compare'}
-            className={`p-2 rounded-full backdrop-blur-md transition-transform duration-200 shadow-md ${
+            className={`p-2 rounded-full backdrop-blur-md transition-transform duration-200 shadow-md focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none ${
               compared
                 ? 'bg-[#C5A059] text-[#1F1A1C] scale-110 font-bold'
                 : 'bg-white/85 text-[#1F1A1C] hover:bg-white hover:text-[#C5A059] hover:scale-110'
@@ -118,10 +129,18 @@ export default function ProductCard({ product, onNavigate }) {
             <span className="text-[#C5A059] font-semibold shrink-0 ml-2">{product.occasion}</span>
           </div>
 
-          {/* Product Title */}
-          <h3 className="font-serif text-sm sm:text-base font-semibold text-[#1F1A1C] group-hover:text-[#5B1425] transition line-clamp-2 leading-snug">
-            {product.name}
-          </h3>
+          {/* Product Title (Keyboard accessible semantic link) */}
+          <a
+            href={`/sarees/${product.slug}`}
+            onClick={(e) => {
+              e.preventDefault();
+              handleCardClick();
+            }}
+            aria-label={`View details for ${product.name}`}
+            className="font-serif text-sm sm:text-base font-semibold text-[#1F1A1C] group-hover:text-[#5B1425] focus-visible:text-[#5B1425] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded transition line-clamp-2 leading-snug cursor-pointer block"
+          >
+            <h3>{product.name}</h3>
+          </a>
 
           {/* Rating & Silk Mark Certification */}
           <div className="flex items-center justify-between mt-1.5">
@@ -160,8 +179,9 @@ export default function ProductCard({ product, onNavigate }) {
 
           <button
             onClick={handleAddToCart}
-            className="p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer"
+            aria-label={`Add ${product.name} to bag`}
             title="Add to Bag"
+            className="p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer"
           >
             <ShoppingBag className="w-4 h-4" />
           </button>
