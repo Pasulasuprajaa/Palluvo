@@ -1,37 +1,59 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, ArrowRight, ShieldCheck, Award, Heart, ShoppingBag, Star, ChevronRight, Check } from 'lucide-react';
+import { Sparkles, ArrowRight, ShieldCheck, Award, Heart, ShoppingBag, Star, ChevronRight, Check, RotateCcw } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 
 export default function HomePage({ onNavigate }) {
-  const [featuredProducts, setFeaturedProducts] = useState([]);
   const [bestSellers, setBestSellers] = useState([]);
+  const [bestSellersLoading, setBestSellersLoading] = useState(true);
+  const [bestSellersError, setBestSellersError] = useState(null);
+
   const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState(null);
+
+  const fetchCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      setCategoriesError(null);
+      const catRes = await fetch('/api/categories');
+      if (!catRes.ok) throw new Error('Failed to load categories');
+      const catData = await catRes.json();
+      if (catData.categories) {
+        setCategories(catData.categories);
+      } else {
+        setCategories([]);
+      }
+    } catch (err) {
+      console.error('Category fetch error:', err);
+      setCategoriesError('Unable to load weave categories at this time.');
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  const fetchBestSellers = async () => {
+    try {
+      setBestSellersLoading(true);
+      setBestSellersError(null);
+      const bestRes = await fetch('/api/products?best_seller=true&limit=4');
+      if (!bestRes.ok) throw new Error('Failed to load best sellers');
+      const bestData = await bestRes.json();
+      if (bestData.products) {
+        setBestSellers(bestData.products);
+      } else {
+        setBestSellers([]);
+      }
+    } catch (err) {
+      console.error('Best sellers fetch error:', err);
+      setBestSellersError('Unable to load best-selling sarees at this time.');
+    } finally {
+      setBestSellersLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true);
-        const [prodRes, bestRes, catRes] = await Promise.all([
-          fetch('/api/products?featured=true&limit=4'),
-          fetch('/api/products?best_seller=true&limit=4'),
-          fetch('/api/categories')
-        ]);
-
-        const prodData = await prodRes.json();
-        const bestData = await bestRes.json();
-        const catData = await catRes.json();
-
-        if (prodData.products) setFeaturedProducts(prodData.products);
-        if (bestData.products) setBestSellers(bestData.products);
-        if (catData.categories) setCategories(catData.categories);
-      } catch (err) {
-        console.error('Home data fetch error:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
+    fetchCategories();
+    fetchBestSellers();
   }, []);
 
   const occasionCollections = [
@@ -216,35 +238,64 @@ export default function HomePage({ onNavigate }) {
         </div>
 
         {/* Mobile Horizontal Carousel / Desktop 5-Col Grid */}
-        <div className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2">
-          {weaveCategories.map((cat) => (
-            <button
-              type="button"
-              key={cat.id}
-              onClick={() => onNavigate('shop', { category: cat.slug })}
-              className="group relative w-36 sm:w-44 md:w-auto shrink-0 snap-item aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
-              aria-label={/sarees?$/i.test(cat.name.trim()) ? `Explore ${cat.name}` : `Explore ${cat.name} Sarees`}
-            >
-              <img
-                src={cat.image_url}
-                alt={cat.name}
-                loading="lazy"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent group-hover:from-[#5B1425]/90 transition-colors duration-300" />
-              
-              <div className="absolute inset-x-3 bottom-3 sm:bottom-4 text-center text-white">
-                <h3 className="font-serif text-xs sm:text-lg font-bold tracking-wide leading-snug sm:leading-normal group-hover:text-[#E0C07F] transition line-clamp-2">
-                  {cat.name}
-                </h3>
-                <div className="mt-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-[#C5A059] inline-flex items-center gap-0.5">
-                  <span>Explore</span>
-                  <ChevronRight className="w-2.5 h-2.5" />
-                </div>
+        {categoriesLoading ? (
+          <div className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2">
+            {[...Array(5)].map((_, i) => (
+              <div
+                key={i}
+                className="w-36 sm:w-44 md:w-auto shrink-0 aspect-[3/4] rounded-2xl bg-[#EAE2D7]/60 animate-pulse flex flex-col justify-end p-4 space-y-2 border border-[#EAE2D7]"
+              >
+                <div className="h-4 bg-[#D5C7B8]/60 rounded-md w-3/4 mx-auto" />
+                <div className="h-3 bg-[#D5C7B8]/40 rounded-md w-1/2 mx-auto" />
               </div>
+            ))}
+          </div>
+        ) : categoriesError ? (
+          <div className="p-8 text-center bg-white rounded-2xl border border-[#EAE2D7] shadow-xs space-y-3">
+            <p className="text-xs sm:text-sm text-[#6E6467]">{categoriesError}</p>
+            <button
+              onClick={fetchCategories}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#5B1425] text-[#FAF7F2] text-xs font-semibold rounded-xl hover:bg-[#7E1E34] transition shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Retry</span>
             </button>
-          ))}
-        </div>
+          </div>
+        ) : weaveCategories.length === 0 ? (
+          <div className="p-8 text-center bg-white rounded-2xl border border-[#EAE2D7] shadow-xs">
+            <p className="text-xs sm:text-sm text-[#6E6467]">No weave categories available at the moment.</p>
+          </div>
+        ) : (
+          <div className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2">
+            {weaveCategories.map((cat) => (
+              <button
+                type="button"
+                key={cat.id}
+                onClick={() => onNavigate('shop', { category: cat.slug })}
+                className="group relative w-36 sm:w-44 md:w-auto shrink-0 snap-item aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
+                aria-label={/sarees?$/i.test(cat.name.trim()) ? `Explore ${cat.name}` : `Explore ${cat.name} Sarees`}
+              >
+                <img
+                  src={cat.image_url}
+                  alt={cat.name}
+                  loading="lazy"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent group-hover:from-[#5B1425]/90 transition-colors duration-300" />
+                
+                <div className="absolute inset-x-3 bottom-3 sm:bottom-4 text-center text-white">
+                  <h3 className="font-serif text-xs sm:text-lg font-bold tracking-wide leading-snug sm:leading-normal group-hover:text-[#E0C07F] transition line-clamp-2">
+                    {cat.name}
+                  </h3>
+                  <div className="mt-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-[#C5A059] inline-flex items-center gap-0.5">
+                    <span>Explore</span>
+                    <ChevronRight className="w-2.5 h-2.5" />
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* 3. FEATURED COLLECTIONS: CURATED FOR EVERY OCCASION */}
@@ -327,11 +378,44 @@ export default function HomePage({ onNavigate }) {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {bestSellers.map((prod) => (
-            <ProductCard key={prod.id} product={prod} onNavigate={onNavigate} />
-          ))}
-        </div>
+        {bestSellersLoading ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            {[...Array(4)].map((_, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden p-3 sm:p-4 space-y-3 shadow-xs"
+              >
+                <div className="aspect-[3/4] w-full rounded-xl bg-[#EAE2D7]/60 animate-pulse" />
+                <div className="space-y-2">
+                  <div className="h-3 bg-[#EAE2D7]/80 rounded w-1/3 animate-pulse" />
+                  <div className="h-4 bg-[#EAE2D7] rounded w-4/5 animate-pulse" />
+                  <div className="h-4 bg-[#EAE2D7]/70 rounded w-1/2 animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : bestSellersError ? (
+          <div className="p-8 text-center bg-white rounded-2xl border border-[#EAE2D7] shadow-xs space-y-3">
+            <p className="text-xs sm:text-sm text-[#6E6467]">{bestSellersError}</p>
+            <button
+              onClick={fetchBestSellers}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#5B1425] text-[#FAF7F2] text-xs font-semibold rounded-xl hover:bg-[#7E1E34] transition shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Retry</span>
+            </button>
+          </div>
+        ) : bestSellers.length === 0 ? (
+          <div className="p-8 text-center bg-white rounded-2xl border border-[#EAE2D7] shadow-xs">
+            <p className="text-xs sm:text-sm text-[#6E6467]">No best seller sarees available at the moment.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            {bestSellers.map((prod) => (
+              <ProductCard key={prod.id} product={prod} onNavigate={onNavigate} />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* 5. BRAND STORY BANNER */}
@@ -445,7 +529,7 @@ export default function HomePage({ onNavigate }) {
                       {post.text}
                     </p>
                   </div>
-                  <div className="mt-2.5 pt-2 border-t border-[#F4EFEB] flex items-center justify-between text-[10px] sm:text-[11px] font-semibold text-[#C5A059] uppercase tracking-wider">
+                  <div className="mt-2.5 pt-2 border-t border-[#F4EFEB] flex items-center justify-between text-[10px] sm:text-[11px] font-semibold text-[#855A16] uppercase tracking-wider">
                     <span>View Post</span>
                     <span>↗</span>
                   </div>

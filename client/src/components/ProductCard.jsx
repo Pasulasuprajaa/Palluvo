@@ -126,7 +126,7 @@ export default function ProductCard({ product, onNavigate }) {
           {/* Fabric & Occasion Tag */}
           <div className="flex items-center justify-between text-[11px] text-[#6E6467] mb-1">
             <span className="font-medium tracking-wide text-[#6E6467]">{product.fabric}</span>
-            <span className="text-[#C5A059] font-semibold shrink-0 ml-2">{product.occasion}</span>
+            <span className="text-[#855A16] font-semibold shrink-0 ml-2">{product.occasion}</span>
           </div>
 
           {/* Product Title (Keyboard accessible semantic link) */}
