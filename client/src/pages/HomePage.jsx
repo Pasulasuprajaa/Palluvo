@@ -503,7 +503,7 @@ export default function HomePage({ onNavigate }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2 cursor-pointer"
-                aria-label={`View Instagram post and profile for ${post.handle} (opens in new tab)`}
+                aria-label={`View Instagram profile for ${post.handle} (opens in new tab)`}
               >
                 <div className="relative aspect-square w-full overflow-hidden bg-[#FAF7F2]">
                   <img
@@ -530,7 +530,7 @@ export default function HomePage({ onNavigate }) {
                     </p>
                   </div>
                   <div className="mt-2.5 pt-2 border-t border-[#F4EFEB] flex items-center justify-between text-[10px] sm:text-[11px] font-semibold text-[#855A16] uppercase tracking-wider">
-                    <span>View Post</span>
+                    <span>View Profile</span>
                     <span>↗</span>
                   </div>
                 </div>

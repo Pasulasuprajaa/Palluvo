@@ -107,8 +107,8 @@ export default function ProductCard({ product, onNavigate }) {
           </button>
         </div>
 
-        {/* Quick View Button (Visible on touch, revealed on hover/focus on desktop) */}
-        <div className="absolute inset-x-3 bottom-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-300 flex gap-2 z-10">
+        {/* Desktop Quick View Button (Revealed on hover/focus on desktop screens only, keeping mobile photography completely unobstructed) */}
+        <div className="hidden sm:flex absolute inset-x-3 bottom-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-300 gap-2 z-10">
           <button
             onClick={handleQuickView}
             aria-label={`Quick view ${product.name}`}
@@ -159,9 +159,9 @@ export default function ProductCard({ product, onNavigate }) {
           </div>
         </div>
 
-        {/* Price & Add to Cart Button */}
-        <div className="pt-2 border-t border-[#F4EFEB] flex items-center justify-between">
-          <div>
+        {/* Price & Action Buttons */}
+        <div className="pt-2 border-t border-[#F4EFEB] flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
               <span className="font-serif text-base sm:text-lg font-bold text-[#5B1425]">
                 ₹{product.price?.toLocaleString('en-IN')}
@@ -172,19 +172,31 @@ export default function ProductCard({ product, onNavigate }) {
                 </span>
               )}
             </div>
-            <div className="text-[10px] text-emerald-700 font-medium">
+            <div className="text-[10px] text-emerald-700 font-medium truncate">
               Free Express Delivery
             </div>
           </div>
 
-          <button
-            onClick={handleAddToCart}
-            aria-label={`Add ${product.name} to bag`}
-            title="Add to Bag"
-            className="p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer"
-          >
-            <ShoppingBag className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Mobile Touch Quick View (positioned below image to keep photo 100% visible) */}
+            <button
+              onClick={handleQuickView}
+              aria-label={`Quick view ${product.name}`}
+              title="Quick View"
+              className="sm:hidden p-2.5 bg-[#FAF7F2] text-[#1F1A1C] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl border border-[#EAE2D7] transition cursor-pointer"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={handleAddToCart}
+              aria-label={`Add ${product.name} to bag`}
+              title="Add to Bag"
+              className="p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer"
+            >
+              <ShoppingBag className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
