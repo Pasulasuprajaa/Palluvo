@@ -160,9 +160,9 @@ export default function ProductCard({ product, onNavigate }) {
         </div>
 
         {/* Price & Action Buttons */}
-        <div className="pt-2 border-t border-[#F4EFEB] flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-2">
+        <div className="pt-2 border-t border-[#F4EFEB] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <div className="flex items-baseline gap-1.5 flex-wrap">
               <span className="font-serif text-base sm:text-lg font-bold text-[#5B1425]">
                 ₹{product.price?.toLocaleString('en-IN')}
               </span>
@@ -172,29 +172,31 @@ export default function ProductCard({ product, onNavigate }) {
                 </span>
               )}
             </div>
-            <div className="text-[10px] text-emerald-700 font-medium truncate">
+            <div className="text-[10px] text-emerald-700 font-medium">
               Free Express Delivery
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 w-full sm:w-auto">
             {/* Mobile Touch Quick View (positioned below image to keep photo 100% visible) */}
             <button
               onClick={handleQuickView}
               aria-label={`Quick view ${product.name}`}
               title="Quick View"
-              className="sm:hidden p-2.5 bg-[#FAF7F2] text-[#1F1A1C] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl border border-[#EAE2D7] transition cursor-pointer"
+              className="sm:hidden flex-1 py-1.5 px-2 bg-[#FAF7F2] text-[#1F1A1C] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl border border-[#EAE2D7] text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1"
             >
-              <Eye className="w-4 h-4" />
+              <Eye className="w-3.5 h-3.5" />
+              <span>Quick</span>
             </button>
 
             <button
               onClick={handleAddToCart}
               aria-label={`Add ${product.name} to bag`}
               title="Add to Bag"
-              className="p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer"
+              className="flex-1 sm:flex-none p-1.5 sm:p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer flex items-center justify-center gap-1 text-xs font-semibold"
             >
-              <ShoppingBag className="w-4 h-4" />
+              <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="sm:hidden">Add</span>
             </button>
           </div>
         </div>

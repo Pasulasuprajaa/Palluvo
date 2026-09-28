@@ -319,13 +319,13 @@ export default function HomePage({ onNavigate }) {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="flex overflow-x-auto gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-6 pb-2">
             {occasionCollections.map((col, idx) => (
               <button
                 type="button"
                 key={idx}
                 onClick={() => onNavigate('shop', col.filter)}
-                className="group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
+                className="w-72 sm:w-auto shrink-0 snap-item group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
                 aria-label={`Explore ${col.title} Collection`}
               >
                 <div className="aspect-[4/3] w-full overflow-hidden bg-[#FAF7F2]">
