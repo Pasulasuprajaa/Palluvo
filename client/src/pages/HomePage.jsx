@@ -435,9 +435,9 @@ export default function HomePage({ onNavigate }) {
           <div className="pt-2">
             <button
               onClick={() => onNavigate('shop', { category: 'banarasi-sarees' })}
-              className="px-8 py-3.5 bg-[#C5A059] text-[#1F1A1C] font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-[#E0C07F] transition shadow-xl focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+              className="px-8 py-3.5 bg-[#C5A059] text-[#1F1A1C] font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-[#E0C07F] transition shadow-xl focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none cursor-pointer"
             >
-              Discover the Weaves
+              Explore Banarasi Sarees
             </button>
           </div>
         </div>
@@ -459,10 +459,19 @@ export default function HomePage({ onNavigate }) {
               className="bg-white rounded-2xl p-6 border border-[#EAE2D7] shadow-sm hover:shadow-md transition flex flex-col justify-between"
             >
               <div>
-                <div className="flex items-center text-[#C5A059] text-sm mb-3">
-                  {[...Array(t.rating)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-current text-[#C5A059]" />
-                  ))}
+                <div
+                  className="flex items-center gap-1 mb-3"
+                  role="img"
+                  aria-label={`${t.rating} out of 5 stars`}
+                >
+                  <div className="flex items-center text-[#855A16]">
+                    {[...Array(t.rating)].map((_, i) => (
+                      <Star key={i} className="w-4 h-4 fill-current text-[#855A16]" aria-hidden="true" />
+                    ))}
+                  </div>
+                  <span className="text-xs font-bold text-[#855A16] ml-1">
+                    {t.rating}.0
+                  </span>
                 </div>
                 <p className="text-xs sm:text-sm text-[#1F1A1C] italic leading-relaxed">
                   "{t.comment}"
