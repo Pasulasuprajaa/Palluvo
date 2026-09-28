@@ -41,9 +41,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
             <span className="text-[#C5A059] font-semibold">| Code <strong className="text-white bg-[#5B1425] px-1 py-0.5 rounded border border-[#C5A059]/40 tracking-wider">WELCOME10</strong> (10% OFF)</span>
           </div>
           <div className="hidden sm:flex items-center gap-4 text-[11px] text-[#FAF7F2]/80 shrink-0">
-            <button onClick={() => handleNav('offers')} className="hover:text-[#C5A059] transition flex items-center gap-1 cursor-pointer">
-              <Tag className="w-3 h-3 text-[#C5A059]" /> Offers
-            </button>
+            <a href="tel:+918001234567" className="hover:text-[#C5A059] transition flex items-center gap-1 cursor-pointer" aria-label="Customer Helpline 1800-123-4567">
+              <Phone className="w-3 h-3 text-[#C5A059]" />
+              <span>Care: 1800-123-4567</span>
+            </a>
             <button onClick={() => handleNav('track-order')} className="hover:text-[#C5A059] transition cursor-pointer">
               Track Order
             </button>

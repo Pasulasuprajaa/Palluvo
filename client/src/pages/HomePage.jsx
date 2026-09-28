@@ -105,21 +105,24 @@ export default function HomePage({ onNavigate }) {
       role: 'Kolkata, WB',
       rating: 5,
       comment: 'The Royal Crimson Banarasi exceeded every expectation. The kadwa gold zari work is dense yet remarkably lightweight.',
-      saree: 'Royal Crimson Banarasi Katan'
+      saree: 'Royal Crimson Banarasi Katan',
+      slug: 'royal-crimson-banarasi-katan-silk-saree'
     },
     {
       name: 'Meera Nambiar',
       role: 'Bengaluru, KA',
       rating: 5,
       comment: 'Authentic heavy korvai luster with a royal drape. The luxury burgundy packaging made unboxing feel like a celebration.',
-      saree: 'Vaidarbhi Pure Kanjivaram Gold'
+      saree: 'Vaidarbhi Pure Kanjivaram Gold',
+      slug: 'vaidarbhi-pure-kanjivaram-bridal-gold-silk-saree'
     },
     {
       name: 'Shweta Singhania',
       role: 'Mumbai, MH',
       rating: 5,
       comment: 'The Noor rose gold organza saree is pure poetry. Featherlight on the skin with an exquisite scalloped border.',
-      saree: 'Noor Rose Gold Organza'
+      saree: 'Noor Rose Gold Organza',
+      slug: 'noor-rose-gold-embroidered-organza-saree'
     }
   ];
 
@@ -476,6 +479,20 @@ export default function HomePage({ onNavigate }) {
                 <p className="text-xs sm:text-sm text-[#1F1A1C] italic leading-relaxed">
                   "{t.comment}"
                 </p>
+
+                {/* Saree Being Reviewed */}
+                <div className="mt-3 pt-2.5 border-t border-[#F4EFEB]">
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('product', { slug: t.slug })}
+                    className="text-[11px] font-semibold text-[#5B1425] hover:text-[#7E1E34] hover:underline inline-flex items-center gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded text-left transition"
+                    aria-label={`View details for ${t.saree}`}
+                  >
+                    <span className="text-[#6E6467] font-normal">Purchased:</span>
+                    <span>{t.saree}</span>
+                    <ArrowRight className="w-3 h-3 text-[#C5A059] shrink-0" />
+                  </button>
+                </div>
               </div>
 
               <div className="mt-6 pt-4 border-t border-[#F4EFEB] flex items-center justify-between">
