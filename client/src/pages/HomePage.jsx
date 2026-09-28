@@ -314,7 +314,7 @@ export default function HomePage({ onNavigate }) {
               onClick={() => onNavigate('shop')}
               className="mt-4 md:mt-0 text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] inline-flex items-center gap-1 group focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-lg p-1"
             >
-              <span>View All Collections</span>
+              <span>Explore All Sarees</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-[#C5A059]" />
             </button>
           </div>

@@ -13,7 +13,14 @@ export default function ProductCard({ product, onNavigate }) {
   const saved = isWishlisted(product.id);
   const compared = isInCompare(product.id);
   const primaryImg = product.primary_image || (product.images && product.images[0]) || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=600&q=80';
-  const secondaryImg = product.secondary_image || (product.images && product.images[1]) || primaryImg;
+  const rawSecondary = product.secondary_image || (product.images && product.images[1]);
+  const hasItemSpecificAlternate = Boolean(
+    rawSecondary &&
+    rawSecondary !== primaryImg &&
+    !rawSecondary.includes('/images/categories/') &&
+    !rawSecondary.includes('/images/occasions/')
+  );
+  const secondaryImg = hasItemSpecificAlternate ? rawSecondary : primaryImg;
 
   const handleCardClick = () => {
     onNavigate('product', { slug: product.slug });

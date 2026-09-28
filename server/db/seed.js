@@ -394,9 +394,7 @@ function seedDatabase() {
       color_name: 'Deep Sindoor Crimson',
       color_hex: '#800C1F',
       images: [
-        '/images/sarees/bridal_sindoor.jpg',
-        '/images/categories/bridal.jpg',
-        '/images/occasions/wedding_edit.jpg'
+        '/images/sarees/bridal_sindoor.jpg'
       ],
       variants: [
         { color_name: 'Deep Sindoor Crimson', color_hex: '#800C1F', stock: 5, sku: 'PAL-BRI-008-RD' },
@@ -644,9 +642,7 @@ function seedDatabase() {
       color_name: '24K Royal Gilded Gold',
       color_hex: '#C5A059',
       images: [
-        '/images/sarees/kanjivaram_gold.jpg',
-        '/images/categories/bridal.jpg',
-        '/images/occasions/wedding_edit.jpg'
+        '/images/sarees/kanjivaram_gold.jpg'
       ],
       variants: [
         { color_name: '24K Royal Gilded Gold', color_hex: '#C5A059', stock: 4, sku: 'PAL-BRI-016-GL' },

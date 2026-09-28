@@ -269,11 +269,11 @@ function initSchema() {
       },
       {
         slug: 'samrajni-grand-muhurtham-24k-gold-korvai-kanjivaram',
-        images: ['/images/sarees/kanjivaram_gold.jpg', '/images/categories/kanjivaram.jpg']
+        images: ['/images/sarees/kanjivaram_gold.jpg']
       },
       {
         slug: 'rajkumari-heritage-sindoor-bridal-banarasi-saree',
-        images: ['/images/sarees/bridal_sindoor.jpg', '/images/categories/banarasi.jpg']
+        images: ['/images/sarees/bridal_sindoor.jpg']
       },
       {
         slug: 'arundhati-pure-silver-tissue-muhurtham-kanjivaram',
