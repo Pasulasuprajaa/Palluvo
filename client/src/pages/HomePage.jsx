@@ -382,11 +382,11 @@ export default function HomePage({ onNavigate }) {
         </div>
 
         {bestSellersLoading ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          <div className="flex overflow-x-auto gap-3.5 sm:gap-6 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 pb-2">
             {[...Array(4)].map((_, i) => (
               <div
                 key={i}
-                className="bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden p-3 sm:p-4 space-y-3 shadow-xs"
+                className="w-56 sm:w-auto shrink-0 snap-item bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden p-3 sm:p-4 space-y-3 shadow-xs"
               >
                 <div className="aspect-[3/4] w-full rounded-xl bg-[#EAE2D7]/60 animate-pulse" />
                 <div className="space-y-2">
@@ -413,9 +413,11 @@ export default function HomePage({ onNavigate }) {
             <p className="text-xs sm:text-sm text-[#6E6467]">No best seller sarees available at the moment.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          <div className="flex overflow-x-auto gap-3.5 sm:gap-6 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 pb-2">
             {bestSellers.map((prod) => (
-              <ProductCard key={prod.id} product={prod} onNavigate={onNavigate} />
+              <div key={prod.id} className="w-56 sm:w-auto shrink-0 snap-item flex">
+                <ProductCard product={prod} onNavigate={onNavigate} />
+              </div>
             ))}
           </div>
         )}

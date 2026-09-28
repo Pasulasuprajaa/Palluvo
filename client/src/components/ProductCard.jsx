@@ -190,20 +190,20 @@ export default function ProductCard({ product, onNavigate }) {
               onClick={handleQuickView}
               aria-label={`Quick view ${product.name}`}
               title="Quick View"
-              className="sm:hidden flex-1 py-1.5 px-2 bg-[#FAF7F2] text-[#1F1A1C] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl border border-[#EAE2D7] text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1"
+              className="sm:hidden flex-1 py-2 px-2 bg-[#FAF7F2] text-[#1F1A1C] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl border border-[#EAE2D7] text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap"
             >
-              <Eye className="w-3.5 h-3.5" />
-              <span>Quick</span>
+              <Eye className="w-3.5 h-3.5 shrink-0" />
+              <span>Quick View</span>
             </button>
 
             <button
               onClick={handleAddToCart}
               aria-label={`Add ${product.name} to bag`}
               title="Add to Bag"
-              className="flex-1 sm:flex-none p-1.5 sm:p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer flex items-center justify-center gap-1 text-xs font-semibold"
+              className="flex-1 sm:flex-none py-2 px-2 sm:p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold whitespace-nowrap"
             >
-              <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="sm:hidden">Add</span>
+              <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="sm:hidden">Add to Bag</span>
             </button>
           </div>
         </div>
