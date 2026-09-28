@@ -184,25 +184,25 @@ export default function ProductCard({ product, onNavigate }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 w-full sm:w-auto">
-            {/* Mobile Touch Quick View (positioned below image to keep photo 100% visible) */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Mobile Touch Quick View (44x44px accessible touch target) */}
             <button
               onClick={handleQuickView}
               aria-label={`Quick view ${product.name}`}
               title="Quick View"
-              className="sm:hidden flex-1 py-2 px-2 bg-[#FAF7F2] text-[#1F1A1C] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl border border-[#EAE2D7] text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs whitespace-nowrap"
+              className="sm:hidden w-11 h-11 min-h-[44px] min-w-[44px] shrink-0 bg-[#FAF7F2] text-[#1F1A1C] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl border border-[#EAE2D7] transition cursor-pointer flex items-center justify-center shadow-xs"
             >
-              <Eye className="w-3.5 h-3.5 shrink-0" />
-              <span>Quick View</span>
+              <Eye className="w-4 h-4" />
             </button>
 
+            {/* Add to Bag (44px height on touch, responsive on desktop) */}
             <button
               onClick={handleAddToCart}
               aria-label={`Add ${product.name} to bag`}
               title="Add to Bag"
-              className="flex-1 sm:flex-none py-2 px-2 sm:p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold whitespace-nowrap"
+              className="flex-1 sm:flex-none h-11 min-h-[44px] sm:h-auto sm:min-h-0 px-3 sm:p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold"
             >
-              <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <ShoppingBag className="w-4 h-4 shrink-0" />
               <span className="sm:hidden">Add to Bag</span>
             </button>
           </div>
