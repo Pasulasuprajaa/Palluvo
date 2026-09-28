@@ -179,8 +179,8 @@ export default function HomePage({ onNavigate }) {
           </div>
 
           <h1 className="font-serif text-3xl sm:text-6xl lg:text-7xl font-bold leading-[1.15] sm:leading-[1.1] tracking-tight text-[#FAF7F2] drop-shadow-sm animate-slide-up">
-            Every drape, <br />
-            <span className="italic font-normal gold-gradient-text">a little magic.</span>
+            Timeless weaves, <br />
+            <span className="italic font-normal gold-gradient-text">woven for generations.</span>
           </h1>
 
           <p className="mt-2 sm:mt-6 text-xs sm:text-lg text-[#FAF7F2]/85 leading-relaxed font-sans max-w-lg drop-shadow-xs">
