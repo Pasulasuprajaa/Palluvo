@@ -187,11 +187,11 @@ export default function HomePage({ onNavigate }) {
             Handcrafted Banarasi, pure Kanjivaram, and ethereal organza sarees designed to make your celebratory moments unforgettable.
           </p>
 
-          {/* Action CTAs: Side-by-side on mobile to eliminate vertical height overflow */}
+          {/* Action CTAs: Side-by-side on mobile with 44px min touch target height */}
           <div className="mt-4 sm:mt-8 flex flex-row items-center gap-2.5 sm:gap-4 w-full sm:w-auto">
             <button
               onClick={() => onNavigate('shop')}
-              className="flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 bg-[#5B1425] hover:bg-[#7E1E34] text-[#FAF7F2] font-bold text-[11px] sm:text-xs uppercase tracking-widest rounded-xl transition-all duration-300 shadow-2xl flex items-center justify-center gap-1.5 sm:gap-2.5 border border-[#C5A059]/30 active:scale-95 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none whitespace-nowrap"
+              className="flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 min-h-[44px] bg-[#5B1425] hover:bg-[#7E1E34] text-[#FAF7F2] font-bold text-[11px] sm:text-xs uppercase tracking-widest rounded-xl transition-all duration-300 shadow-2xl flex items-center justify-center gap-1.5 sm:gap-2.5 border border-[#C5A059]/30 active:scale-95 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none whitespace-nowrap"
             >
               <span>Explore Sarees</span>
               <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#C5A059]" />
@@ -199,7 +199,7 @@ export default function HomePage({ onNavigate }) {
 
             <button
               onClick={() => onNavigate('shop', { occasion: 'Wedding' })}
-              className="flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 bg-[#FAF7F2]/10 hover:bg-[#FAF7F2]/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-[11px] sm:text-xs uppercase tracking-widest rounded-xl transition-all duration-300 border border-white/20 hover:border-[#C5A059] active:scale-95 text-center cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none whitespace-nowrap"
+              className="flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 min-h-[44px] bg-[#FAF7F2]/10 hover:bg-[#FAF7F2]/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-[11px] sm:text-xs uppercase tracking-widest rounded-xl transition-all duration-300 border border-white/20 hover:border-[#C5A059] active:scale-95 flex items-center justify-center text-center cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none whitespace-nowrap"
             >
               Bridal Edit
             </button>
@@ -209,15 +209,23 @@ export default function HomePage({ onNavigate }) {
           <div className="mt-4 sm:mt-12 pt-3 sm:pt-8 border-t border-white/15 grid grid-cols-3 gap-2 sm:gap-6 text-left w-full">
             <div>
               <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">100%</div>
-              <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">Pure Handloom</div>
+              <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">
+                <span className="sm:hidden">Handloom</span>
+                <span className="hidden sm:inline">Pure Handloom</span>
+              </div>
             </div>
             <div>
               <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">15k+</div>
-              <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">Drapes Loved</div>
+              <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">
+                Drapes Loved
+              </div>
             </div>
             <div>
               <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">4.9 ★</div>
-              <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">Verified Reviews</div>
+              <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">
+                <span className="sm:hidden">Reviews</span>
+                <span className="hidden sm:inline">Verified Reviews</span>
+              </div>
             </div>
           </div>
         </div>
