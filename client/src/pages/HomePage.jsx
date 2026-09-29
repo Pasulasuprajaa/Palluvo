@@ -322,13 +322,13 @@ export default function HomePage({ onNavigate }) {
             </button>
           </div>
 
-          <div className="flex overflow-x-auto gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-6 pb-2">
+          <div className="flex overflow-x-auto gap-3.5 sm:gap-6 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 pb-2">
             {occasionCollections.map((col, idx) => (
               <button
                 type="button"
                 key={idx}
                 onClick={() => onNavigate('shop', col.filter)}
-                className="w-72 sm:w-auto shrink-0 snap-item group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
+                className="w-[72vw] min-w-[218px] max-w-[268px] sm:w-auto shrink-0 snap-item group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
                 aria-label={`Explore ${col.title} Collection`}
               >
                 <div className="aspect-[4/3] w-full overflow-hidden bg-[#FAF7F2]">
@@ -339,12 +339,12 @@ export default function HomePage({ onNavigate }) {
                   />
                 </div>
 
-                <div className="p-5 flex-1 flex flex-col justify-between w-full">
+                <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between w-full">
                   <div>
-                    <h3 className="font-serif text-xl font-bold text-[#1F1A1C] group-hover:text-[#5B1425] transition">
+                    <h3 className="font-serif text-lg sm:text-xl font-bold text-[#1F1A1C] group-hover:text-[#5B1425] transition">
                       {col.title}
                     </h3>
-                    <p className="text-xs text-[#6E6467] mt-1.5 leading-relaxed">
+                    <p className="text-xs text-[#6E6467] mt-1.5 leading-relaxed line-clamp-2">
                       {col.subtitle}
                     </p>
                   </div>
@@ -360,6 +360,12 @@ export default function HomePage({ onNavigate }) {
                 </div>
               </button>
             ))}
+          </div>
+
+          {/* Mobile Swipe Cue */}
+          <div className="flex sm:hidden items-center justify-center gap-1 mt-2.5 text-[11px] text-[#6E6467] font-medium">
+            <span>Swipe to explore 6 occasion edits</span>
+            <ChevronRight className="w-3.5 h-3.5 text-[#C5A059]" />
           </div>
         </div>
       </section>

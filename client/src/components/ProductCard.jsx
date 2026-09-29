@@ -86,31 +86,31 @@ export default function ProductCard({ product, onNavigate }) {
         </div>
 
         {/* Wishlist & Compare Buttons */}
-        <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-10">
+        <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
           <button
             onClick={handleWishlistClick}
             aria-label={saved ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
             title={saved ? 'Remove from Wishlist' : 'Add to Wishlist'}
-            className={`p-2 rounded-full backdrop-blur-md transition-transform duration-200 shadow-md focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none ${
+            className={`w-10 h-10 min-w-[40px] min-h-[40px] sm:w-9 sm:h-9 sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-full backdrop-blur-md transition-transform duration-200 shadow-md focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none cursor-pointer ${
               saved
-                ? 'bg-[#5B1425] text-white scale-110'
-                : 'bg-white/85 text-[#1F1A1C] hover:bg-white hover:text-[#5B1425] hover:scale-110'
+                ? 'bg-[#5B1425] text-white scale-105'
+                : 'bg-white/90 text-[#1F1A1C] hover:bg-white hover:text-[#5B1425] hover:scale-105'
             }`}
           >
-            <Heart className={`w-4 h-4 ${saved ? 'fill-current' : ''}`} />
+            <Heart className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${saved ? 'fill-current' : ''}`} />
           </button>
 
           <button
             onClick={handleCompareClick}
             aria-label={compared ? `Remove ${product.name} from comparison` : `Add ${product.name} to comparison`}
             title={compared ? 'Remove from Comparison' : 'Add to Compare'}
-            className={`p-2 rounded-full backdrop-blur-md transition-transform duration-200 shadow-md focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none ${
+            className={`w-10 h-10 min-w-[40px] min-h-[40px] sm:w-9 sm:h-9 sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-full backdrop-blur-md transition-transform duration-200 shadow-md focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none cursor-pointer ${
               compared
-                ? 'bg-[#C5A059] text-[#1F1A1C] scale-110 font-bold'
-                : 'bg-white/85 text-[#1F1A1C] hover:bg-white hover:text-[#C5A059] hover:scale-110'
+                ? 'bg-[#C5A059] text-[#1F1A1C] scale-105 font-bold'
+                : 'bg-white/90 text-[#1F1A1C] hover:bg-white hover:text-[#C5A059] hover:scale-105'
             }`}
           >
-            <Scale className="w-4 h-4" />
+            <Scale className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
           </button>
         </div>
 
