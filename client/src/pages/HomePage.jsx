@@ -233,19 +233,10 @@ export default function HomePage({ onNavigate }) {
 
       {/* 2. CATEGORY SECTION (Horizontal Swipeable Carousel on Mobile) */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full">
-        <div className="flex items-end justify-between mb-6 sm:mb-8">
-          <div>
-            <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C]">
-              Shop by Weave & Fabric
-            </h2>
-          </div>
-          <button
-            onClick={() => onNavigate('shop')}
-            className="text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] hidden sm:inline-flex items-center gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-lg p-1"
-          >
-            <span>View All</span>
-            <ArrowRight className="w-3.5 h-3.5 text-[#C5A059]" />
-          </button>
+        <div className="mb-6 sm:mb-8">
+          <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C]">
+            Shop by Weave & Fabric
+          </h2>
         </div>
 
         {/* Mobile Horizontal Carousel / Desktop 5-Col Grid */}
@@ -277,34 +268,42 @@ export default function HomePage({ onNavigate }) {
             <p className="text-xs sm:text-sm text-[#6E6467]">No weave categories available at the moment.</p>
           </div>
         ) : (
-          <div className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2">
-            {weaveCategories.map((cat) => (
-              <button
-                type="button"
-                key={cat.id}
-                onClick={() => onNavigate('shop', { category: cat.slug })}
-                className="group relative w-36 sm:w-44 md:w-auto shrink-0 snap-item aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
-                aria-label={/sarees?$/i.test(cat.name.trim()) ? `Explore ${cat.name}` : `Explore ${cat.name} Sarees`}
-              >
-                <img
-                  src={cat.image_url}
-                  alt={cat.name}
-                  loading="lazy"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent group-hover:from-[#5B1425]/90 transition-colors duration-300" />
-                
-                <div className="absolute inset-x-3 bottom-3 sm:bottom-4 text-center text-white">
-                  <h3 className="font-serif text-xs sm:text-lg font-bold tracking-wide leading-snug sm:leading-normal group-hover:text-[#E0C07F] transition line-clamp-2">
-                    {cat.name}
-                  </h3>
-                  <div className="mt-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-[#C5A059] inline-flex items-center gap-0.5">
-                    <span>Explore</span>
-                    <ChevronRight className="w-2.5 h-2.5" />
+          <div>
+            <div className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2">
+              {weaveCategories.map((cat) => (
+                <button
+                  type="button"
+                  key={cat.id}
+                  onClick={() => onNavigate('shop', { category: cat.slug })}
+                  className="group relative w-36 sm:w-44 md:w-auto shrink-0 snap-item aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
+                  aria-label={/sarees?$/i.test(cat.name.trim()) ? `Explore ${cat.name}` : `Explore ${cat.name} Sarees`}
+                >
+                  <img
+                    src={cat.image_url}
+                    alt={cat.name}
+                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent group-hover:from-[#5B1425]/90 transition-colors duration-300" />
+                  
+                  <div className="absolute inset-x-3 bottom-3 sm:bottom-4 text-center text-white">
+                    <h3 className="font-serif text-xs sm:text-lg font-bold tracking-wide leading-snug sm:leading-normal group-hover:text-[#E0C07F] transition line-clamp-2">
+                      {cat.name}
+                    </h3>
+                    <div className="mt-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-[#C5A059] inline-flex items-center gap-0.5">
+                      <span>Explore</span>
+                      <ChevronRight className="w-2.5 h-2.5" />
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              ))}
+            </div>
+
+            {/* Mobile Swipe Cue */}
+            <div className="flex md:hidden items-center justify-center gap-1 mt-2.5 text-[11px] text-[#6E6467] font-medium">
+              <span>Swipe to explore {weaveCategories.length} weave collections</span>
+              <ChevronRight className="w-3.5 h-3.5 text-[#C5A059]" />
+            </div>
           </div>
         )}
       </section>
@@ -427,12 +426,20 @@ export default function HomePage({ onNavigate }) {
             <p className="text-xs sm:text-sm text-[#6E6467]">No best seller sarees available at the moment.</p>
           </div>
         ) : (
-          <div className="flex overflow-x-auto gap-3.5 sm:gap-6 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 pb-2">
-            {bestSellers.map((prod) => (
-              <div key={prod.id} className="w-56 sm:w-auto shrink-0 snap-item flex">
-                <ProductCard product={prod} onNavigate={onNavigate} />
-              </div>
-            ))}
+          <div>
+            <div className="flex overflow-x-auto gap-3.5 sm:gap-6 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 pb-2">
+              {bestSellers.map((prod) => (
+                <div key={prod.id} className="w-56 sm:w-auto shrink-0 snap-item flex">
+                  <ProductCard product={prod} onNavigate={onNavigate} />
+                </div>
+              ))}
+            </div>
+
+            {/* Mobile Swipe Cue */}
+            <div className="flex sm:hidden items-center justify-center gap-1 mt-2.5 text-[11px] text-[#6E6467] font-medium">
+              <span>Swipe to explore {bestSellers.length} best seller sarees</span>
+              <ChevronRight className="w-3.5 h-3.5 text-[#C5A059]" />
+            </div>
           </div>
         )}
       </section>
