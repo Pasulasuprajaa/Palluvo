@@ -97,7 +97,7 @@ export default function Footer({ onNavigate }) {
                 onChange={(e) => setNewsletterEmail(e.target.value)}
                 placeholder="Enter your email address..."
                 aria-label="Email address for newsletter and ₹500 welcome coupon"
-                className="flex-1 bg-white/10 border border-white/20 rounded-l-xl px-3.5 py-2.5 text-xs text-[#FAF7F2] placeholder-white/40 focus:outline-none focus:border-[#C5A059]"
+                className="flex-1 bg-white/10 border border-white/20 rounded-l-xl px-3.5 py-2.5 text-xs text-[#FAF7F2] placeholder-white/75 focus:outline-none focus:border-[#C5A059]"
               />
               <button
                 type="submit"
@@ -308,8 +308,9 @@ export default function Footer({ onNavigate }) {
             </div>
           </div>
 
-          <div className="text-xs text-[#FAF7F2]/70 text-center sm:text-right">
-            <span>📍 Indiranagar, Bengaluru, Karnataka 560038</span>
+          <div className="text-xs text-[#FAF7F2]/70 flex items-center justify-center sm:justify-end gap-1.5">
+            <MapPin className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+            <span>Indiranagar, Bengaluru, Karnataka 560038</span>
           </div>
         </div>
       </div>
