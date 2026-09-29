@@ -209,15 +209,15 @@ export default function HomePage({ onNavigate }) {
           <div className="mt-4 sm:mt-12 pt-3 sm:pt-8 border-t border-white/15 grid grid-cols-3 gap-2 sm:gap-6 text-left w-full">
             <div>
               <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">100%</div>
-              <div className="text-[9px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Pure Handloom</div>
+              <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">Pure Handloom</div>
             </div>
             <div>
               <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">15k+</div>
-              <div className="text-[9px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Drapes Loved</div>
+              <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">Drapes Loved</div>
             </div>
             <div>
               <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">4.9 ★</div>
-              <div className="text-[9px] sm:text-[11px] text-[#FAF7F2]/70 uppercase tracking-wider mt-0.5">Verified Reviews</div>
+              <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">Verified Reviews</div>
             </div>
           </div>
         </div>
@@ -328,7 +328,7 @@ export default function HomePage({ onNavigate }) {
                 type="button"
                 key={idx}
                 onClick={() => onNavigate('shop', col.filter)}
-                className="w-[72vw] min-w-[218px] max-w-[268px] sm:w-auto shrink-0 snap-item group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
+                className="w-[72vw] min-w-[218px] max-w-[268px] sm:w-full sm:min-w-0 sm:max-w-none shrink-0 sm:shrink snap-item group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
                 aria-label={`Explore ${col.title} Collection`}
               >
                 <div className="aspect-[4/3] w-full overflow-hidden bg-[#FAF7F2]">
