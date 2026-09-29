@@ -95,7 +95,7 @@ export default function QuickViewModal({ onNavigate }) {
                 ))}
               </div>
               <span className="text-xs font-bold text-[#1F1A1C]">
-                {quickViewProduct.rating || 4.9}
+                {(Number(quickViewProduct.rating) || 4.9).toFixed(1)}
               </span>
               <span className="text-xs text-[#6E6467]">
                 ({quickViewProduct.review_count || 120} reviews)

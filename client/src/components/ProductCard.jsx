@@ -153,7 +153,9 @@ export default function ProductCard({ product, onNavigate }) {
           <div className="flex items-center justify-between mt-1.5">
             <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-xs">
               <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-              <span className="font-bold text-[#1F1A1C]">{product.rating || 4.8}</span>
+              <span className="font-bold text-[#1F1A1C]">
+                {(Number(product.rating) || 4.8).toFixed(1)}
+              </span>
               <span className="text-[10px] text-gray-500">
                 ({product.review_count || 45})
               </span>

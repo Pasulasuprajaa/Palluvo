@@ -207,7 +207,7 @@ export default function SearchModal({ onNavigate }) {
                                 )}
                                 <span className="text-[10px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded font-bold border border-amber-200 flex items-center gap-0.5">
                                   <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                                  <span>{prod.rating || 4.8}</span>
+                                  <span>{(Number(prod.rating) || 4.8).toFixed(1)}</span>
                                 </span>
                               </div>
                             </div>
