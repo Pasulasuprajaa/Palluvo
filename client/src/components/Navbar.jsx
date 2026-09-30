@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   Search, Heart, ShoppingBag, User, Menu, X, Sparkles,
-  ChevronDown, Tag, Scale, Home, Grid, ChevronRight, Phone, Info
+  ChevronDown, Tag, Scale, Home, Grid, ChevronRight, Phone, Info,
+  Layers, Crown, Flame, Truck, MessageSquare, Settings
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -307,7 +308,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                         onClick={() => handleNav('admin')}
                         className="w-full text-left px-4 py-2 text-sm text-[#5B1425] font-semibold bg-[#F4EFEB]/50 hover:bg-[#F4EFEB] transition cursor-pointer"
                       >
-                        Admin Dashboard ⚙️
+                        Admin Dashboard
                       </button>
                     )}
 
@@ -390,40 +391,43 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               )}
             </div>
 
-            {/* Mandatory Menu Items specified in prompt */}
+            {/* Mandatory Menu Items with Consistent Luxury Line Icons */}
             <div className="space-y-1">
               {[
-                { label: 'Home', icon: '✦', action: () => handleNav('home'), highlight: currentPage === 'home' },
-                { label: 'Sarees', icon: '🥻', action: () => handleNav('shop'), highlight: isAllSareesActive },
-                { label: 'New Arrivals', icon: '✨', action: () => handleNav('shop', { filter: 'new_arrival' }), highlight: isNewArrivalActive },
-                { label: 'Collections', icon: '👑', action: () => handleNav('shop', { category: 'bridal-collection' }), highlight: isCollectionsActive },
-                { label: 'Best Sellers', icon: '🔥', action: () => handleNav('shop', { filter: 'best_seller' }), highlight: isBestSellerActive },
-                { label: 'Offers', icon: '🏷️', action: () => handleNav('offers'), highlight: currentPage === 'offers' },
-                { label: 'Track Order', icon: '🚚', action: () => handleNav('track-order'), highlight: currentPage === 'track-order' },
-                { label: 'Contact Us', icon: '💬', action: () => {
+                { label: 'Home', icon: Home, action: () => handleNav('home'), highlight: currentPage === 'home' },
+                { label: 'Sarees', icon: Layers, action: () => handleNav('shop'), highlight: isAllSareesActive },
+                { label: 'New Arrivals', icon: Sparkles, action: () => handleNav('shop', { filter: 'new_arrival' }), highlight: isNewArrivalActive },
+                { label: 'Collections', icon: Crown, action: () => handleNav('shop', { category: 'bridal-collection' }), highlight: isCollectionsActive },
+                { label: 'Best Sellers', icon: Flame, action: () => handleNav('shop', { filter: 'best_seller' }), highlight: isBestSellerActive },
+                { label: 'Offers', icon: Tag, action: () => handleNav('offers'), highlight: currentPage === 'offers' },
+                { label: 'Track Order', icon: Truck, action: () => handleNav('track-order'), highlight: currentPage === 'track-order' },
+                { label: 'Contact Us', icon: MessageSquare, action: () => {
                   setMobileMenuOpen(false);
                   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
                 }},
-                { label: 'About PALLUVO', icon: '🪷', action: () => {
+                { label: 'About PALLUVO', icon: Info, action: () => {
                   setMobileMenuOpen(false);
                   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
                 }},
-                { label: 'Account', icon: '👤', action: () => user ? handleNav('account') : onOpenAuth() }
-              ].map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={item.action}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer ${
-                    item.highlight ? 'bg-[#5B1425] text-white font-bold shadow-xs' : 'text-[#1F1A1C] hover:bg-[#F4EFEB]'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-base">{item.icon}</span>
-                    <span>{item.label}</span>
-                  </div>
-                  <ChevronRight className={`w-4 h-4 ${item.highlight ? 'text-white' : 'text-[#A09699]'}`} />
-                </button>
-              ))}
+                { label: 'Account', icon: User, action: () => user ? handleNav('account') : onOpenAuth() }
+              ].map((item, idx) => {
+                const ItemIcon = item.icon;
+                return (
+                  <button
+                    key={idx}
+                    onClick={item.action}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${
+                      item.highlight ? 'bg-[#5B1425] text-white font-bold shadow-xs' : 'text-[#1F1A1C] hover:bg-[#F4EFEB]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <ItemIcon className={`w-4 h-4 shrink-0 ${item.highlight ? 'text-[#FAF7F2]' : 'text-[#6E6467]'}`} />
+                      <span>{item.label}</span>
+                    </div>
+                    <ChevronRight className={`w-4 h-4 ${item.highlight ? 'text-white' : 'text-[#A09699]'}`} />
+                  </button>
+                );
+              })}
             </div>
 
             {/* Curated Collections & Occasions */}
@@ -443,7 +447,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                   <button
                     key={col.name}
                     onClick={() => handleNav('shop', col.filter)}
-                    className="text-left px-3 py-2 bg-white rounded-lg border border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425] transition cursor-pointer"
+                    className="text-left px-3 py-2 bg-white rounded-lg border border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425] transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none"
                   >
                     {col.name}
                   </button>
@@ -463,12 +467,12 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                   { name: 'Pure Silk', slug: 'silk-sarees' },
                   { name: 'Organza Sarees', slug: 'organza-sarees' },
                   { name: 'Cotton & Linen', slug: 'cotton-sarees' },
-                  { name: 'Bridal Edit', slug: 'bridal-collection' }
+                  { name: 'Designer Sarees', slug: 'designer-sarees' }
                 ].map(cat => (
                   <button
                     key={cat.slug}
                     onClick={() => handleNav('shop', { category: cat.slug })}
-                    className="text-left px-3 py-2 bg-white rounded-lg border border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425] transition cursor-pointer"
+                    className="text-left px-3 py-2 bg-white rounded-lg border border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425] transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none"
                   >
                     {cat.name}
                   </button>
@@ -480,9 +484,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               <div className="pt-2 border-t border-[#EAE2D7]">
                 <button
                   onClick={() => handleNav('admin')}
-                  className="w-full text-center py-2.5 bg-[#5B1425] text-[#FAF7F2] font-semibold rounded-xl text-xs uppercase tracking-wider shadow-sm cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#5B1425] text-[#FAF7F2] font-semibold rounded-xl text-xs uppercase tracking-wider shadow-sm cursor-pointer hover:bg-[#7E1E34] transition"
                 >
-                  Open Admin Dashboard ⚙️
+                  <Settings className="w-3.5 h-3.5 text-[#C5A059]" />
+                  <span>Open Admin Dashboard</span>
                 </button>
               </div>
             )}
