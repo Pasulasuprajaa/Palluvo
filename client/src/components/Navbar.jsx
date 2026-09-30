@@ -77,9 +77,14 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                 {mobileMenuOpen ? <X className="w-6 h-6 text-[#5B1425]" /> : <Menu className="w-6 h-6" />}
               </button>
 
-              <div
-                onClick={() => handleNav('home')}
-                className="cursor-pointer group flex flex-col items-start select-none"
+              <a
+                href="/"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleNav('home');
+                }}
+                aria-label="PALLUVO Home"
+                className="cursor-pointer group flex flex-col items-start select-none rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:ring-offset-2 transition"
               >
                 <div className="flex items-center gap-1">
                   <span className="font-cinzel text-xl sm:text-2xl lg:text-[26px] xl:text-3xl font-bold tracking-[0.16em] sm:tracking-[0.18em] xl:tracking-[0.2em] text-[#5B1425] group-hover:text-[#7E1E34] transition whitespace-nowrap">
@@ -90,7 +95,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                 <span className="text-[8.5px] sm:text-[9px] xl:text-[10px] font-serif tracking-[0.12em] sm:tracking-[0.15em] text-[#6E6467] -mt-1 uppercase italic block whitespace-nowrap">
                   Every drape, a little magic
                 </span>
-              </div>
+              </a>
             </div>
 
             {/* Center: Desktop Navigation — Compact Single-Line Layout */}
@@ -389,10 +394,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
             <div className="space-y-1">
               {[
                 { label: 'Home', icon: '✦', action: () => handleNav('home'), highlight: currentPage === 'home' },
-                { label: 'Sarees', icon: '🥻', action: () => handleNav('shop'), highlight: currentPage === 'shop' },
-                { label: 'New Arrivals', icon: '✨', action: () => handleNav('shop', { filter: 'new_arrival' }) },
-                { label: 'Collections', icon: '👑', action: () => handleNav('shop') },
-                { label: 'Best Sellers', icon: '🔥', action: () => handleNav('shop', { filter: 'best_seller' }) },
+                { label: 'Sarees', icon: '🥻', action: () => handleNav('shop'), highlight: isAllSareesActive },
+                { label: 'New Arrivals', icon: '✨', action: () => handleNav('shop', { filter: 'new_arrival' }), highlight: isNewArrivalActive },
+                { label: 'Collections', icon: '👑', action: () => handleNav('shop', { category: 'bridal-collection' }), highlight: isCollectionsActive },
+                { label: 'Best Sellers', icon: '🔥', action: () => handleNav('shop', { filter: 'best_seller' }), highlight: isBestSellerActive },
                 { label: 'Offers', icon: '🏷️', action: () => handleNav('offers'), highlight: currentPage === 'offers' },
                 { label: 'Track Order', icon: '🚚', action: () => handleNav('track-order'), highlight: currentPage === 'track-order' },
                 { label: 'Contact Us', icon: '💬', action: () => {
@@ -419,6 +424,31 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                   <ChevronRight className={`w-4 h-4 ${item.highlight ? 'text-white' : 'text-[#A09699]'}`} />
                 </button>
               ))}
+            </div>
+
+            {/* Curated Collections & Occasions */}
+            <div className="pt-2 border-t border-[#EAE2D7]">
+              <div className="text-[11px] font-bold text-[#6E6467] uppercase tracking-wider px-1 mb-2">
+                Curated Collections & Occasions
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {[
+                  { name: 'Bridal Edit', filter: { category: 'bridal-collection' } },
+                  { name: 'Wedding Vault', filter: { occasion: 'Wedding' } },
+                  { name: 'Festive Glow', filter: { occasion: 'Festive' } },
+                  { name: 'Evening Glam', filter: { occasion: 'Party' } },
+                  { name: 'Office Elegance', filter: { occasion: 'Workwear' } },
+                  { name: 'Heritage Silks', filter: { category: 'silk-sarees' } }
+                ].map(col => (
+                  <button
+                    key={col.name}
+                    onClick={() => handleNav('shop', col.filter)}
+                    className="text-left px-3 py-2 bg-white rounded-lg border border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425] transition cursor-pointer"
+                  >
+                    {col.name}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Shop by Category Accordion Grid */}
