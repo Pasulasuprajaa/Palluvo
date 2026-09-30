@@ -21,7 +21,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
 
   const isAllSareesActive = currentPage === 'shop' && !pageParams.filter && !pageParams.occasion && !pageParams.category;
   const isNewArrivalActive = currentPage === 'shop' && pageParams.filter === 'new_arrival';
-  const isCollectionsActive = currentPage === 'shop' && (Boolean(pageParams.occasion) || (Boolean(pageParams.category) && pageParams.category !== ''));
+  const isCollectionsActive = currentPage === 'shop' && (pageParams.filter === 'featured' || Boolean(pageParams.occasion) || (Boolean(pageParams.category) && pageParams.category !== ''));
   const isBestSellerActive = currentPage === 'shop' && pageParams.filter === 'best_seller';
 
   const handleNav = (page, params = {}) => {
@@ -397,7 +397,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                 { label: 'Home', icon: Home, action: () => handleNav('home'), highlight: currentPage === 'home' },
                 { label: 'Sarees', icon: Layers, action: () => handleNav('shop'), highlight: isAllSareesActive },
                 { label: 'New Arrivals', icon: Sparkles, action: () => handleNav('shop', { filter: 'new_arrival' }), highlight: isNewArrivalActive },
-                { label: 'Collections', icon: Crown, action: () => handleNav('shop', { category: 'bridal-collection' }), highlight: isCollectionsActive },
+                { label: 'Collections', icon: Crown, action: () => handleNav('shop', { filter: 'featured' }), highlight: currentPage === 'shop' && pageParams.filter === 'featured' },
                 { label: 'Best Sellers', icon: Flame, action: () => handleNav('shop', { filter: 'best_seller' }), highlight: isBestSellerActive },
                 { label: 'Offers', icon: Tag, action: () => handleNav('offers'), highlight: currentPage === 'offers' },
                 { label: 'Track Order', icon: Truck, action: () => handleNav('track-order'), highlight: currentPage === 'track-order' },
@@ -442,16 +442,27 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                   { name: 'Festive Glow', filter: { occasion: 'Festive' } },
                   { name: 'Evening Glam', filter: { occasion: 'Party' } },
                   { name: 'Office Elegance', filter: { occasion: 'Workwear' } },
-                  { name: 'Heritage Silks', filter: { category: 'silk-sarees' } }
-                ].map(col => (
-                  <button
-                    key={col.name}
-                    onClick={() => handleNav('shop', col.filter)}
-                    className="text-left px-3 py-2 bg-white rounded-lg border border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425] transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none"
-                  >
-                    {col.name}
-                  </button>
-                ))}
+                  { name: 'Party & Cocktail', filter: { category: 'party-wear' } }
+                ].map(col => {
+                  const isActive = currentPage === 'shop' && (
+                    (col.filter.category && pageParams.category === col.filter.category) ||
+                    (col.filter.occasion && pageParams.occasion === col.filter.occasion) ||
+                    (col.filter.filter && pageParams.filter === col.filter.filter)
+                  );
+                  return (
+                    <button
+                      key={col.name}
+                      onClick={() => handleNav('shop', col.filter)}
+                      className={`text-left px-3 py-2 rounded-lg border transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${
+                        isActive
+                          ? 'bg-[#5B1425] text-white border-[#5B1425] font-semibold shadow-2xs'
+                          : 'bg-white border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425]'
+                      }`}
+                    >
+                      {col.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -468,15 +479,22 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                   { name: 'Organza Sarees', slug: 'organza-sarees' },
                   { name: 'Cotton & Linen', slug: 'cotton-sarees' },
                   { name: 'Designer Sarees', slug: 'designer-sarees' }
-                ].map(cat => (
-                  <button
-                    key={cat.slug}
-                    onClick={() => handleNav('shop', { category: cat.slug })}
-                    className="text-left px-3 py-2 bg-white rounded-lg border border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425] transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none"
-                  >
-                    {cat.name}
-                  </button>
-                ))}
+                ].map(cat => {
+                  const isActive = currentPage === 'shop' && pageParams.category === cat.slug;
+                  return (
+                    <button
+                      key={cat.slug}
+                      onClick={() => handleNav('shop', { category: cat.slug })}
+                      className={`text-left px-3 py-2 rounded-lg border transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${
+                        isActive
+                          ? 'bg-[#5B1425] text-white border-[#5B1425] font-semibold shadow-2xs'
+                          : 'bg-white border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425]'
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

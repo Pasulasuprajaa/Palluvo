@@ -147,6 +147,8 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
                 ? 'NEW ARRIVALS'
                 : filterTag === 'best_seller'
                 ? 'BEST SELLERS'
+                : filterTag === 'featured'
+                ? 'CURATED COLLECTIONS'
                 : selectedCategory
                 ? selectedCategory.replace('-', ' ').toUpperCase()
                 : (selectedOccasion ? `${selectedOccasion} Sarees` : 'Sarees Collection')}
@@ -157,6 +159,8 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
               ? 'New Arrivals — Fresh off the Loom'
               : filterTag === 'best_seller'
               ? 'Best Selling Sarees'
+              : filterTag === 'featured'
+              ? 'Curated Heirloom Collections'
               : selectedCategory
               ? categoriesList.find(c => c.value === selectedCategory)?.label || 'Curated Sarees'
               : selectedOccasion
@@ -201,6 +205,12 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
       {hasActiveFilters && (
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-1">
           <span className="text-[11px] sm:text-xs font-medium text-[#6E6467]">Filters:</span>
+          {filterTag && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#5B1425]/10 text-[#5B1425] text-[11px] rounded-full font-medium">
+              Collection: {filterTag === 'new_arrival' ? 'New Arrivals' : filterTag === 'best_seller' ? 'Best Sellers' : filterTag === 'featured' ? 'Curated Collections' : filterTag}
+              <button onClick={() => setFilterTag('')}><X className="w-3 h-3" /></button>
+            </span>
+          )}
           {selectedCategory && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#5B1425]/10 text-[#5B1425] text-[11px] rounded-full font-medium">
               Category: {selectedCategory}
