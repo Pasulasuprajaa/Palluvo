@@ -156,7 +156,7 @@ export default function HomePage({ onNavigate }) {
   return (
     <div className="flex flex-col">
       {/* 1. HERO SECTION */}
-      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] md:min-h-[85vh]">
+      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] min-h-[calc(100svh-4rem)] md:min-h-[85vh]">
         {/* Background Image — Full 100% Brightness with Top-Aligned Portrait Crop on Mobile/Tablet */}
         <div className="absolute inset-0 z-0">
           <picture>
@@ -172,7 +172,7 @@ export default function HomePage({ onNavigate }) {
         </div>
 
         {/* Hero Content — Seamless Luxury Typography Positioned Below Subject with Full Bottom Safe Area */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-20 md:py-28 flex flex-col items-start max-w-2xl w-full mt-auto md:mt-0">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 sm:pt-14 sm:pb-20 md:py-28 flex flex-col items-start max-w-2xl w-full mt-auto md:mt-0">
           <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#FAF7F2]/10 backdrop-blur-md border border-[#C5A059]/40 text-[#C5A059] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-2.5 md:mb-6 animate-fade-in shadow-sm">
             <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
             <span>The Festive & Bridal Heirloom Edit</span>
@@ -232,7 +232,7 @@ export default function HomePage({ onNavigate }) {
       </section>
 
       {/* 2. CATEGORY SECTION (Horizontal Swipeable Carousel on Mobile) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-14 w-full">
         <div className="mb-6 sm:mb-8">
           <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C]">
             Shop by Weave & Fabric

@@ -119,7 +119,7 @@ export default function Footer({ onNavigate }) {
             <button
               onClick={() => toggleSection('shop')}
               aria-expanded={openSection === 'shop'}
-              className="w-full flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059] cursor-pointer"
+              className="w-full min-h-[44px] flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059] cursor-pointer"
             >
               <span>Shop Sarees & Collections</span>
               {openSection === 'shop' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -142,7 +142,7 @@ export default function Footer({ onNavigate }) {
             <button
               onClick={() => toggleSection('care')}
               aria-expanded={openSection === 'care'}
-              className="w-full flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059] cursor-pointer"
+              className="w-full min-h-[44px] flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059] cursor-pointer"
             >
               <span>Customer Care</span>
               {openSection === 'care' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -165,7 +165,7 @@ export default function Footer({ onNavigate }) {
             <button
               onClick={() => toggleSection('about')}
               aria-expanded={openSection === 'about'}
-              className="w-full flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059] cursor-pointer"
+              className="w-full min-h-[44px] flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059] cursor-pointer"
             >
               <span>About PALLUVO</span>
               {openSection === 'about' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -185,7 +185,7 @@ export default function Footer({ onNavigate }) {
             <button
               onClick={() => toggleSection('policies')}
               aria-expanded={openSection === 'policies'}
-              className="w-full flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059] cursor-pointer"
+              className="w-full min-h-[44px] flex items-center justify-between py-3 text-xs font-serif font-bold uppercase tracking-wider text-[#C5A059] cursor-pointer"
             >
               <span>Policies & Legal</span>
               {openSection === 'policies' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
