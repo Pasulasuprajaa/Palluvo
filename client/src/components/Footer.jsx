@@ -320,11 +320,11 @@ export default function Footer({ onNavigate }) {
         <div>
           © {new Date().getFullYear()} <strong>PALLUVO LUXURY FASHION PVT. LTD.</strong> All Rights Reserved.
         </div>
-        <div className="flex gap-4 text-[11px]">
-          <button onClick={() => onNavigate('policy', { tab: 'privacy' })} className="hover:text-[#C5A059] transition cursor-pointer">Privacy</button>
-          <button onClick={() => onNavigate('policy', { tab: 'terms' })} className="hover:text-[#C5A059] transition cursor-pointer">Terms</button>
-          <button onClick={() => onNavigate('policy', { tab: 'shipping' })} className="hover:text-[#C5A059] transition cursor-pointer">Shipping</button>
-          <button onClick={() => onNavigate('policy', { tab: 'refund' })} className="hover:text-[#C5A059] transition cursor-pointer">Returns</button>
+        <div className="flex flex-wrap items-center justify-center gap-x-3 sm:gap-x-4 gap-y-1 text-[11px]">
+          <button onClick={() => onNavigate('policy', { tab: 'privacy' })} className="py-2.5 px-2 hover:text-[#C5A059] transition cursor-pointer inline-flex items-center">Privacy</button>
+          <button onClick={() => onNavigate('policy', { tab: 'terms' })} className="py-2.5 px-2 hover:text-[#C5A059] transition cursor-pointer inline-flex items-center">Terms</button>
+          <button onClick={() => onNavigate('policy', { tab: 'shipping' })} className="py-2.5 px-2 hover:text-[#C5A059] transition cursor-pointer inline-flex items-center">Shipping</button>
+          <button onClick={() => onNavigate('policy', { tab: 'refund' })} className="py-2.5 px-2 hover:text-[#C5A059] transition cursor-pointer inline-flex items-center">Returns</button>
         </div>
       </div>
     </footer>
