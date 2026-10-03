@@ -571,7 +571,7 @@ export default function HomePage({ onNavigate }) {
 
                 <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between bg-white">
                   <div>
-                    <span className="block text-xs font-bold text-[#5B1425] group-hover:text-[#7E1E34] transition break-all leading-snug">
+                    <span className="block text-xs font-bold text-[#5B1425] group-hover:text-[#7E1E34] transition truncate whitespace-nowrap leading-snug" title={post.handle}>
                       {post.handle}
                     </span>
                     <p className="text-[11px] sm:text-xs text-[#6E6467] mt-1 line-clamp-2 leading-relaxed">

@@ -125,14 +125,14 @@ export default function Footer({ onNavigate }) {
               {openSection === 'shop' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             {openSection === 'shop' && (
-              <ul className="space-y-2.5 text-xs text-[#FAF7F2]/80 pb-3 pl-2 animate-fade-in">
-                <li><button onClick={() => onNavigate('shop', { category: 'banarasi-sarees' })}>Banarasi Sarees</button></li>
-                <li><button onClick={() => onNavigate('shop', { category: 'kanjivaram-sarees' })}>Kanjivaram Silk</button></li>
-                <li><button onClick={() => onNavigate('shop', { category: 'silk-sarees' })}>Pure Silk Sarees</button></li>
-                <li><button onClick={() => onNavigate('shop', { category: 'organza-sarees' })}>Organza Sarees</button></li>
-                <li><button onClick={() => onNavigate('shop', { category: 'cotton-sarees' })}>Cotton & Handloom</button></li>
-                <li><button onClick={() => onNavigate('shop', { category: 'bridal-collection' })}>Bridal Trousseau</button></li>
-                <li><button onClick={() => onNavigate('offers')} className="text-[#C5A059] font-medium">Offers & Festive Deals</button></li>
+              <ul className="space-y-1 text-xs text-[#FAF7F2]/80 pb-3 pl-2 animate-fade-in">
+                <li><button onClick={() => onNavigate('shop', { category: 'banarasi-sarees' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Banarasi Sarees</button></li>
+                <li><button onClick={() => onNavigate('shop', { category: 'kanjivaram-sarees' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Kanjivaram Silk</button></li>
+                <li><button onClick={() => onNavigate('shop', { category: 'silk-sarees' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Pure Silk Sarees</button></li>
+                <li><button onClick={() => onNavigate('shop', { category: 'organza-sarees' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Organza Sarees</button></li>
+                <li><button onClick={() => onNavigate('shop', { category: 'cotton-sarees' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Cotton & Handloom</button></li>
+                <li><button onClick={() => onNavigate('shop', { category: 'bridal-collection' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Bridal Trousseau</button></li>
+                <li><button onClick={() => onNavigate('offers')} className="min-h-[44px] py-2 px-1 text-[#C5A059] font-medium text-left flex items-center w-full cursor-pointer">Offers & Festive Deals</button></li>
               </ul>
             )}
           </div>
@@ -148,14 +148,14 @@ export default function Footer({ onNavigate }) {
               {openSection === 'care' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             {openSection === 'care' && (
-              <ul className="space-y-2.5 text-xs text-[#FAF7F2]/80 pb-3 pl-2 animate-fade-in">
-                <li><button onClick={() => onNavigate('track-order')}>Track Order Shipment</button></li>
-                <li><button onClick={() => onNavigate('account')}>My Orders & Account</button></li>
-                <li><button onClick={() => onNavigate('wishlist')}>Saved Wishlist</button></li>
-                <li><span>Concierge: +91 84988 54323</span></li>
-                <li><span>Support: +91 81067 89789</span></li>
-                <li><span>Email: contact@palluvo.com</span></li>
-                <li><span className="text-[#FAF7F2]/60">Hours: Mon-Sat, 10 AM - 8 PM IST</span></li>
+              <ul className="space-y-1 text-xs text-[#FAF7F2]/80 pb-3 pl-2 animate-fade-in">
+                <li><button onClick={() => onNavigate('track-order')} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Track Order Shipment</button></li>
+                <li><button onClick={() => onNavigate('account')} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">My Orders & Account</button></li>
+                <li><button onClick={() => onNavigate('wishlist')} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Saved Wishlist</button></li>
+                <li className="min-h-[44px] py-2 px-1 flex items-center"><span>Concierge: +91 84988 54323</span></li>
+                <li className="min-h-[44px] py-2 px-1 flex items-center"><span>Support: +91 81067 89789</span></li>
+                <li className="min-h-[44px] py-2 px-1 flex items-center"><span>Email: contact@palluvo.com</span></li>
+                <li className="min-h-[44px] py-2 px-1 flex items-center"><span className="text-[#FAF7F2]/60">Hours: Mon-Sat, 10 AM - 8 PM IST</span></li>
               </ul>
             )}
           </div>
@@ -171,11 +171,11 @@ export default function Footer({ onNavigate }) {
               {openSection === 'about' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             {openSection === 'about' && (
-              <ul className="space-y-2.5 text-xs text-[#FAF7F2]/80 pb-3 pl-2 animate-fade-in">
-                <li><button onClick={() => onNavigate('about', { tab: 'heritage' })} className="hover:text-[#C5A059] text-left">Our Handloom Heritage</button></li>
-                <li><button onClick={() => onNavigate('about', { tab: 'artisans' })} className="hover:text-[#C5A059] text-left">Artisans & Weavers</button></li>
-                <li><button onClick={() => onNavigate('about', { tab: 'care' })} className="hover:text-[#C5A059] text-left">Saree Care & Storage Guide</button></li>
-                <li><button onClick={() => onNavigate('about', { tab: 'sustainability' })} className="hover:text-[#C5A059] text-left">Sustainable Silk Pledge</button></li>
+              <ul className="space-y-1 text-xs text-[#FAF7F2]/80 pb-3 pl-2 animate-fade-in">
+                <li><button onClick={() => onNavigate('about', { tab: 'heritage' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Our Handloom Heritage</button></li>
+                <li><button onClick={() => onNavigate('about', { tab: 'artisans' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Artisans & Weavers</button></li>
+                <li><button onClick={() => onNavigate('about', { tab: 'care' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Saree Care & Storage Guide</button></li>
+                <li><button onClick={() => onNavigate('about', { tab: 'sustainability' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Sustainable Silk Pledge</button></li>
               </ul>
             )}
           </div>
@@ -191,11 +191,11 @@ export default function Footer({ onNavigate }) {
               {openSection === 'policies' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             {openSection === 'policies' && (
-              <ul className="space-y-2.5 text-xs text-[#FAF7F2]/80 pb-3 pl-2 animate-fade-in">
-                <li><button onClick={() => onNavigate('policy', { tab: 'privacy' })} className="hover:text-[#C5A059] text-left">Privacy Policy</button></li>
-                <li><button onClick={() => onNavigate('policy', { tab: 'terms' })} className="hover:text-[#C5A059] text-left">Terms & Conditions</button></li>
-                <li><button onClick={() => onNavigate('policy', { tab: 'shipping' })} className="hover:text-[#C5A059] text-left">Shipping Policy</button></li>
-                <li><button onClick={() => onNavigate('policy', { tab: 'refund' })} className="hover:text-[#C5A059] text-left">7-Day Return Policy</button></li>
+              <ul className="space-y-1 text-xs text-[#FAF7F2]/80 pb-3 pl-2 animate-fade-in">
+                <li><button onClick={() => onNavigate('policy', { tab: 'privacy' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Privacy Policy</button></li>
+                <li><button onClick={() => onNavigate('policy', { tab: 'terms' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Terms & Conditions</button></li>
+                <li><button onClick={() => onNavigate('policy', { tab: 'shipping' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Shipping Policy</button></li>
+                <li><button onClick={() => onNavigate('policy', { tab: 'refund' })} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">7-Day Return Policy</button></li>
               </ul>
             )}
           </div>
