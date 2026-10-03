@@ -25,6 +25,7 @@ import WishlistPage from './pages/WishlistPage';
 import OffersPage from './pages/OffersPage';
 import AdminPage from './pages/AdminPage';
 import PolicyPage from './pages/PolicyPage';
+import AboutPage from './pages/AboutPage';
 
 function getRouteFromPath(pathname = window.location.pathname, search = window.location.search) {
   const path = pathname.toLowerCase();
@@ -57,6 +58,13 @@ function getRouteFromPath(pathname = window.location.pathname, search = window.l
     return { page: 'track-order', params: { trackingId } };
   } else if (path === '/admin') {
     return { page: 'admin', params: {} };
+  } else if (path === '/about' || path === '/heritage' || path === '/artisans' || path === '/care-guide' || path === '/sustainability') {
+    let tab = 'heritage';
+    if (path === '/artisans') tab = 'artisans';
+    else if (path === '/care-guide') tab = 'care';
+    else if (path === '/sustainability') tab = 'sustainability';
+    else if (searchParams.get('tab')) tab = searchParams.get('tab');
+    return { page: 'about', params: { tab } };
   } else if (path === '/privacy' || path === '/terms' || path === '/shipping' || path === '/refund' || path === '/policies' || path === '/policy') {
     const tab = path === '/policies' || path === '/policy' ? (searchParams.get('tab') || 'privacy') : path.replace('/', '');
     return { page: 'policy', params: { tab } };
@@ -102,6 +110,7 @@ function AppContent() {
     else if (page === 'offers') urlPath = '/offers';
     else if (page === 'track-order') urlPath = '/track-order';
     else if (page === 'admin') urlPath = '/admin';
+    else if (page === 'about') urlPath = params.tab ? `/about?tab=${params.tab}` : '/about';
     else if (page === 'policy') urlPath = `/${params.tab || 'privacy'}`;
 
     window.history.pushState({}, '', urlPath);
@@ -180,6 +189,10 @@ function AppContent() {
 
         {currentPage === 'admin' && (
           <AdminPage onNavigate={navigate} />
+        )}
+
+        {currentPage === 'about' && (
+          <AboutPage initialTab={pageParams.tab || 'heritage'} onNavigate={navigate} />
         )}
 
         {currentPage === 'policy' && (

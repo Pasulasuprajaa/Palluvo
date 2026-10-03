@@ -172,10 +172,10 @@ export default function Footer({ onNavigate }) {
             </button>
             {openSection === 'about' && (
               <ul className="space-y-2.5 text-xs text-[#FAF7F2]/80 pb-3 pl-2 animate-fade-in">
-                <li><button onClick={() => onNavigate('home')}>Our Handloom Heritage</button></li>
-                <li><button onClick={() => onNavigate('home')}>Artisans & Weavers</button></li>
-                <li><button onClick={() => onNavigate('home')}>Saree Care & Storage Guide</button></li>
-                <li><button onClick={() => onNavigate('home')}>Sustainable Silk Pledge</button></li>
+                <li><button onClick={() => onNavigate('about', { tab: 'heritage' })} className="hover:text-[#C5A059] text-left">Our Handloom Heritage</button></li>
+                <li><button onClick={() => onNavigate('about', { tab: 'artisans' })} className="hover:text-[#C5A059] text-left">Artisans & Weavers</button></li>
+                <li><button onClick={() => onNavigate('about', { tab: 'care' })} className="hover:text-[#C5A059] text-left">Saree Care & Storage Guide</button></li>
+                <li><button onClick={() => onNavigate('about', { tab: 'sustainability' })} className="hover:text-[#C5A059] text-left">Sustainable Silk Pledge</button></li>
               </ul>
             )}
           </div>
@@ -241,10 +241,10 @@ export default function Footer({ onNavigate }) {
               About PALLUVO
             </h4>
             <ul className="space-y-2 text-xs text-[#FAF7F2]/80">
-              <li><button onClick={() => onNavigate('home')} className="hover:text-[#C5A059] transition">Our Handloom Heritage</button></li>
-              <li><button onClick={() => onNavigate('home')} className="hover:text-[#C5A059] transition">Artisans & Weavers</button></li>
-              <li><button onClick={() => onNavigate('home')} className="hover:text-[#C5A059] transition">Saree Care & Storage Guide</button></li>
-              <li><button onClick={() => onNavigate('home')} className="hover:text-[#C5A059] transition">Sustainable Silk Pledge</button></li>
+              <li><button onClick={() => onNavigate('about', { tab: 'heritage' })} className="hover:text-[#C5A059] transition text-left">Our Handloom Heritage</button></li>
+              <li><button onClick={() => onNavigate('about', { tab: 'artisans' })} className="hover:text-[#C5A059] transition text-left">Artisans & Weavers</button></li>
+              <li><button onClick={() => onNavigate('about', { tab: 'care' })} className="hover:text-[#C5A059] transition text-left">Saree Care & Storage Guide</button></li>
+              <li><button onClick={() => onNavigate('about', { tab: 'sustainability' })} className="hover:text-[#C5A059] transition text-left">Sustainable Silk Pledge</button></li>
             </ul>
           </div>
 
