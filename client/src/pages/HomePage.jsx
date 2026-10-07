@@ -257,7 +257,7 @@ export default function HomePage({ onNavigate }) {
             <p className="text-xs sm:text-sm text-[#6E6467]">{categoriesError}</p>
             <button
               onClick={fetchCategories}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#5B1425] text-[#FAF7F2] text-xs font-semibold rounded-xl hover:bg-[#7E1E34] transition shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
+              className="inline-flex items-center justify-center min-h-[44px] gap-1.5 px-4 py-2 bg-[#5B1425] text-[#FAF7F2] text-xs font-semibold rounded-xl hover:bg-[#7E1E34] transition shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Retry</span>
@@ -415,7 +415,7 @@ export default function HomePage({ onNavigate }) {
             <p className="text-xs sm:text-sm text-[#6E6467]">{bestSellersError}</p>
             <button
               onClick={fetchBestSellers}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#5B1425] text-[#FAF7F2] text-xs font-semibold rounded-xl hover:bg-[#7E1E34] transition shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
+              className="inline-flex items-center justify-center min-h-[44px] gap-1.5 px-4 py-2 bg-[#5B1425] text-[#FAF7F2] text-xs font-semibold rounded-xl hover:bg-[#7E1E34] transition shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Retry</span>

@@ -213,14 +213,14 @@ export default function Footer({ onNavigate }) {
             <h4 className="font-serif font-bold text-sm text-[#C5A059] tracking-wider uppercase">
               Shop Collections
             </h4>
-            <ul className="space-y-2 text-xs text-[#FAF7F2]/80">
-              <li><button onClick={() => onNavigate('shop', { category: 'banarasi-sarees' })} className="hover:text-[#C5A059] transition">Banarasi Sarees</button></li>
-              <li><button onClick={() => onNavigate('shop', { category: 'kanjivaram-sarees' })} className="hover:text-[#C5A059] transition">Kanjivaram Silk</button></li>
-              <li><button onClick={() => onNavigate('shop', { category: 'silk-sarees' })} className="hover:text-[#C5A059] transition">Pure Silk Sarees</button></li>
-              <li><button onClick={() => onNavigate('shop', { category: 'organza-sarees' })} className="hover:text-[#C5A059] transition">Organza & Tissue</button></li>
-              <li><button onClick={() => onNavigate('shop', { category: 'cotton-sarees' })} className="hover:text-[#C5A059] transition">Cotton & Handloom</button></li>
-              <li><button onClick={() => onNavigate('shop', { category: 'bridal-collection' })} className="hover:text-[#C5A059] transition">Bridal Trousseau</button></li>
-              <li><button onClick={() => onNavigate('offers')} className="text-[#C5A059] font-medium hover:underline transition">Offers & Festive Deals</button></li>
+            <ul className="space-y-1 text-xs text-[#FAF7F2]/80">
+              <li><button onClick={() => onNavigate('shop', { category: 'banarasi-sarees' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Banarasi Sarees</button></li>
+              <li><button onClick={() => onNavigate('shop', { category: 'kanjivaram-sarees' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Kanjivaram Silk</button></li>
+              <li><button onClick={() => onNavigate('shop', { category: 'silk-sarees' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Pure Silk Sarees</button></li>
+              <li><button onClick={() => onNavigate('shop', { category: 'organza-sarees' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Organza & Tissue</button></li>
+              <li><button onClick={() => onNavigate('shop', { category: 'cotton-sarees' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Cotton & Handloom</button></li>
+              <li><button onClick={() => onNavigate('shop', { category: 'bridal-collection' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Bridal Trousseau</button></li>
+              <li><button onClick={() => onNavigate('offers')} className="min-h-[44px] py-2 text-[#C5A059] font-medium hover:underline transition text-left flex items-center cursor-pointer">Offers & Festive Deals</button></li>
             </ul>
           </div>
 
@@ -229,14 +229,14 @@ export default function Footer({ onNavigate }) {
             <h4 className="font-serif font-bold text-sm text-[#C5A059] tracking-wider uppercase">
               Customer Care
             </h4>
-            <ul className="space-y-2 text-xs text-[#FAF7F2]/80">
-              <li><button onClick={() => onNavigate('track-order')} className="hover:text-[#C5A059] transition">Track Order Shipment</button></li>
-              <li><button onClick={() => onNavigate('account')} className="hover:text-[#C5A059] transition">My Orders & Account</button></li>
-              <li><button onClick={() => onNavigate('wishlist')} className="hover:text-[#C5A059] transition">Saved Wishlist</button></li>
-              <li><span className="text-[#FAF7F2]/80 font-medium">Concierge: +91 84988 54323</span></li>
-              <li><span className="text-[#FAF7F2]/80 font-medium">Support: +91 81067 89789</span></li>
-              <li><span className="text-[#FAF7F2]/80 font-medium">Email: contact@palluvo.com</span></li>
-              <li><span className="text-[#FAF7F2]/60">Hours: Mon-Sat, 10 AM - 8 PM IST</span></li>
+            <ul className="space-y-1 text-xs text-[#FAF7F2]/80">
+              <li><button onClick={() => onNavigate('track-order')} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Track Order Shipment</button></li>
+              <li><button onClick={() => onNavigate('account')} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">My Orders & Account</button></li>
+              <li><button onClick={() => onNavigate('wishlist')} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Saved Wishlist</button></li>
+              <li className="min-h-[44px] py-2 flex items-center"><span className="text-[#FAF7F2]/80 font-medium">Concierge: +91 84988 54323</span></li>
+              <li className="min-h-[44px] py-2 flex items-center"><span className="text-[#FAF7F2]/80 font-medium">Support: +91 81067 89789</span></li>
+              <li className="min-h-[44px] py-2 flex items-center"><span className="text-[#FAF7F2]/80 font-medium">Email: contact@palluvo.com</span></li>
+              <li className="min-h-[44px] py-2 flex items-center"><span className="text-[#FAF7F2]/60">Hours: Mon-Sat, 10 AM - 8 PM IST</span></li>
             </ul>
           </div>
 
@@ -245,11 +245,11 @@ export default function Footer({ onNavigate }) {
             <h4 className="font-serif font-bold text-sm text-[#C5A059] tracking-wider uppercase">
               About PALLUVO
             </h4>
-            <ul className="space-y-2 text-xs text-[#FAF7F2]/80">
-              <li><button onClick={() => onNavigate('about', { tab: 'heritage' })} className="hover:text-[#C5A059] transition text-left">Our Handloom Heritage</button></li>
-              <li><button onClick={() => onNavigate('about', { tab: 'artisans' })} className="hover:text-[#C5A059] transition text-left">Artisans & Weavers</button></li>
-              <li><button onClick={() => onNavigate('about', { tab: 'care' })} className="hover:text-[#C5A059] transition text-left">Saree Care & Storage Guide</button></li>
-              <li><button onClick={() => onNavigate('about', { tab: 'sustainability' })} className="hover:text-[#C5A059] transition text-left">Sustainable Silk Pledge</button></li>
+            <ul className="space-y-1 text-xs text-[#FAF7F2]/80">
+              <li><button onClick={() => onNavigate('about', { tab: 'heritage' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Our Handloom Heritage</button></li>
+              <li><button onClick={() => onNavigate('about', { tab: 'artisans' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Artisans & Weavers</button></li>
+              <li><button onClick={() => onNavigate('about', { tab: 'care' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Saree Care & Storage Guide</button></li>
+              <li><button onClick={() => onNavigate('about', { tab: 'sustainability' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Sustainable Silk Pledge</button></li>
             </ul>
           </div>
 
@@ -258,11 +258,11 @@ export default function Footer({ onNavigate }) {
             <h4 className="font-serif font-bold text-sm text-[#C5A059] tracking-wider uppercase">
               Policies
             </h4>
-            <ul className="space-y-2 text-xs text-[#FAF7F2]/80">
-              <li><button onClick={() => onNavigate('policy', { tab: 'privacy' })} className="hover:text-[#C5A059] transition text-left">Privacy Policy</button></li>
-              <li><button onClick={() => onNavigate('policy', { tab: 'terms' })} className="hover:text-[#C5A059] transition text-left">Terms & Conditions</button></li>
-              <li><button onClick={() => onNavigate('policy', { tab: 'shipping' })} className="hover:text-[#C5A059] transition text-left">Shipping Policy</button></li>
-              <li><button onClick={() => onNavigate('policy', { tab: 'refund' })} className="hover:text-[#C5A059] transition text-left">7-Day Refund Policy</button></li>
+            <ul className="space-y-1 text-xs text-[#FAF7F2]/80">
+              <li><button onClick={() => onNavigate('policy', { tab: 'privacy' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Privacy Policy</button></li>
+              <li><button onClick={() => onNavigate('policy', { tab: 'terms' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Terms & Conditions</button></li>
+              <li><button onClick={() => onNavigate('policy', { tab: 'shipping' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Shipping Policy</button></li>
+              <li><button onClick={() => onNavigate('policy', { tab: 'refund' })} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">7-Day Refund Policy</button></li>
             </ul>
           </div>
         </div>
