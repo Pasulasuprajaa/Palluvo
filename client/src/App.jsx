@@ -130,6 +130,14 @@ function AppContent() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAF7F2] text-[#1F1A1C] font-sans pb-20 lg:pb-0">
+      {/* Accessible Skip to Content Link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-[#5B1425] focus:text-[#FAF7F2] focus:rounded-xl focus:shadow-2xl focus:ring-2 focus:ring-[#C5A059] focus:outline-none text-xs font-bold uppercase tracking-wider"
+      >
+        Skip to main content
+      </a>
+
       {/* Sticky Top Luxury Header */}
       <Navbar
         currentPage={currentPage}
@@ -139,7 +147,7 @@ function AppContent() {
       />
 
       {/* Main Dynamic View */}
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
         {currentPage === 'home' && (
           <HomePage onNavigate={navigate} />
         )}

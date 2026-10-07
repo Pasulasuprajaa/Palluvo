@@ -215,9 +215,10 @@ export default function HomePage({ onNavigate }) {
               </div>
             </div>
             <div>
-              <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">15k+</div>
+              <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">Direct</div>
               <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">
-                Drapes Loved
+                <span className="md:hidden">From Loom</span>
+                <span className="hidden md:inline">Master Weavers</span>
               </div>
             </div>
             <div>
