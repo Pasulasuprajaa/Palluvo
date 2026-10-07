@@ -383,7 +383,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                       setMobileMenuOpen(false);
                       onOpenAuth();
                     }}
-                    className="px-3 py-1.5 bg-[#5B1425] text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer"
+                    className="min-h-[44px] px-3.5 py-2 inline-flex items-center justify-center bg-[#5B1425] text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer hover:bg-[#7E1E34] transition shrink-0 ml-2"
                   >
                     Sign In
                   </button>

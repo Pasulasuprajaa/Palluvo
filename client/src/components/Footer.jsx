@@ -97,12 +97,12 @@ export default function Footer({ onNavigate }) {
                 onChange={(e) => setNewsletterEmail(e.target.value)}
                 placeholder="Enter your email address..."
                 aria-label="Email address for newsletter and ₹500 welcome coupon"
-                className="flex-1 bg-white/10 border border-white/20 rounded-l-xl px-3.5 py-2.5 text-xs text-[#FAF7F2] placeholder-white/75 focus:outline-none focus:border-[#C5A059]"
+                className="flex-1 min-h-[44px] bg-white/10 border border-white/20 rounded-l-xl px-3.5 py-2.5 text-xs text-[#FAF7F2] placeholder-white/75 focus:outline-none focus:border-[#C5A059]"
               />
               <button
                 type="submit"
                 aria-label="Subscribe to newsletter"
-                className="bg-[#C5A059] text-[#1F1A1C] font-bold text-xs px-4 py-2.5 rounded-r-xl hover:bg-[#E0C07F] transition flex items-center gap-1 shrink-0 cursor-pointer"
+                className="min-h-[44px] bg-[#C5A059] text-[#1F1A1C] font-bold text-xs px-4 py-2.5 rounded-r-xl hover:bg-[#E0C07F] transition flex items-center justify-center gap-1 shrink-0 cursor-pointer"
               >
                 <span>Join</span>
                 <ArrowRight className="w-3.5 h-3.5" />
