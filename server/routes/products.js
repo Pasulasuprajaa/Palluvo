@@ -25,7 +25,13 @@ router.get('/', (req, res) => {
     } = req.query;
 
     let query = `
-      SELECT p.*, c.name as category_name, c.slug as category_slug,
+      SELECT p.id, p.name, p.slug, p.tagline, p.description, p.short_desc, p.category_id,
+        p.fabric, p.occasion, p.pattern, p.saree_length, p.blouse_length, p.care_instructions,
+        p.price, p.mrp, p.discount_percent, p.stock_quantity, p.sku, p.is_featured,
+        p.is_new_arrival, p.is_best_seller, p.color_name, p.color_hex, p.created_at, p.updated_at,
+        c.name as category_name, c.slug as category_slug,
+        (SELECT COUNT(*) FROM reviews WHERE product_id = p.id) as review_count,
+        (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE product_id = p.id) as rating,
         (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) as primary_image,
         (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1 OFFSET 1) as secondary_image
       FROM products p
@@ -225,14 +231,26 @@ router.get('/:slugOrId', (req, res) => {
 
     if (!isNaN(slugOrId)) {
       product = db.prepare(`
-        SELECT p.*, c.name as category_name, c.slug as category_slug
+        SELECT p.id, p.name, p.slug, p.tagline, p.description, p.short_desc, p.category_id,
+          p.fabric, p.occasion, p.pattern, p.saree_length, p.blouse_length, p.care_instructions,
+          p.price, p.mrp, p.discount_percent, p.stock_quantity, p.sku, p.is_featured,
+          p.is_new_arrival, p.is_best_seller, p.color_name, p.color_hex, p.created_at, p.updated_at,
+          c.name as category_name, c.slug as category_slug,
+          (SELECT COUNT(*) FROM reviews WHERE product_id = p.id) as review_count,
+          (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE product_id = p.id) as rating
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.id = ?
       `).get(parseInt(slugOrId));
     } else {
       product = db.prepare(`
-        SELECT p.*, c.name as category_name, c.slug as category_slug
+        SELECT p.id, p.name, p.slug, p.tagline, p.description, p.short_desc, p.category_id,
+          p.fabric, p.occasion, p.pattern, p.saree_length, p.blouse_length, p.care_instructions,
+          p.price, p.mrp, p.discount_percent, p.stock_quantity, p.sku, p.is_featured,
+          p.is_new_arrival, p.is_best_seller, p.color_name, p.color_hex, p.created_at, p.updated_at,
+          c.name as category_name, c.slug as category_slug,
+          (SELECT COUNT(*) FROM reviews WHERE product_id = p.id) as review_count,
+          (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE product_id = p.id) as rating
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.slug = ?
@@ -257,11 +275,13 @@ router.get('/:slugOrId', (req, res) => {
 
     // Related Products (Same category or fabric)
     const related = db.prepare(`
-      SELECT p.id, p.name, p.slug, p.price, p.mrp, p.discount_percent, p.rating, p.review_count,
+      SELECT p.id, p.name, p.slug, p.price, p.mrp, p.discount_percent,
+        (SELECT COUNT(*) FROM reviews WHERE product_id = p.id) as review_count,
+        (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE product_id = p.id) as rating,
         (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC LIMIT 1) as primary_image
       FROM products p
       WHERE (p.category_id = ? OR p.fabric = ?) AND p.id != ?
-      ORDER BY p.rating DESC
+      ORDER BY p.id ASC
       LIMIT 4
     `).all(product.category_id, product.fabric, product.id);
 

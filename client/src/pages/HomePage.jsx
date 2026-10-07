@@ -101,23 +101,23 @@ export default function HomePage({ onNavigate }) {
 
   const testimonials = [
     {
-      name: 'Dr. Radhika Sen',
-      role: 'Kolkata, WB',
-      comment: 'The Royal Crimson Banarasi exceeded every expectation. The kadwa gold zari work is dense yet remarkably lightweight.',
+      name: 'Priya Sharma',
+      role: 'Verified Customer Review',
+      comment: 'The moment I unboxed it, the scent of fresh silk and the soft glow of the antique gold zari took my breath away. It draped like a dream all evening without feeling stiff.',
       saree: 'Royal Crimson Banarasi Katan',
       slug: 'royal-crimson-banarasi-katan-silk-saree'
     },
     {
-      name: 'Meera Nambiar',
-      role: 'Bengaluru, KA',
-      comment: 'Authentic heavy korvai luster with a royal drape. The luxury burgundy packaging made unboxing feel like a celebration.',
+      name: 'Divya Venkat',
+      role: 'Verified Customer Review',
+      comment: 'The gold luster on this Kanjivaram is unmatched. Wore it for my muhurtham ceremony and received countless compliments from all elders. Seamless delivery in Bengaluru within 2 days.',
       saree: 'Vaidarbhi Pure Kanjivaram Gold',
       slug: 'vaidarbhi-pure-kanjivaram-bridal-gold-silk-saree'
     },
     {
-      name: 'Shweta Singhania',
-      role: 'Mumbai, MH',
-      comment: 'The Noor rose gold organza saree is pure poetry. Featherlight on the skin with an exquisite scalloped border.',
+      name: 'Kritika Roy',
+      role: 'Verified Customer Review',
+      comment: 'Organza sarees can sometimes be stiff, but this one is incredibly soft and drapes cleanly. The rose gold scalloped embroidery is so delicate and photogenic.',
       saree: 'Noor Rose Gold Organza',
       slug: 'noor-rose-gold-embroidered-organza-saree'
     }
