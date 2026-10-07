@@ -182,15 +182,16 @@ export default function SearchModal({ onNavigate }) {
                       </div>
                       <div className="space-y-2">
                         {results.products.map(prod => (
-                          <div
+                          <button
+                            type="button"
                             key={prod.id}
                             onClick={() => handleSelectProduct(prod)}
-                            className="flex items-center gap-3.5 p-2.5 rounded-xl hover:bg-white bg-white sm:bg-[#FAF7F2] border border-[#E8E1D5] cursor-pointer transition group shadow-xs active:scale-[0.99]"
+                            className="w-full text-left flex items-center gap-3.5 p-2.5 rounded-xl hover:bg-white bg-white sm:bg-[#FAF7F2] border border-[#E8E1D5] focus:border-[#5B1425] focus:ring-2 focus:ring-[#5B1425]/30 focus:outline-hidden cursor-pointer transition group shadow-xs active:scale-[0.99]"
                           >
                             <img
                               src={prod.primary_image || '/images/categories/banarasi.jpg'}
                               alt={prod.name}
-                              className="w-12 h-16 object-cover rounded-lg shadow-xs group-hover:scale-105 transition"
+                              className="w-12 h-16 object-cover rounded-lg shadow-xs group-hover:scale-105 transition shrink-0"
                             />
                             <div className="flex-1 min-w-0">
                               <h4 className="text-xs sm:text-sm font-semibold text-[#1F1A1C] group-hover:text-[#5B1425] transition truncate">
@@ -205,14 +206,21 @@ export default function SearchModal({ onNavigate }) {
                                     ₹{prod.mrp?.toLocaleString('en-IN')}
                                   </span>
                                 )}
-                                <span className="text-[10px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded font-bold border border-amber-200 flex items-center gap-0.5">
-                                  <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                                  <span>{(Number(prod.rating) || 4.8).toFixed(1)}</span>
-                                </span>
+                                {Number(prod.review_count) > 0 && prod.rating ? (
+                                  <span className="text-[10px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded font-bold border border-amber-200 flex items-center gap-0.5">
+                                    <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                                    <span>{Number(prod.rating).toFixed(1)}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-[#6E6467] bg-[#FAF7F2] px-1.5 py-0.5 rounded font-medium border border-[#EAE2D7] flex items-center gap-0.5">
+                                    <Star className="w-3 h-3 text-[#A09699]" />
+                                    <span>Unrated</span>
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-[#5B1425] group-hover:translate-x-1 transition shrink-0" />
-                          </div>
+                          </button>
                         ))}
                       </div>
 

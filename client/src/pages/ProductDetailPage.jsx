@@ -297,14 +297,21 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
 
             {/* Rating Summary + Customer Reviews Count */}
             <div className="flex items-center gap-3 pt-1">
-              <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full text-xs font-bold text-amber-900">
-                <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                <span>{product.rating || '4.9'}</span>
-                <span className="text-gray-400 font-normal">|</span>
-                <span className="text-gray-600 font-normal underline cursor-pointer" onClick={() => setActiveTab('reviews')}>
-                  {totalReviewsCount} Customer Ratings
-                </span>
-              </div>
+              {Number(totalReviewsCount) > 0 && product.rating ? (
+                <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full text-xs font-bold text-amber-900">
+                  <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                  <span>{Number(product.rating).toFixed(1)}</span>
+                  <span className="text-gray-400 font-normal">|</span>
+                  <button type="button" className="text-gray-600 font-normal underline hover:text-[#5B1425] cursor-pointer" onClick={() => setActiveTab('reviews')}>
+                    {totalReviewsCount} Customer {totalReviewsCount === 1 ? 'Rating' : 'Ratings'}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 bg-[#FAF7F2] border border-[#EAE2D7] px-2.5 py-1 rounded-full text-xs text-[#6E6467]">
+                  <Star className="w-3.5 h-3.5 text-[#A09699]" />
+                  <span className="font-medium">No reviews yet</span>
+                </div>
+              )}
 
               <span className="text-xs text-gray-400">•</span>
               <span className="text-xs text-emerald-800 font-semibold">
@@ -694,16 +701,35 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6 p-6 bg-[#FAF7F2] rounded-2xl border border-[#E8E1D5]">
                 {/* Left Average */}
                 <div className="md:col-span-4 flex flex-col items-center justify-center text-center border-b md:border-b-0 md:border-r border-[#E8E1D5] pb-6 md:pb-0 md:pr-6">
-                  <div className="font-serif text-5xl font-bold text-[#5B1425]">
-                    {product.rating || '4.9'}
-                  </div>
+                  {Number(totalReviewsCount) > 0 && product.rating ? (
+                    <div className="font-serif text-5xl font-bold text-[#5B1425]">
+                      {Number(product.rating).toFixed(1)}
+                    </div>
+                  ) : (
+                    <div className="font-serif text-3xl font-bold text-gray-500">
+                      Unrated
+                    </div>
+                  )}
                   <div className="flex text-amber-500 my-2">
                     {[1, 2, 3, 4, 5].map((s) => (
-                      <Star key={s} className="w-4 h-4 fill-current" />
+                      <Star
+                        key={s}
+                        className={`w-4 h-4 ${
+                          Number(totalReviewsCount) > 0 && s <= Math.round(Number(product.rating) || 0)
+                            ? 'fill-current text-amber-500'
+                            : 'text-gray-300'
+                        }`}
+                      />
                     ))}
                   </div>
-                  <p className="text-xs text-gray-600">Based on {totalReviewsCount} verified customer ratings</p>
-                  <p className="text-[11px] text-emerald-700 font-semibold mt-1">98% of patrons recommend this saree</p>
+                  <p className="text-xs text-gray-600">
+                    {totalReviewsCount > 0
+                      ? `Based on ${totalReviewsCount} verified customer ${totalReviewsCount === 1 ? 'rating' : 'ratings'}`
+                      : 'No customer reviews recorded yet'}
+                  </p>
+                  {totalReviewsCount > 0 && (
+                    <p className="text-[11px] text-emerald-700 font-semibold mt-1">98% of patrons recommend this saree</p>
+                  )}
 
                   <button
                     onClick={() => {
@@ -722,8 +748,8 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                 {/* Right Progress Bars (Flipkart / Amazon style) */}
                 <div className="md:col-span-8 flex flex-col justify-center space-y-2">
                   {[5, 4, 3, 2, 1].map((stars) => {
-                    const count = ratingDist[stars] || (stars === 5 ? 38 : (stars === 4 ? 8 : 2));
-                    const percentage = Math.round((count / (totalReviewsCount || 1)) * 100);
+                    const count = ratingDist[stars] || 0;
+                    const percentage = totalReviewsCount > 0 ? Math.round((count / totalReviewsCount) * 100) : 0;
                     return (
                       <div key={stars} className="flex items-center gap-3 text-xs">
                         <span className="w-12 font-semibold text-gray-700 flex items-center gap-1">
