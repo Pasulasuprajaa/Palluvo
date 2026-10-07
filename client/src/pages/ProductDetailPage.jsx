@@ -180,7 +180,7 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   reviews.forEach(r => {
     if (ratingDist[r.rating] !== undefined) ratingDist[r.rating]++;
   });
-  const totalReviewsCount = reviews.length || product.review_count || 48;
+  const totalReviewsCount = reviews.length || product.review_count || 0;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">

@@ -153,15 +153,22 @@ export default function ProductCard({ product, onNavigate }) {
 
           {/* Rating & Silk Mark Certification */}
           <div className="flex items-center justify-between mt-1.5">
-            <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-xs">
-              <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-              <span className="font-bold text-[#1F1A1C]">
-                {(Number(product.rating) || 4.8).toFixed(1)}
-              </span>
-              <span className="text-[10px] text-gray-500">
-                ({product.review_count || 45})
-              </span>
-            </div>
+            {Number(product.review_count) > 0 ? (
+              <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-xs">
+                <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                <span className="font-bold text-[#1F1A1C]">
+                  {(Number(product.rating) || 0).toFixed(1)}
+                </span>
+                <span className="text-[10px] text-gray-500">
+                  ({product.review_count})
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1 bg-[#FAF7F2] px-1.5 py-0.5 rounded border border-[#EAE2D7] text-[10px] text-[#6E6467]">
+                <Star className="w-3 h-3 text-[#A09699]" />
+                <span className="font-medium">No reviews yet</span>
+              </div>
+            )}
 
             <span className="text-[10px] text-emerald-800 font-semibold flex items-center gap-0.5">
               <Check className="w-3 h-3 text-emerald-600" />
@@ -199,12 +206,12 @@ export default function ProductCard({ product, onNavigate }) {
               <Eye className="w-4 h-4" />
             </button>
 
-            {/* Add to Bag (44px height on touch, responsive on desktop) */}
+            {/* Add to Bag (44px min touch target across all breakpoints) */}
             <button
               onClick={handleAddToCart}
               aria-label={`Add ${product.name} to bag`}
               title="Add to Bag"
-              className="flex-1 sm:flex-none h-11 min-h-[44px] sm:h-auto sm:min-h-0 px-3 sm:p-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold"
+              className="flex-1 sm:flex-none min-h-[44px] sm:min-w-[44px] px-3 sm:px-2.5 bg-[#F4EFEB] text-[#5B1425] hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-xl transition shadow-xs group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] cursor-pointer flex items-center justify-center gap-1.5 text-xs font-semibold"
             >
               <ShoppingBag className="w-4 h-4 shrink-0" />
               <span className="sm:hidden">Add to Bag</span>

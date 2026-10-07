@@ -91,15 +91,21 @@ export default function QuickViewModal({ onNavigate }) {
             <div className="flex items-center gap-2">
               <div className="flex items-center text-[#C5A059] text-sm">
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-current text-[#C5A059]" />
+                  <Star key={i} className={`w-4 h-4 ${Number(quickViewProduct.review_count) > 0 && i < Math.round(Number(quickViewProduct.rating) || 0) ? 'fill-current text-[#C5A059]' : 'text-gray-300'}`} />
                 ))}
               </div>
-              <span className="text-xs font-bold text-[#1F1A1C]">
-                {(Number(quickViewProduct.rating) || 4.9).toFixed(1)}
-              </span>
-              <span className="text-xs text-[#6E6467]">
-                ({quickViewProduct.review_count || 120} reviews)
-              </span>
+              {Number(quickViewProduct.review_count) > 0 ? (
+                <>
+                  <span className="text-xs font-bold text-[#1F1A1C]">
+                    {(Number(quickViewProduct.rating) || 0).toFixed(1)}
+                  </span>
+                  <span className="text-xs text-[#6E6467]">
+                    ({quickViewProduct.review_count} reviews)
+                  </span>
+                </>
+              ) : (
+                <span className="text-xs text-[#6E6467]">No reviews yet</span>
+              )}
             </div>
 
             {/* Pricing */}

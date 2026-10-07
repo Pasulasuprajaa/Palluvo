@@ -167,13 +167,17 @@ export default function CompareDrawer({ onNavigate }) {
                     </td>
                     {compareItems.map((item) => (
                       <td key={item.id} className="p-3 text-center">
-                        <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full text-amber-900 font-semibold">
-                          <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                          <span>{(Number(item.rating) || 4.8).toFixed(1)}</span>
-                          <span className="text-[10px] text-gray-500 font-normal">
-                            ({item.review_count || 48})
-                          </span>
-                        </div>
+                        {Number(item.review_count) > 0 ? (
+                          <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 px-2 py-1 rounded-full text-amber-900 font-semibold">
+                            <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                            <span>{(Number(item.rating) || 0).toFixed(1)}</span>
+                            <span className="text-[10px] text-gray-500 font-normal">
+                              ({item.review_count})
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-500">No reviews yet</span>
+                        )}
                       </td>
                     ))}
                   </tr>
