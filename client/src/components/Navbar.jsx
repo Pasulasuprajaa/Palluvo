@@ -39,7 +39,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
           <div className="flex items-center gap-1 sm:gap-2 mx-auto sm:mx-0 text-center sm:text-left flex-wrap justify-center sm:justify-start">
             <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#C5A059] shrink-0 animate-pulse" />
             <span>Free Express Delivery &gt; ₹1,999</span>
-            <span className="text-[#C5A059] font-semibold">| Code <strong className="text-white bg-[#5B1425] px-1 py-0.5 rounded border border-[#C5A059]/40 tracking-wider">WELCOME10</strong> (10% OFF)</span>
+            <span className="text-[#C5A059] font-semibold">| Code <strong className="text-white bg-[#5B1425] px-1 py-0.5 rounded border border-[#C5A059]/40 tracking-wider">WELCOME10</strong> (10% OFF up to ₹1,500 on orders &gt; ₹1,999)</span>
           </div>
           <div className="hidden sm:flex items-center gap-4 text-[11px] text-[#FAF7F2]/80 shrink-0">
             <a href="tel:18001234567" className="hover:text-[#C5A059] transition flex items-center gap-1 cursor-pointer" aria-label="Customer Helpline 1800-123-4567">

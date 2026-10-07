@@ -25,17 +25,20 @@ router.get('/', (req, res) => {
     } = req.query;
 
     let query = `
-      SELECT p.id, p.name, p.slug, p.tagline, p.description, p.short_desc, p.category_id,
-        p.fabric, p.occasion, p.pattern, p.saree_length, p.blouse_length, p.care_instructions,
-        p.price, p.mrp, p.discount_percent, p.stock_quantity, p.sku, p.is_featured,
-        p.is_new_arrival, p.is_best_seller, p.color_name, p.color_hex, p.created_at, p.updated_at,
-        c.name as category_name, c.slug as category_slug,
-        (SELECT COUNT(*) FROM reviews WHERE product_id = p.id) as review_count,
-        (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE product_id = p.id) as rating,
-        (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) as primary_image,
-        (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1 OFFSET 1) as secondary_image
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
+      WITH product_catalog AS (
+        SELECT p.id, p.name, p.slug, p.tagline, p.description, p.short_desc, p.category_id,
+          p.fabric, p.occasion, p.pattern, p.saree_length, p.blouse_length, p.care_instructions,
+          p.price, p.mrp, p.discount_percent, p.stock_quantity, p.sku, p.is_featured,
+          p.is_new_arrival, p.is_best_seller, p.color_name, p.color_hex, p.created_at, p.updated_at,
+          c.name as category_name, c.slug as category_slug,
+          (SELECT COUNT(*) FROM reviews WHERE product_id = p.id) as review_count,
+          (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE product_id = p.id) as rating,
+          (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) as primary_image,
+          (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1 OFFSET 1) as secondary_image
+        FROM products p
+        LEFT JOIN categories c ON p.category_id = c.id
+      )
+      SELECT * FROM product_catalog p
       WHERE 1=1
     `;
     const params = [];
@@ -43,7 +46,7 @@ router.get('/', (req, res) => {
     // Category filter (slug or id)
     if (category) {
       if (isNaN(category)) {
-        query += ` AND c.slug = ?`;
+        query += ` AND p.category_slug = ?`;
         params.push(category);
       } else {
         query += ` AND p.category_id = ?`;
@@ -54,7 +57,6 @@ router.get('/', (req, res) => {
     // Fabric filter
     if (fabric) {
       const fabrics = Array.isArray(fabric) ? fabric : fabric.split(',');
-      const placeholders = fabrics.map(() => '?').join(',');
       query += ` AND (${fabrics.map(() => 'p.fabric LIKE ?').join(' OR ')})`;
       fabrics.forEach(f => params.push(`%${f.trim()}%`));
     }
@@ -120,7 +122,7 @@ router.get('/', (req, res) => {
         p.fabric LIKE ? OR
         p.occasion LIKE ? OR
         p.pattern LIKE ? OR
-        c.name LIKE ?
+        p.category_name LIKE ?
       )`;
       params.push(s, s, s, s, s, s, s);
     }
@@ -128,26 +130,26 @@ router.get('/', (req, res) => {
     // Sorting
     switch (sort) {
       case 'price_asc':
-        query += ` ORDER BY p.price ASC`;
+        query += ` ORDER BY p.price ASC, p.id ASC`;
         break;
       case 'price_desc':
-        query += ` ORDER BY p.price DESC`;
+        query += ` ORDER BY p.price DESC, p.id DESC`;
         break;
       case 'rating':
-        query += ` ORDER BY p.rating DESC, p.review_count DESC`;
+        query += ` ORDER BY p.rating DESC, p.review_count DESC, p.id DESC`;
         break;
       case 'newest':
         query += ` ORDER BY p.created_at DESC, p.id DESC`;
         break;
       case 'best_seller':
-        query += ` ORDER BY p.is_best_seller DESC, p.review_count DESC`;
+        query += ` ORDER BY p.is_best_seller DESC, COALESCE(p.rating, 0) DESC, p.review_count DESC, p.id DESC`;
         break;
       case 'discount':
-        query += ` ORDER BY p.discount_percent DESC`;
+        query += ` ORDER BY p.discount_percent DESC, p.id DESC`;
         break;
       case 'recommended':
       default:
-        query += ` ORDER BY p.is_featured DESC, p.rating DESC, p.id DESC`;
+        query += ` ORDER BY p.is_featured DESC, COALESCE(p.rating, 0) DESC, p.review_count DESC, p.id DESC`;
         break;
     }
 
@@ -201,7 +203,9 @@ router.get('/search/suggestions', (req, res) => {
 
     const term = `%${q.trim()}%`;
     const products = db.prepare(`
-      SELECT p.id, p.name, p.slug, p.price, p.mrp, p.discount_percent, p.rating,
+      SELECT p.id, p.name, p.slug, p.price, p.mrp, p.discount_percent,
+        (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE product_id = p.id) as rating,
+        (SELECT COUNT(*) FROM reviews WHERE product_id = p.id) as review_count,
         (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC LIMIT 1) as primary_image
       FROM products p
       WHERE p.name LIKE ? OR p.fabric LIKE ? OR p.occasion LIKE ?
