@@ -103,7 +103,6 @@ export default function HomePage({ onNavigate }) {
     {
       name: 'Dr. Radhika Sen',
       role: 'Kolkata, WB',
-      rating: 5,
       comment: 'The Royal Crimson Banarasi exceeded every expectation. The kadwa gold zari work is dense yet remarkably lightweight.',
       saree: 'Royal Crimson Banarasi Katan',
       slug: 'royal-crimson-banarasi-katan-silk-saree'
@@ -111,7 +110,6 @@ export default function HomePage({ onNavigate }) {
     {
       name: 'Meera Nambiar',
       role: 'Bengaluru, KA',
-      rating: 5,
       comment: 'Authentic heavy korvai luster with a royal drape. The luxury burgundy packaging made unboxing feel like a celebration.',
       saree: 'Vaidarbhi Pure Kanjivaram Gold',
       slug: 'vaidarbhi-pure-kanjivaram-bridal-gold-silk-saree'
@@ -119,7 +117,6 @@ export default function HomePage({ onNavigate }) {
     {
       name: 'Shweta Singhania',
       role: 'Mumbai, MH',
-      rating: 5,
       comment: 'The Noor rose gold organza saree is pure poetry. Featherlight on the skin with an exquisite scalloped border.',
       saree: 'Noor Rose Gold Organza',
       slug: 'noor-rose-gold-embroidered-organza-saree'
@@ -485,25 +482,14 @@ export default function HomePage({ onNavigate }) {
               className="bg-white rounded-2xl p-6 border border-[#EAE2D7] shadow-sm hover:shadow-md transition flex flex-col justify-between"
             >
               <div>
-                <div
-                  className="flex items-center gap-1 mb-3"
-                  role="img"
-                  aria-label={`${t.rating} out of 5 stars`}
-                >
-                  <div className="flex items-center text-[#855A16]">
-                    {[...Array(t.rating)].map((_, i) => (
-                      <Star key={i} className="w-4 h-4 fill-current text-[#855A16]" aria-hidden="true" />
-                    ))}
-                  </div>
-                  <span className="text-xs font-bold text-[#855A16] ml-1">
-                    {t.rating}.0
-                  </span>
+                <div className="text-[#C5A059] font-serif text-3xl leading-none mb-2 select-none" aria-hidden="true">
+                  “
                 </div>
                 <p className="text-xs sm:text-sm text-[#1F1A1C] italic leading-relaxed">
                   "{t.comment}"
                 </p>
 
-                {/* Saree Being Reviewed */}
+                {/* Saree Featured in Testimonial */}
                 <div className="mt-3 pt-2.5 border-t border-[#F4EFEB]">
                   <button
                     type="button"
@@ -511,7 +497,7 @@ export default function HomePage({ onNavigate }) {
                     className="text-[11px] font-semibold text-[#5B1425] hover:text-[#7E1E34] hover:underline min-h-[44px] py-2 px-1 inline-flex items-center gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded text-left transition w-full"
                     aria-label={`View details for ${t.saree}`}
                   >
-                    <span className="text-[#6E6467] font-normal">Purchased:</span>
+                    <span className="text-[#6E6467] font-normal">Draped:</span>
                     <span>{t.saree}</span>
                     <ArrowRight className="w-3 h-3 text-[#C5A059] shrink-0" />
                   </button>
@@ -523,8 +509,8 @@ export default function HomePage({ onNavigate }) {
                   <div className="text-xs font-bold text-[#1F1A1C]">{t.name}</div>
                   <div className="text-[11px] text-[#6E6467]">{t.role}</div>
                 </div>
-                <span className="text-[10px] bg-green-50 text-green-800 font-semibold px-2 py-0.5 rounded border border-green-200">
-                  ✓ Verified Buyer
+                <span className="text-[10px] text-[#855A16] font-medium tracking-wider uppercase">
+                  Client Story
                 </span>
               </div>
             </div>

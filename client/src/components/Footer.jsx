@@ -26,7 +26,8 @@ export default function Footer({ onNavigate }) {
       });
       const data = await res.json();
       if (res.ok) {
-        addToast(data.message || '✨ Welcome to the PALLUVO Circle! Your welcome coupon has been registered.');
+        const promoInfo = data.couponCode ? ` (Code: ${data.couponCode} • ${data.discountTerms || '10% OFF'})` : '';
+        addToast(data.message || `✨ Welcome to the PALLUVO Circle!${promoInfo}`);
         setNewsletterEmail('');
       } else {
         addToast(data.error || 'Unable to subscribe. Please try again.');
@@ -111,7 +112,7 @@ export default function Footer({ onNavigate }) {
 
           <form onSubmit={handleSubscribe} className="pt-2 max-w-md space-y-1.5">
             <label htmlFor="footer-newsletter-email" className="block text-xs font-semibold text-[#C5A059] tracking-wide">
-              Subscribe to the PALLUVO Circle (Get ₹500 OFF)
+              Subscribe to the PALLUVO Circle (Get 10% OFF with code WELCOME10)
             </label>
             <div className="flex">
               <input
@@ -122,7 +123,7 @@ export default function Footer({ onNavigate }) {
                 value={newsletterEmail}
                 onChange={(e) => setNewsletterEmail(e.target.value)}
                 placeholder="Enter your email address..."
-                aria-label="Email address for newsletter and ₹500 welcome coupon"
+                aria-label="Email address for newsletter and 10% welcome coupon"
                 className="flex-1 min-h-[44px] bg-white/10 border border-white/20 rounded-l-xl px-3.5 py-2.5 text-xs text-[#FAF7F2] placeholder-white/75 focus:outline-none focus:border-[#C5A059]"
               />
               <button
