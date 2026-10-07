@@ -70,12 +70,17 @@ export default function Footer({ onNavigate }) {
         
         {/* Top Brand Banner & Newsletter */}
         <div className="mb-10 lg:mb-12 max-w-2xl space-y-3">
-          <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => onNavigate('home')}>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] rounded-sm"
+            onClick={() => onNavigate('home')}
+            aria-label="PALLUVO - Return to homepage"
+          >
             <span className="font-cinzel text-2xl sm:text-3xl font-bold tracking-[0.2em] text-[#C5A059]">
               PALLUVO
             </span>
             <span className="text-[#C5A059] text-xl -mt-2">✦</span>
-          </div>
+          </button>
           <p className="text-xs font-serif italic text-[#FAF7F2]/80 tracking-wider uppercase">
             Every drape, a little magic.
           </p>

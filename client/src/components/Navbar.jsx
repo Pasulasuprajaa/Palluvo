@@ -406,7 +406,14 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
                 }},
                 { label: 'About PALLUVO', icon: Info, action: () => handleNav('about'), highlight: currentPage === 'about' },
-                { label: 'Account', icon: User, action: () => user ? handleNav('account') : onOpenAuth() }
+                { label: 'Account', icon: User, action: () => {
+                  setMobileMenuOpen(false);
+                  if (user) {
+                    handleNav('account');
+                  } else {
+                    onOpenAuth();
+                  }
+                }}
               ].map((item, idx) => {
                 const ItemIcon = item.icon;
                 return (
