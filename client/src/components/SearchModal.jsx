@@ -12,6 +12,17 @@ export default function SearchModal({ onNavigate }) {
   const modalRef = useRef(null);
   const previousActiveElementRef = useRef(null);
 
+  const getVisibleFocusableElements = (container) => {
+    if (!container) return [];
+    const selector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])';
+    return Array.from(container.querySelectorAll(selector)).filter((el) => {
+      if (el.getAttribute('aria-hidden') === 'true') return false;
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      return el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0;
+    });
+  };
+
   useEffect(() => {
     if (isSearchOpen) {
       previousActiveElementRef.current = document.activeElement;
@@ -37,20 +48,21 @@ export default function SearchModal({ onNavigate }) {
         return;
       }
       if (e.key === 'Tab' && modalRef.current) {
-        const focusableElements = modalRef.current.querySelectorAll(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
-        if (focusableElements.length === 0) return;
+        const focusableElements = getVisibleFocusableElements(modalRef.current);
+        if (focusableElements.length === 0) {
+          e.preventDefault();
+          return;
+        }
         const firstElement = focusableElements[0];
         const lastElement = focusableElements[focusableElements.length - 1];
 
         if (e.shiftKey) {
-          if (document.activeElement === firstElement) {
+          if (document.activeElement === firstElement || !modalRef.current.contains(document.activeElement)) {
             e.preventDefault();
             lastElement.focus();
           }
         } else {
-          if (document.activeElement === lastElement) {
+          if (document.activeElement === lastElement || !modalRef.current.contains(document.activeElement)) {
             e.preventDefault();
             firstElement.focus();
           }
@@ -150,10 +162,10 @@ export default function SearchModal({ onNavigate }) {
       >
         {/* Search Header Bar */}
         <div className="p-4 sm:p-5 border-b border-[#E8E1D5] bg-white">
-          <div className="flex items-center justify-between mb-3 sm:hidden">
+          <div className="flex items-center justify-between mb-3 sm:mb-0">
             <h2
               id="search-modal-title"
-              className="font-serif font-bold text-sm text-[#5B1425] tracking-wider uppercase"
+              className="font-serif font-bold text-sm text-[#5B1425] tracking-wider uppercase sm:sr-only"
             >
               Search PALLUVO
             </h2>
@@ -161,15 +173,11 @@ export default function SearchModal({ onNavigate }) {
               type="button"
               onClick={() => setIsSearchOpen(false)}
               aria-label="Close search"
-              className="p-1.5 rounded-full text-[#6E6467] hover:text-[#5B1425] hover:bg-[#F4EFEB] transition cursor-pointer"
+              className="p-1.5 rounded-full text-[#6E6467] hover:text-[#5B1425] hover:bg-[#F4EFEB] transition cursor-pointer sm:hidden"
             >
               <X className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
-
-          <h2 id="search-modal-title" className="sr-only hidden sm:block">
-            Search PALLUVO Luxury Sarees
-          </h2>
 
           <form onSubmit={handleSearchSubmit} className="relative flex items-center bg-[#FAF7F2] border border-[#E0D8CD] rounded-xl px-3.5 py-2.5">
             <Search className="w-5 h-5 text-[#5B1425] mr-2.5 shrink-0" aria-hidden="true" />
