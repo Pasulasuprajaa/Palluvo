@@ -26,8 +26,7 @@ export default function Footer({ onNavigate }) {
       });
       const data = await res.json();
       if (res.ok) {
-        const promoInfo = data.couponCode ? ` (Code: ${data.couponCode} • ${data.discountTerms || '10% OFF'})` : '';
-        addToast(data.message || `✨ Welcome to the PALLUVO Circle!${promoInfo}`);
+        addToast(data.message || `✨ Welcome to the PALLUVO Circle! Use code ${data.couponCode || 'WELCOME10'} for 10% OFF (up to ₹1,500) on orders above ₹1,999.`);
         setNewsletterEmail('');
       } else {
         addToast(data.error || 'Unable to subscribe. Please try again.');
@@ -114,6 +113,9 @@ export default function Footer({ onNavigate }) {
             <label htmlFor="footer-newsletter-email" className="block text-xs font-semibold text-[#C5A059] tracking-wide">
               Subscribe to the PALLUVO Circle (Get 10% OFF with code WELCOME10)
             </label>
+            <p className="text-[11px] text-[#FAF7F2]/70">
+              Enjoy 10% OFF (up to ₹1,500) on your first luxury purchase above ₹1,999.
+            </p>
             <div className="flex">
               <input
                 id="footer-newsletter-email"
@@ -123,7 +125,7 @@ export default function Footer({ onNavigate }) {
                 value={newsletterEmail}
                 onChange={(e) => setNewsletterEmail(e.target.value)}
                 placeholder="Enter your email address..."
-                aria-label="Email address for newsletter and 10% welcome coupon"
+                aria-label="Email address for newsletter and 10% welcome coupon (up to ₹1,500 off on orders above ₹1,999)"
                 className="flex-1 min-h-[44px] bg-white/10 border border-white/20 rounded-l-xl px-3.5 py-2.5 text-xs text-[#FAF7F2] placeholder-white/75 focus:outline-none focus:border-[#C5A059]"
               />
               <button

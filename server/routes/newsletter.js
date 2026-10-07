@@ -27,9 +27,11 @@ router.post('/subscribe', (req, res) => {
       const code = existing.coupon_code || 'WELCOME10';
       return res.json({
         success: true,
-        message: `You are already subscribed to the PALLUVO Circle! Use code ${code} for 10% OFF on your luxury drape order.`,
+        message: `You are already subscribed to the PALLUVO Circle! Use code ${code} for 10% OFF (up to ₹1,500) on orders above ₹1,999.`,
         couponCode: code,
         discountTerms: '10% OFF up to ₹1,500 on orders above ₹1,999',
+        minOrderAmount: 1999,
+        maxDiscountAmount: 1500,
         alreadySubscribed: true
       });
     }
@@ -38,9 +40,11 @@ router.post('/subscribe', (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: '✨ Welcome to the PALLUVO Circle! Use code WELCOME10 for 10% OFF on your first luxury order.',
+      message: '✨ Welcome to the PALLUVO Circle! Use code WELCOME10 for 10% OFF (up to ₹1,500) on orders above ₹1,999.',
       couponCode: 'WELCOME10',
-      discountTerms: '10% OFF up to ₹1,500 on orders above ₹1,999'
+      discountTerms: '10% OFF up to ₹1,500 on orders above ₹1,999',
+      minOrderAmount: 1999,
+      maxDiscountAmount: 1500
     });
   } catch (error) {
     console.error('Newsletter subscribe error:', error);
