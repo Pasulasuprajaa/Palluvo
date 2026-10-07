@@ -44,6 +44,7 @@ app.use('/api/payments', require('./routes/payments'));
 app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/pincode', require('./routes/pincode'));
+app.use('/api/newsletter', require('./routes/newsletter'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

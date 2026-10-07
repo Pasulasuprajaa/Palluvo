@@ -540,6 +540,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
           {/* 1. Home */}
           <button
             onClick={() => handleNav('home')}
+            aria-current={currentPage === 'home' ? 'page' : undefined}
             className={`flex-1 flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
               currentPage === 'home' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
             }`}
@@ -551,6 +552,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
           {/* 2. Categories */}
           <button
             onClick={() => handleNav('shop')}
+            aria-current={currentPage === 'shop' ? 'page' : undefined}
             className={`flex-1 flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
               currentPage === 'shop' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
             }`}
@@ -562,6 +564,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
           {/* 3. Offers */}
           <button
             onClick={() => handleNav('offers')}
+            aria-current={currentPage === 'offers' ? 'page' : undefined}
             className={`flex-1 flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
               currentPage === 'offers' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
             }`}
@@ -573,6 +576,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
           {/* 4. Wishlist */}
           <button
             onClick={() => handleNav('wishlist')}
+            aria-current={currentPage === 'wishlist' ? 'page' : undefined}
             className={`flex-1 relative flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
               currentPage === 'wishlist' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
             }`}
@@ -597,6 +601,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                 onOpenAuth();
               }
             }}
+            aria-current={currentPage === 'account' ? 'page' : undefined}
             className={`flex-1 flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
               currentPage === 'account' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
             }`}

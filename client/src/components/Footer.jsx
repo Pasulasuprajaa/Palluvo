@@ -4,6 +4,7 @@ import { useToast } from '../context/ToastContext';
 
 export default function Footer({ onNavigate }) {
   const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [isSubscribing, setIsSubscribing] = useState(false);
   const { addToast } = useToast();
   const [openSection, setOpenSection] = useState(null); // 'shop', 'care', 'about', 'policies'
 
@@ -11,11 +12,31 @@ export default function Footer({ onNavigate }) {
     setOpenSection(prev => prev === sec ? null : sec);
   };
 
-  const handleSubscribe = (e) => {
+  const handleSubscribe = async (e) => {
     e.preventDefault();
-    if (!newsletterEmail.trim()) return;
-    addToast('✨ Welcome to the PALLUVO Circle! Your ₹500 welcome coupon has been sent.');
-    setNewsletterEmail('');
+    const email = newsletterEmail.trim();
+    if (!email) return;
+
+    setIsSubscribing(true);
+    try {
+      const res = await fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addToast(data.message || '✨ Welcome to the PALLUVO Circle! Your welcome coupon has been registered.');
+        setNewsletterEmail('');
+      } else {
+        addToast(data.error || 'Unable to subscribe. Please try again.');
+      }
+    } catch (err) {
+      console.error('Newsletter subscribe error:', err);
+      addToast('Network error while subscribing. Please try again.');
+    } finally {
+      setIsSubscribing(false);
+    }
   };
 
   return (
@@ -106,10 +127,11 @@ export default function Footer({ onNavigate }) {
               />
               <button
                 type="submit"
+                disabled={isSubscribing}
                 aria-label="Subscribe to newsletter"
-                className="min-h-[44px] bg-[#C5A059] text-[#1F1A1C] font-bold text-xs px-4 py-2.5 rounded-r-xl hover:bg-[#E0C07F] transition flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                className="min-h-[44px] bg-[#C5A059] text-[#1F1A1C] font-bold text-xs px-4 py-2.5 rounded-r-xl hover:bg-[#E0C07F] disabled:opacity-60 transition flex items-center justify-center gap-1 shrink-0 cursor-pointer"
               >
-                <span>Join</span>
+                <span>{isSubscribing ? 'Joining...' : 'Join'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
