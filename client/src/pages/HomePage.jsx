@@ -183,7 +183,7 @@ export default function HomePage({ onNavigate }) {
             <span className="italic font-normal gold-gradient-text">woven for generations.</span>
           </h1>
 
-          <p className="mt-2 md:mt-5 text-xs sm:text-sm md:text-base text-[#FAF7F2]/85 leading-relaxed font-sans max-w-lg drop-shadow-xs">
+          <p className="mt-2 md:mt-5 text-sm md:text-base text-[#FAF7F2]/85 leading-relaxed font-sans max-w-lg drop-shadow-xs">
             Handcrafted Banarasi, pure Kanjivaram, and ethereal organza sarees designed to make your celebratory moments unforgettable.
           </p>
 
@@ -221,10 +221,10 @@ export default function HomePage({ onNavigate }) {
               </div>
             </div>
             <div>
-              <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">4.9 ★</div>
+              <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">Silk Mark</div>
               <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">
-                <span className="md:hidden">Reviews</span>
-                <span className="hidden md:inline">Verified Reviews</span>
+                <span className="md:hidden">Certified</span>
+                <span className="hidden md:inline">Certified Pure</span>
               </div>
             </div>
           </div>
