@@ -72,7 +72,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
             <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 shrink-0 mr-1 sm:mr-2 lg:mr-3 xl:mr-6">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="lg:hidden p-2 -ml-1 text-[#1F1A1C] hover:text-[#5B1425] rounded-xl hover:bg-[#F4EFEB] transition cursor-pointer"
+                className="lg:hidden min-w-[44px] min-h-[44px] flex items-center justify-center -ml-1 text-[#1F1A1C] hover:text-[#5B1425] rounded-xl hover:bg-[#F4EFEB] transition cursor-pointer"
                 aria-label="Toggle navigation menu"
               >
                 {mobileMenuOpen ? <X className="w-6 h-6 text-[#5B1425]" /> : <Menu className="w-6 h-6" />}
@@ -350,7 +350,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               type="button"
               onClick={() => setIsSearchOpen(true)}
               aria-label="Search sarees, collections and more"
-              className="w-full flex items-center gap-2.5 bg-white border border-[#E0D8CD] rounded-xl px-3.5 py-2.5 shadow-xs cursor-pointer active:scale-[0.99] transition-transform text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
+              className="w-full min-h-[44px] flex items-center gap-2.5 bg-white border border-[#E0D8CD] rounded-xl px-3.5 py-2.5 shadow-xs cursor-pointer active:scale-[0.99] transition-transform text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
             >
               <Search className="w-4 h-4 text-[#C5A059] shrink-0" />
               <span className="text-xs text-[#8C8285] font-normal truncate">
