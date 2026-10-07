@@ -271,7 +271,7 @@ export default function Footer({ onNavigate }) {
                 href="https://www.instagram.com/palluvo_official"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 bg-white/10 rounded-full hover:text-[#C5A059] hover:bg-white/20 transition flex items-center justify-center cursor-pointer"
+                className="w-11 h-11 min-w-[44px] min-h-[44px] bg-white/10 rounded-full hover:text-[#C5A059] hover:bg-white/20 transition flex items-center justify-center cursor-pointer"
                 aria-label="Follow PALLUVO on Instagram"
                 title="Instagram"
               >
@@ -285,7 +285,7 @@ export default function Footer({ onNavigate }) {
                 href="https://www.facebook.com/palluvo.official"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 bg-white/10 rounded-full hover:text-[#C5A059] hover:bg-white/20 transition flex items-center justify-center cursor-pointer"
+                className="w-11 h-11 min-w-[44px] min-h-[44px] bg-white/10 rounded-full hover:text-[#C5A059] hover:bg-white/20 transition flex items-center justify-center cursor-pointer"
                 aria-label="Follow PALLUVO on Facebook"
                 title="Facebook"
               >
@@ -297,7 +297,7 @@ export default function Footer({ onNavigate }) {
                 href="https://www.pinterest.com/palluvo"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 bg-white/10 rounded-full hover:text-[#C5A059] hover:bg-white/20 transition flex items-center justify-center cursor-pointer"
+                className="w-11 h-11 min-w-[44px] min-h-[44px] bg-white/10 rounded-full hover:text-[#C5A059] hover:bg-white/20 transition flex items-center justify-center cursor-pointer"
                 aria-label="Follow PALLUVO on Pinterest"
                 title="Pinterest"
               >

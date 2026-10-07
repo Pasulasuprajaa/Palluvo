@@ -322,7 +322,7 @@ export default function HomePage({ onNavigate }) {
             </div>
             <button
               onClick={() => onNavigate('shop')}
-              className="mt-4 md:mt-0 text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] inline-flex items-center gap-1 group focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-lg p-1"
+              className="mt-2 md:mt-0 text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] inline-flex items-center gap-1 group focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-lg min-h-[44px] px-2 py-1 cursor-pointer"
             >
               <span>Explore All Sarees</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-[#C5A059]" />
@@ -387,7 +387,7 @@ export default function HomePage({ onNavigate }) {
           </div>
           <button
             onClick={() => onNavigate('shop', { filter: 'best_seller' })}
-            className="mt-4 md:mt-0 text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] inline-flex items-center gap-1 group focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-lg p-1"
+            className="mt-2 md:mt-0 text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] inline-flex items-center gap-1 group focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-lg min-h-[44px] px-2 py-1 cursor-pointer"
           >
             <span>View All Best Sellers</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-[#C5A059]" />
