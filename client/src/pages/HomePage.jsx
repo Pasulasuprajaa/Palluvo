@@ -238,19 +238,31 @@ export default function HomePage({ onNavigate }) {
 
         {/* Mobile Horizontal Carousel / Desktop 5-Col Grid */}
         {categoriesLoading ? (
-          <div className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2">
-            {[...Array(5)].map((_, i) => (
-              <div
-                key={i}
-                className="w-36 sm:w-44 md:w-auto shrink-0 aspect-[3/4] rounded-2xl bg-[#EAE2D7]/60 animate-pulse flex flex-col justify-end p-4 space-y-2 border border-[#EAE2D7]"
-              >
-                <div className="h-4 bg-[#D5C7B8]/60 rounded-md w-3/4 mx-auto" />
-                <div className="h-3 bg-[#D5C7B8]/40 rounded-md w-1/2 mx-auto" />
-              </div>
-            ))}
+          <div
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+            className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2"
+          >
+            <span className="sr-only">Loading weave categories...</span>
+            <div className="contents" aria-hidden="true">
+              {[...Array(5)].map((_, i) => (
+                <div
+                  key={i}
+                  className="w-36 sm:w-44 md:w-auto shrink-0 aspect-[3/4] rounded-2xl bg-[#EAE2D7]/60 animate-pulse flex flex-col justify-end p-4 space-y-2 border border-[#EAE2D7]"
+                >
+                  <div className="h-4 bg-[#D5C7B8]/60 rounded-md w-3/4 mx-auto" />
+                  <div className="h-3 bg-[#D5C7B8]/40 rounded-md w-1/2 mx-auto" />
+                </div>
+              ))}
+            </div>
           </div>
         ) : categoriesError ? (
-          <div className="p-8 text-center bg-white rounded-2xl border border-[#EAE2D7] shadow-xs space-y-3">
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="p-8 text-center bg-white rounded-2xl border border-[#EAE2D7] shadow-xs space-y-3"
+          >
             <p className="text-xs sm:text-sm text-[#6E6467]">{categoriesError}</p>
             <button
               onClick={fetchCategories}
@@ -392,23 +404,35 @@ export default function HomePage({ onNavigate }) {
         </div>
 
         {bestSellersLoading ? (
-          <div className="flex overflow-x-auto gap-3.5 sm:gap-6 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 pb-2">
-            {[...Array(4)].map((_, i) => (
-              <div
-                key={i}
-                className="w-56 sm:w-auto shrink-0 snap-item bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden p-3 sm:p-4 space-y-3 shadow-xs"
-              >
-                <div className="aspect-[3/4] w-full rounded-xl bg-[#EAE2D7]/60 animate-pulse" />
-                <div className="space-y-2">
-                  <div className="h-3 bg-[#EAE2D7]/80 rounded w-1/3 animate-pulse" />
-                  <div className="h-4 bg-[#EAE2D7] rounded w-4/5 animate-pulse" />
-                  <div className="h-4 bg-[#EAE2D7]/70 rounded w-1/2 animate-pulse" />
+          <div
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+            className="flex overflow-x-auto gap-3.5 sm:gap-6 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 pb-2"
+          >
+            <span className="sr-only">Loading best seller sarees...</span>
+            <div className="contents" aria-hidden="true">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className="w-56 sm:w-auto shrink-0 snap-item bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden p-3 sm:p-4 space-y-3 shadow-xs"
+                >
+                  <div className="aspect-[3/4] w-full rounded-xl bg-[#EAE2D7]/60 animate-pulse" />
+                  <div className="space-y-2">
+                    <div className="h-3 bg-[#EAE2D7]/80 rounded w-1/3 animate-pulse" />
+                    <div className="h-4 bg-[#EAE2D7] rounded w-4/5 animate-pulse" />
+                    <div className="h-4 bg-[#EAE2D7]/70 rounded w-1/2 animate-pulse" />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         ) : bestSellersError ? (
-          <div className="p-8 text-center bg-white rounded-2xl border border-[#EAE2D7] shadow-xs space-y-3">
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="p-8 text-center bg-white rounded-2xl border border-[#EAE2D7] shadow-xs space-y-3"
+          >
             <p className="text-xs sm:text-sm text-[#6E6467]">{bestSellersError}</p>
             <button
               onClick={fetchBestSellers}
