@@ -161,6 +161,9 @@ export default function HomePage({ onNavigate }) {
             <img
               src="/images/occasions/wedding_edit.jpg"
               alt="Indian bride adorned in an ornate crimson and gold handcrafted silk saree"
+              loading="eager"
+              fetchpriority="high"
+              decoding="async"
               className="w-full h-full object-cover object-[center_12%] md:object-[75%_center] lg:object-right opacity-100 scale-100 transition-transform duration-1000 ease-out"
             />
           </picture>
@@ -351,6 +354,8 @@ export default function HomePage({ onNavigate }) {
                   <img
                     src={col.image}
                     alt={col.title}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                   />
                 </div>
@@ -510,7 +515,7 @@ export default function HomePage({ onNavigate }) {
                   “
                 </div>
                 <p className="text-xs sm:text-sm text-[#1F1A1C] italic leading-relaxed">
-                  "{t.comment}"
+                  {t.comment}
                 </p>
 
                 {/* Saree Featured in Testimonial */}
@@ -568,6 +573,8 @@ export default function HomePage({ onNavigate }) {
                   <img
                     src={post.image}
                     alt={`Saree drape styling by ${post.handle}`}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-black/40 backdrop-blur-md text-white shadow-sm">

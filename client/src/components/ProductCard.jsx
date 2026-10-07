@@ -68,6 +68,8 @@ export default function ProductCard({ product, onNavigate }) {
           <img
             src={isHovered ? secondaryImg : primaryImg}
             alt={product.name}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover object-top transition-transform duration-700 ease-out group-hover:scale-105"
           />
         </a>
