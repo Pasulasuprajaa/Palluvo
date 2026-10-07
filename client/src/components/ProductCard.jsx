@@ -119,7 +119,7 @@ export default function ProductCard({ product, onNavigate }) {
           <button
             onClick={handleQuickView}
             aria-label={`Quick view ${product.name}`}
-            className="flex-1 py-2 bg-white/95 backdrop-blur-md text-[#1F1A1C] text-xs font-semibold rounded-xl hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none transition shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
+            className="flex-1 min-h-[44px] py-2 px-3 bg-white/95 backdrop-blur-md text-[#1F1A1C] text-xs font-semibold rounded-xl hover:bg-[#5B1425] hover:text-[#FAF7F2] focus-visible:bg-[#5B1425] focus-visible:text-[#FAF7F2] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none transition shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <Eye className="w-3.5 h-3.5" />
             <span>Quick View</span>

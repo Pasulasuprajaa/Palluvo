@@ -217,7 +217,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               {/* Search Trigger (Desktop only - mobile uses dedicated search bar below) */}
               <button
                 onClick={() => setIsSearchOpen(true)}
-                className="hidden lg:flex p-1.5 xl:p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition items-center gap-1 cursor-pointer shrink-0"
+                className="hidden lg:flex min-w-[44px] min-h-[44px] p-1.5 xl:p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition items-center justify-center gap-1 cursor-pointer shrink-0"
                 aria-label="Search sarees"
               >
                 <Search className="w-4 h-4 xl:w-5 xl:h-5" />
@@ -227,13 +227,13 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               {/* Wishlist (Desktop only - mobile uses bottom navigation) */}
               <button
                 onClick={() => handleNav('wishlist')}
-                className="hidden lg:inline-flex relative p-1.5 xl:p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer shrink-0"
+                className="hidden lg:inline-flex relative min-w-[44px] min-h-[44px] items-center justify-center p-1.5 xl:p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer shrink-0"
                 aria-label="Wishlist"
                 title="Wishlist"
               >
                 <Heart className="w-4 h-4 xl:w-5 xl:h-5" />
                 {wishlistCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 bg-[#5B1425] text-[#FAF7F2] text-[9px] xl:text-[10px] w-3.5 h-3.5 xl:w-4 xl:h-4 rounded-full flex items-center justify-center font-bold">
+                  <span className="absolute top-1 right-1 xl:top-0.5 xl:right-0.5 bg-[#5B1425] text-[#FAF7F2] text-[9px] xl:text-[10px] w-3.5 h-3.5 xl:w-4 xl:h-4 rounded-full flex items-center justify-center font-bold">
                     {wishlistCount}
                   </span>
                 )}
@@ -242,13 +242,13 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               {/* Compare Sarees (Desktop & Tablet) */}
               <button
                 onClick={() => setIsCompareOpen(true)}
-                className="hidden sm:inline-flex relative p-1.5 xl:p-2 text-[#1F1A1C] hover:text-[#C5A059] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer shrink-0"
+                className="hidden sm:inline-flex relative min-w-[44px] min-h-[44px] items-center justify-center p-1.5 xl:p-2 text-[#1F1A1C] hover:text-[#C5A059] hover:bg-[#F4EFEB] rounded-full transition cursor-pointer shrink-0"
                 aria-label="Compare Sarees"
                 title="Compare Sarees"
               >
                 <Scale className="w-4 h-4 xl:w-5 xl:h-5" />
                 {compareItems.length > 0 && (
-                  <span className="absolute top-0.5 right-0.5 bg-[#C5A059] text-[#1F1A1C] text-[9px] xl:text-[10px] w-3.5 h-3.5 xl:w-4 xl:h-4 rounded-full flex items-center justify-center font-bold shadow-xs">
+                  <span className="absolute top-1 right-1 xl:top-0.5 xl:right-0.5 bg-[#C5A059] text-[#1F1A1C] text-[9px] xl:text-[10px] w-3.5 h-3.5 xl:w-4 xl:h-4 rounded-full flex items-center justify-center font-bold shadow-xs">
                     {compareItems.length}
                   </span>
                 )}
@@ -264,7 +264,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                       onOpenAuth();
                     }
                   }}
-                  className="p-1.5 xl:p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition flex items-center gap-1 cursor-pointer"
+                  className="min-w-[44px] min-h-[44px] p-1.5 xl:p-2 text-[#1F1A1C] hover:text-[#5B1425] hover:bg-[#F4EFEB] rounded-full transition inline-flex items-center justify-center gap-1 cursor-pointer"
                   aria-label="Account"
                 >
                   <User className="w-4 h-4 xl:w-5 xl:h-5" />
