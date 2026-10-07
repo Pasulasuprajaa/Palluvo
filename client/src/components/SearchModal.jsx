@@ -9,18 +9,58 @@ export default function SearchModal({ onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [recentSearches, setRecentSearches] = useState([]);
   const inputRef = useRef(null);
+  const modalRef = useRef(null);
+  const previousActiveElementRef = useRef(null);
 
   useEffect(() => {
     if (isSearchOpen) {
+      previousActiveElementRef.current = document.activeElement;
       try {
         const stored = localStorage.getItem('palluvo_recent_searches');
         if (stored) setRecentSearches(JSON.parse(stored));
       } catch (e) {}
       if (inputRef.current) {
-        setTimeout(() => inputRef.current.focus(), 100);
+        setTimeout(() => inputRef.current.focus(), 50);
       }
+    } else if (previousActiveElementRef.current && typeof previousActiveElementRef.current.focus === 'function') {
+      previousActiveElementRef.current.focus();
     }
   }, [isSearchOpen]);
+
+  useEffect(() => {
+    if (!isSearchOpen) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setIsSearchOpen(false);
+        return;
+      }
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusableElements = modalRef.current.querySelectorAll(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusableElements.length === 0) return;
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSearchOpen, setIsSearchOpen]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -95,36 +135,58 @@ export default function SearchModal({ onNavigate }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center sm:pt-16 sm:px-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="bg-[#FAF7F2] w-full h-full sm:h-auto sm:max-h-[85vh] sm:max-w-2xl sm:rounded-2xl shadow-2xl border border-[#C5A059]/30 flex flex-col overflow-hidden">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="search-modal-title"
+      className="fixed inset-0 z-50 flex items-start justify-center sm:pt-16 sm:px-4 bg-black/80 backdrop-blur-md animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) setIsSearchOpen(false);
+      }}
+    >
+      <div
+        ref={modalRef}
+        className="bg-[#FAF7F2] w-full h-full sm:h-auto sm:max-h-[85vh] sm:max-w-2xl sm:rounded-2xl shadow-2xl border border-[#C5A059]/30 flex flex-col overflow-hidden"
+      >
         {/* Search Header Bar */}
         <div className="p-4 sm:p-5 border-b border-[#E8E1D5] bg-white">
           <div className="flex items-center justify-between mb-3 sm:hidden">
-            <span className="font-serif font-bold text-sm text-[#5B1425] tracking-wider uppercase">
+            <h2
+              id="search-modal-title"
+              className="font-serif font-bold text-sm text-[#5B1425] tracking-wider uppercase"
+            >
               Search PALLUVO
-            </span>
+            </h2>
             <button
+              type="button"
               onClick={() => setIsSearchOpen(false)}
+              aria-label="Close search"
               className="p-1.5 rounded-full text-[#6E6467] hover:text-[#5B1425] hover:bg-[#F4EFEB] transition cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
 
+          <h2 id="search-modal-title" className="sr-only hidden sm:block">
+            Search PALLUVO Luxury Sarees
+          </h2>
+
           <form onSubmit={handleSearchSubmit} className="relative flex items-center bg-[#FAF7F2] border border-[#E0D8CD] rounded-xl px-3.5 py-2.5">
-            <Search className="w-5 h-5 text-[#5B1425] mr-2.5 shrink-0" />
+            <Search className="w-5 h-5 text-[#5B1425] mr-2.5 shrink-0" aria-hidden="true" />
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search sarees, collections & more..."
-              className="w-full bg-transparent text-sm sm:text-base text-[#1F1A1C] placeholder-gray-400 focus:outline-none font-sans"
+              aria-label="Search sarees and collections"
+              className="w-full bg-transparent text-sm sm:text-base text-[#1F1A1C] placeholder-gray-400 focus:outline-hidden font-sans"
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery('')}
+                aria-label="Clear search input"
                 className="text-gray-400 hover:text-black mr-2 text-xs uppercase font-bold cursor-pointer"
               >
                 Clear
@@ -133,9 +195,10 @@ export default function SearchModal({ onNavigate }) {
             <button
               type="button"
               onClick={() => setIsSearchOpen(false)}
+              aria-label="Close search"
               className="hidden sm:inline-flex p-1 rounded-full text-gray-500 hover:text-black hover:bg-gray-200 transition cursor-pointer"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           </form>
         </div>
