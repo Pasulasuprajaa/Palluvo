@@ -413,7 +413,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                   <button
                     key={idx}
                     onClick={item.action}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${
+                    className={`w-full min-h-[44px] flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${
                       item.highlight ? 'bg-[#5B1425] text-white font-bold shadow-xs' : 'text-[#1F1A1C] hover:bg-[#F4EFEB]'
                     }`}
                   >
@@ -450,7 +450,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                     <button
                       key={col.name}
                       onClick={() => handleNav('shop', col.filter)}
-                      className={`text-left px-3 py-2 rounded-lg border transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${
+                      className={`text-left min-h-[44px] flex items-center px-3 py-2 rounded-lg border transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${
                         isActive
                           ? 'bg-[#5B1425] text-white border-[#5B1425] font-semibold shadow-2xs'
                           : 'bg-white border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425]'
@@ -482,7 +482,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                     <button
                       key={cat.slug}
                       onClick={() => handleNav('shop', { category: cat.slug })}
-                      className={`text-left px-3 py-2 rounded-lg border transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${
+                      className={`text-left min-h-[44px] flex items-center px-3 py-2 rounded-lg border transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${
                         isActive
                           ? 'bg-[#5B1425] text-white border-[#5B1425] font-semibold shadow-2xs'
                           : 'bg-white border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425]'
@@ -499,7 +499,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               <div className="pt-2 border-t border-[#EAE2D7]">
                 <button
                   onClick={() => handleNav('admin')}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#5B1425] text-[#FAF7F2] font-semibold rounded-xl text-xs uppercase tracking-wider shadow-sm cursor-pointer hover:bg-[#7E1E34] transition"
+                  className="w-full min-h-[44px] flex items-center justify-center gap-2 py-2.5 bg-[#5B1425] text-[#FAF7F2] font-semibold rounded-xl text-xs uppercase tracking-wider shadow-sm cursor-pointer hover:bg-[#7E1E34] transition"
                 >
                   <Settings className="w-3.5 h-3.5 text-[#C5A059]" />
                   <span>Open Admin Dashboard</span>
@@ -514,7 +514,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                     setMobileMenuOpen(false);
                     logout();
                   }}
-                  className="w-full text-center py-2 border border-red-200 text-red-700 bg-red-50/50 rounded-xl text-xs font-semibold hover:bg-red-100 transition cursor-pointer"
+                  className="w-full min-h-[44px] flex items-center justify-center text-center py-2 border border-red-200 text-red-700 bg-red-50/50 rounded-xl text-xs font-semibold hover:bg-red-100 transition cursor-pointer"
                 >
                   Sign Out
                 </button>

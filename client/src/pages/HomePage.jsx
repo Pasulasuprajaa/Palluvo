@@ -508,7 +508,7 @@ export default function HomePage({ onNavigate }) {
                   <button
                     type="button"
                     onClick={() => onNavigate('product', { slug: t.slug })}
-                    className="text-[11px] font-semibold text-[#5B1425] hover:text-[#7E1E34] hover:underline inline-flex items-center gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded text-left transition"
+                    className="text-[11px] font-semibold text-[#5B1425] hover:text-[#7E1E34] hover:underline min-h-[44px] py-2 px-1 inline-flex items-center gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded text-left transition w-full"
                     aria-label={`View details for ${t.saree}`}
                   >
                     <span className="text-[#6E6467] font-normal">Purchased:</span>
