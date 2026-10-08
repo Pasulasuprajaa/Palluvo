@@ -102,21 +102,24 @@ export default function HomePage({ onNavigate }) {
   const testimonials = [
     {
       name: 'Priya Sharma',
-      role: 'Verified Customer Review',
+      location: 'Bengaluru',
+      occasion: 'Wedding Drape',
       comment: 'The moment I unboxed it, the scent of fresh silk and the soft glow of the antique gold zari took my breath away. It draped like a dream all evening without feeling stiff.',
       saree: 'Royal Crimson Banarasi Katan',
       slug: 'royal-crimson-banarasi-katan-silk-saree'
     },
     {
       name: 'Divya Venkat',
-      role: 'Verified Customer Review',
+      location: 'Chennai',
+      occasion: 'Muhurtham Ceremony',
       comment: 'The gold luster on this Kanjivaram is unmatched. Wore it for my muhurtham ceremony and received countless compliments from all elders. Seamless delivery in Bengaluru within 2 days.',
       saree: 'Vaidarbhi Pure Kanjivaram Gold',
       slug: 'vaidarbhi-pure-kanjivaram-bridal-gold-silk-saree'
     },
     {
       name: 'Kritika Roy',
-      role: 'Verified Customer Review',
+      location: 'Mumbai',
+      occasion: 'Reception Gala',
       comment: 'Organza sarees can sometimes be stiff, but this one is incredibly soft and drapes cleanly. The rose gold scalloped embroidery is so delicate and photogenic.',
       saree: 'Noor Rose Gold Organza',
       slug: 'noor-rose-gold-embroidered-organza-saree'
@@ -167,8 +170,8 @@ export default function HomePage({ onNavigate }) {
               className="w-full h-full object-cover object-[center_top] sm:object-[center_8%] md:object-[right_center] lg:object-right opacity-100 scale-100 transition-transform duration-1000 ease-out"
             />
           </picture>
-          {/* Gradient Overlay: Deep bottom gradient on mobile and left gradient on tablet/desktop keeps bride face & saree clear */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/90 via-55% to-transparent md:bg-gradient-to-r md:from-[#1F1A1C] md:via-[#1F1A1C]/85 md:via-45% md:to-transparent pointer-events-none" />
+          {/* Gradient Overlay: Calibrated gradient maintains solid contrast behind copy while letting the model and silk weave retain full vibrant color and texture */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] from-15% via-[#1F1A1C]/70 via-40% to-transparent to-65% md:bg-gradient-to-r md:from-[#1F1A1C]/90 md:from-15% md:via-[#1F1A1C]/40 md:via-35% md:to-transparent md:to-55% pointer-events-none" />
         </div>
         {/* Hero Content — Constrained Width on Tablet & Mobile to Leave Model & Saree Visible */}
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-44 pb-8 sm:pt-52 sm:pb-12 md:py-24 lg:py-28 w-full">
@@ -576,10 +579,11 @@ export default function HomePage({ onNavigate }) {
               <div className="mt-6 pt-4 border-t border-[#F4EFEB] flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold text-[#1F1A1C]">{t.name}</div>
-                  <div className="text-[11px] text-[#6E6467]">{t.role}</div>
+                  <div className="text-[11px] text-[#6E6467]">{t.location} • {t.occasion}</div>
                 </div>
-                <span className="text-[10px] text-[#855A16] font-medium tracking-wider uppercase">
-                  Client Story
+                <span className="inline-flex items-center gap-1 text-[10px] text-[#2E7D32] bg-[#E8F5E9] px-2.5 py-0.5 rounded-full font-semibold tracking-wide">
+                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  <span>Verified Buyer</span>
                 </span>
               </div>
             </div>
