@@ -189,20 +189,30 @@ export default function HomePage({ onNavigate }) {
 
             {/* Action CTAs: Side-by-side on mobile with 44px min touch target height */}
             <div className="mt-4 md:mt-8 flex flex-row items-center gap-2.5 sm:gap-4 w-full sm:w-auto">
-              <button
-                onClick={() => onNavigate('shop')}
+              <a
+                href="/sarees"
+                onClick={(e) => {
+                  if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+                  e.preventDefault();
+                  onNavigate('shop');
+                }}
                 className="flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 min-h-[44px] bg-[#5B1425] hover:bg-[#7E1E34] text-[#FAF7F2] font-bold text-[11px] sm:text-xs uppercase tracking-widest rounded-xl transition-all duration-300 shadow-2xl flex items-center justify-center gap-1.5 sm:gap-2.5 border border-[#C5A059]/30 active:scale-95 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none whitespace-nowrap"
               >
                 <span>Explore Sarees</span>
                 <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#C5A059]" />
-              </button>
+              </a>
 
-              <button
-                onClick={() => onNavigate('shop', { occasion: 'Wedding' })}
+              <a
+                href="/shop?occasion=Wedding"
+                onClick={(e) => {
+                  if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+                  e.preventDefault();
+                  onNavigate('shop', { occasion: 'Wedding' });
+                }}
                 className="flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 min-h-[44px] bg-[#FAF7F2]/10 hover:bg-[#FAF7F2]/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-[11px] sm:text-xs uppercase tracking-widest rounded-xl transition-all duration-300 border border-white/20 hover:border-[#C5A059] active:scale-95 flex items-center justify-center text-center cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none whitespace-nowrap"
               >
                 Bridal Edit
-              </button>
+              </a>
             </div>
 
             {/* Micro Trust Stats */}
@@ -339,13 +349,18 @@ export default function HomePage({ onNavigate }) {
                 Curated for Every Occasion
               </h2>
             </div>
-            <button
-              onClick={() => onNavigate('shop')}
+            <a
+              href="/sarees"
+              onClick={(e) => {
+                if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+                e.preventDefault();
+                onNavigate('shop');
+              }}
               className="mt-2 md:mt-0 text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] inline-flex items-center gap-1 group focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-lg min-h-[44px] px-2 py-1 cursor-pointer"
             >
               <span>Explore All Sarees</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-[#C5A059]" />
-            </button>
+            </a>
           </div>
 
           <div className="flex overflow-x-auto gap-3.5 sm:gap-6 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 pb-2">
@@ -410,13 +425,18 @@ export default function HomePage({ onNavigate }) {
               Best Sellers of the Season
             </h2>
           </div>
-          <button
-            onClick={() => onNavigate('shop', { filter: 'best_seller' })}
+          <a
+            href="/shop?filter=best_seller"
+            onClick={(e) => {
+              if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+              e.preventDefault();
+              onNavigate('shop', { filter: 'best_seller' });
+            }}
             className="mt-2 md:mt-0 text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] inline-flex items-center gap-1 group focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-lg min-h-[44px] px-2 py-1 cursor-pointer"
           >
             <span>View All Best Sellers</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-[#C5A059]" />
-          </button>
+          </a>
         </div>
 
         {bestSellersLoading ? (
@@ -496,12 +516,17 @@ export default function HomePage({ onNavigate }) {
             At PALLUVO, every saree is born on the handloom through weeks of dedicated craftsmanship. We work closely with master weavers across Varanasi, Kanchipuram, and Chanderi to bring you authentic weaves that celebrate modern Indian grace.
           </p>
           <div className="pt-2">
-            <button
-              onClick={() => onNavigate('shop', { category: 'banarasi-sarees' })}
-              className="px-8 py-3.5 bg-[#C5A059] text-[#1F1A1C] font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-[#E0C07F] transition shadow-xl focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none cursor-pointer"
+            <a
+              href="/shop?category=banarasi-sarees"
+              onClick={(e) => {
+                if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+                e.preventDefault();
+                onNavigate('shop', { category: 'banarasi-sarees' });
+              }}
+              className="inline-block px-8 py-3.5 bg-[#C5A059] text-[#1F1A1C] font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-[#E0C07F] transition shadow-xl focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none cursor-pointer text-center"
             >
               Explore Banarasi Sarees
-            </button>
+            </a>
           </div>
         </div>
       </section>
@@ -515,11 +540,11 @@ export default function HomePage({ onNavigate }) {
           <div className="w-16 h-0.5 bg-[#C5A059] mx-auto mt-3" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {testimonials.map((t, idx) => (
             <div
               key={idx}
-              className="bg-white rounded-2xl p-6 border border-[#EAE2D7] shadow-sm hover:shadow-md transition flex flex-col justify-between"
+              className={`bg-white rounded-2xl p-6 border border-[#EAE2D7] shadow-sm hover:shadow-md transition flex flex-col justify-between ${idx === 2 ? 'md:col-span-2 lg:col-span-1 md:max-w-xl md:w-full md:mx-auto lg:max-w-none' : ''}`}
             >
               <div>
                 <div className="text-[#C5A059] font-serif text-3xl leading-none mb-2 select-none" aria-hidden="true">
