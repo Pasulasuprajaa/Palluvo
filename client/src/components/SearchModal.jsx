@@ -85,11 +85,11 @@ export default function SearchModal({ onNavigate }) {
     }
 
     setResults({ products: [], categories: [] });
+    setLoading(true);
     const controller = new AbortController();
 
     const timer = setTimeout(async () => {
       try {
-        setLoading(true);
         setError(null);
         const res = await fetch(`/api/products/search/suggestions?q=${encodeURIComponent(trimmedQuery)}`, {
           signal: controller.signal
@@ -217,7 +217,7 @@ export default function SearchModal({ onNavigate }) {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search sarees, collections & more..."
               aria-label="Search sarees and collections"
-              className="w-full bg-transparent text-sm sm:text-base text-[#1F1A1C] placeholder-gray-400 focus:outline-hidden font-sans"
+              className="w-full bg-transparent text-sm sm:text-base text-[#1F1A1C] placeholder-[#52484B] focus:outline-hidden font-sans"
             />
             {query && (
               <button

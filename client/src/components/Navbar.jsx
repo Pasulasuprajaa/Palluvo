@@ -353,7 +353,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               className="w-full min-h-[44px] flex items-center gap-2.5 bg-white border border-[#E0D8CD] rounded-xl px-3.5 py-2.5 shadow-xs cursor-pointer active:scale-[0.99] transition-transform text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
             >
               <Search className="w-4 h-4 text-[#C5A059] shrink-0" />
-              <span className="text-xs text-[#8C8285] font-normal truncate">
+              <span className="text-xs text-[#52484B] font-medium truncate">
                 Search sarees, collections & more...
               </span>
             </button>
