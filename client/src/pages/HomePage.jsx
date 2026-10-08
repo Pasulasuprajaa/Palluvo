@@ -285,16 +285,19 @@ export default function HomePage({ onNavigate }) {
           <div>
             <div className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2">
               {weaveCategories.map((cat, idx) => (
-                <button
-                  type="button"
+                <a
+                  href={`/shop?category=${encodeURIComponent(cat.slug)}`}
                   key={cat.id}
-                  onClick={() => onNavigate('shop', { category: cat.slug })}
-                  className="group relative w-36 sm:w-44 md:w-auto shrink-0 snap-item aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2 bg-[#3F0D19]/20"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onNavigate('shop', { category: cat.slug });
+                  }}
+                  className="group relative w-36 sm:w-44 md:w-auto shrink-0 snap-item aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2 bg-[#3F0D19]/20 block"
                   aria-label={/sarees?$/i.test(cat.name.trim()) ? `Explore ${cat.name}` : `Explore ${cat.name} Sarees`}
                 >
                   <img
                     src={cat.image_url}
-                    alt={cat.name}
+                    alt=""
                     loading={idx < 5 ? "eager" : "lazy"}
                     decoding="async"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
@@ -310,7 +313,7 @@ export default function HomePage({ onNavigate }) {
                       <ChevronRight className="w-2.5 h-2.5" />
                     </div>
                   </div>
-                </button>
+                </a>
               ))}
             </div>
 
@@ -346,17 +349,20 @@ export default function HomePage({ onNavigate }) {
 
           <div className="flex overflow-x-auto gap-3.5 sm:gap-6 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 pb-2">
             {occasionCollections.map((col, idx) => (
-              <button
-                type="button"
+              <a
+                href={`/shop?${new URLSearchParams(col.filter).toString()}`}
                 key={idx}
-                onClick={() => onNavigate('shop', col.filter)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onNavigate('shop', col.filter);
+                }}
                 className="w-[72vw] min-w-[218px] max-w-[268px] sm:w-full sm:min-w-0 sm:max-w-none shrink-0 sm:shrink snap-item group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
                 aria-label={`Explore ${col.title} Collection`}
               >
                 <div className="aspect-[4/3] w-full overflow-hidden bg-[#FAF7F2]">
                   <img
                     src={col.image}
-                    alt={col.title}
+                    alt=""
                     loading="lazy"
                     decoding="async"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
@@ -382,7 +388,7 @@ export default function HomePage({ onNavigate }) {
                     </div>
                   </div>
                 </div>
-              </button>
+              </a>
             ))}
           </div>
 
