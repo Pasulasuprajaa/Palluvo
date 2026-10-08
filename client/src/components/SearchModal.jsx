@@ -7,6 +7,7 @@ export default function SearchModal({ onNavigate }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState({ products: [], categories: [] });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [recentSearches, setRecentSearches] = useState([]);
   const inputRef = useRef(null);
   const modalRef = useRef(null);
@@ -76,28 +77,42 @@ export default function SearchModal({ onNavigate }) {
 
   useEffect(() => {
     const trimmedQuery = query.trim();
+    setError(null);
     if (!trimmedQuery) {
       setResults({ products: [], categories: [] });
       setLoading(false);
       return;
     }
 
+    setResults({ products: [], categories: [] });
     const controller = new AbortController();
 
     const timer = setTimeout(async () => {
       try {
         setLoading(true);
+        setError(null);
         const res = await fetch(`/api/products/search/suggestions?q=${encodeURIComponent(trimmedQuery)}`, {
           signal: controller.signal
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (!controller.signal.aborted) {
+            setResults({ products: [], categories: [] });
+            setError('Unable to load search suggestions');
+          }
+          return;
+        }
         const data = await res.json();
         if (!controller.signal.aborted) {
-          setResults(data);
+          setResults(data || { products: [], categories: [] });
+          setError(null);
         }
       } catch (e) {
         if (e.name !== 'AbortError') {
           console.error(e);
+          if (!controller.signal.aborted) {
+            setResults({ products: [], categories: [] });
+            setError('Unable to load search suggestions');
+          }
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -235,6 +250,8 @@ export default function SearchModal({ onNavigate }) {
           {query.trim() ? (
             loading ? (
               'Searching PALLUVO handcrafted vault...'
+            ) : error ? (
+              `Unable to load search suggestions for "${query.trim()}".`
             ) : results.products && results.products.length > 0 ? (
               `${results.products.length} saree result${results.products.length === 1 ? '' : 's'}${results.categories && results.categories.length > 0 ? ` and ${results.categories.length} suggested categor${results.categories.length === 1 ? 'y' : 'ies'}` : ''} found for "${query.trim()}".`
             ) : (
@@ -251,6 +268,24 @@ export default function SearchModal({ onNavigate }) {
                 <div className="py-12 text-center text-xs text-gray-500 animate-pulse">
                   <Sparkles className="w-5 h-5 text-[#C5A059] mx-auto mb-2 animate-spin" />
                   Searching PALLUVO handcrafted vault...
+                </div>
+              ) : error ? (
+                <div className="py-12 text-center space-y-3 bg-white rounded-xl p-6 border border-[#E8E1D5]">
+                  <div className="text-3xl">⚠️</div>
+                  <div className="font-serif font-bold text-sm text-[#5B1425]">
+                    Unable to load suggestions
+                  </div>
+                  <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                    We encountered an issue fetching suggestions for "{query.trim()}". You can still view full search results below.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSearchSubmit}
+                    className="mt-2 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#5B1425] hover:bg-[#430e1b] text-white rounded-xl text-xs font-semibold uppercase tracking-wider transition cursor-pointer shadow-md"
+                  >
+                    <span>Search for "{query.trim()}"</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               ) : (
                 <>
