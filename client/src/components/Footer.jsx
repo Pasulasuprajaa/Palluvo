@@ -69,8 +69,8 @@ export default function Footer({ onNavigate }) {
               <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <h4 className="font-serif font-bold text-xs sm:text-sm text-[#FAF7F2]">Hassle-Free Returns</h4>
-              <p className="text-[11px] sm:text-xs text-[#FAF7F2]/70 mt-0.5 leading-relaxed">Easy 7-day doorstep return and replacement concierge.</p>
+              <h4 className="font-serif font-bold text-xs sm:text-sm text-[#FAF7F2]">7-Day Doorstep Returns</h4>
+              <p className="text-[11px] sm:text-xs text-[#FAF7F2]/70 mt-0.5 leading-relaxed">7-day doorstep returns and replacements with insured reverse pickup.</p>
             </div>
           </div>
 
@@ -79,7 +79,7 @@ export default function Footer({ onNavigate }) {
               <Truck className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <h4 className="font-serif font-bold text-xs sm:text-sm text-[#FAF7F2]">Complimentary Express</h4>
+              <h4 className="font-serif font-bold text-xs sm:text-sm text-[#FAF7F2]">Complimentary Express Delivery</h4>
               <p className="text-[11px] sm:text-xs text-[#FAF7F2]/70 mt-0.5 leading-relaxed">Free luxury insured delivery on orders above ₹1,999.</p>
             </div>
           </div>
