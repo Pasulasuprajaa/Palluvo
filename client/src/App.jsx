@@ -38,10 +38,9 @@ function getRouteFromPath(pathname = window.location.pathname, search = window.l
     return { page: 'product', params: { slug } };
   } else if (path === '/sarees' || path === '/shop') {
     const filters = {};
-    if (searchParams.get('category')) filters.category = searchParams.get('category');
-    if (searchParams.get('occasion')) filters.occasion = searchParams.get('occasion');
-    if (searchParams.get('fabric')) filters.fabric = searchParams.get('fabric');
-    if (searchParams.get('filter')) filters.filter = searchParams.get('filter');
+    for (const [key, value] of searchParams.entries()) {
+      if (value) filters[key] = value;
+    }
     return { page: 'shop', params: filters };
   } else if (path === '/cart') {
     return { page: 'cart', params: {} };
@@ -101,14 +100,25 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     let urlPath = '/';
-    if (page === 'shop') urlPath = '/sarees';
+    if (page === 'shop') {
+      const searchParams = new URLSearchParams();
+      if (params && typeof params === 'object') {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== '') {
+            searchParams.set(key, value);
+          }
+        });
+      }
+      const qs = searchParams.toString();
+      urlPath = qs ? `/sarees?${qs}` : '/sarees';
+    }
     else if (page === 'product' && params.slug) urlPath = `/sarees/${params.slug}`;
     else if (page === 'cart') urlPath = '/cart';
     else if (page === 'checkout') urlPath = '/checkout';
     else if (page === 'account') urlPath = '/account';
     else if (page === 'wishlist') urlPath = '/wishlist';
     else if (page === 'offers') urlPath = '/offers';
-    else if (page === 'track-order') urlPath = '/track-order';
+    else if (page === 'track-order') urlPath = params.trackingId ? `/track-order?trackingId=${encodeURIComponent(params.trackingId)}` : '/track-order';
     else if (page === 'admin') urlPath = '/admin';
     else if (page === 'about') urlPath = params.tab ? `/about?tab=${params.tab}` : '/about';
     else if (page === 'policy') urlPath = `/${params.tab || 'privacy'}`;

@@ -278,7 +278,7 @@ export default function HomePage({ onNavigate }) {
             </button>
           </div>
         ) : weaveCategories.length === 0 ? (
-          <div className="p-8 text-center bg-white rounded-2xl border border-[#EAE2D7] shadow-xs">
+          <div role="status" aria-live="polite" className="p-8 text-center bg-white rounded-2xl border border-[#EAE2D7] shadow-xs">
             <p className="text-xs sm:text-sm text-[#6E6467]">No weave categories available at the moment.</p>
           </div>
         ) : (
@@ -459,7 +459,7 @@ export default function HomePage({ onNavigate }) {
             </button>
           </div>
         ) : bestSellers.length === 0 ? (
-          <div className="p-8 text-center bg-white rounded-2xl border border-[#EAE2D7] shadow-xs">
+          <div role="status" aria-live="polite" className="p-8 text-center bg-white rounded-2xl border border-[#EAE2D7] shadow-xs">
             <p className="text-xs sm:text-sm text-[#6E6467]">No best seller sarees available at the moment.</p>
           </div>
         ) : (
