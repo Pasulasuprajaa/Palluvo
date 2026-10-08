@@ -23,6 +23,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
   const isNewArrivalActive = currentPage === 'shop' && pageParams.filter === 'new_arrival';
   const isCollectionsActive = currentPage === 'shop' && (pageParams.filter === 'featured' || Boolean(pageParams.occasion) || (Boolean(pageParams.category) && pageParams.category !== ''));
   const isBestSellerActive = currentPage === 'shop' && pageParams.filter === 'best_seller';
+  const isOffersActive = currentPage === 'offers';
 
   const handleNav = (page, params = {}) => {
     setMobileMenuOpen(false);
@@ -71,11 +72,14 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
             {/* Left: Mobile Hamburger & Logo */}
             <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 shrink-0 mr-1 sm:mr-2 lg:mr-3 xl:mr-6">
               <button
+                type="button"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="lg:hidden min-w-[44px] min-h-[44px] flex items-center justify-center -ml-1 text-[#1F1A1C] hover:text-[#5B1425] rounded-xl hover:bg-[#F4EFEB] transition cursor-pointer"
-                aria-label="Toggle navigation menu"
+                aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+                aria-expanded={mobileMenuOpen}
+                aria-controls="mobile-navigation-menu"
               >
-                {mobileMenuOpen ? <X className="w-6 h-6 text-[#5B1425]" /> : <Menu className="w-6 h-6" />}
+                {mobileMenuOpen ? <X className="w-6 h-6 text-[#5B1425]" aria-hidden="true" /> : <Menu className="w-6 h-6" aria-hidden="true" />}
               </button>
 
               <a
@@ -205,9 +209,13 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
 
               <button
                 onClick={() => handleNav('offers')}
-                className="h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 border-transparent text-[#9A7730] font-semibold hover:text-[#5B1425] gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-1 cursor-pointer whitespace-nowrap shrink-0 ${
+                  isOffersActive
+                    ? 'border-[#5B1425] text-[#5B1425] font-bold'
+                    : 'border-transparent text-[#9A7730] font-semibold hover:text-[#5B1425]'
+                }`}
               >
-                <Sparkles className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                <Sparkles className={`w-3.5 h-3.5 shrink-0 ${isOffersActive ? 'text-[#5B1425]' : 'text-[#C5A059]'}`} />
                 <span>Offers</span>
               </button>
             </nav>
@@ -362,7 +370,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
 
         {/* Mobile Navigation Hamburger Drawer */}
         {mobileMenuOpen && (
-          <div className="lg:hidden bg-[#FAF7F2] border-t border-[#EAE2D7] px-4 pt-3 pb-8 space-y-4 animate-fade-in shadow-2xl max-h-[85vh] overflow-y-auto">
+          <div
+            id="mobile-navigation-menu"
+            className="lg:hidden bg-[#FAF7F2] border-t border-[#EAE2D7] px-4 pt-3 pb-8 space-y-4 animate-fade-in shadow-2xl max-h-[85vh] overflow-y-auto"
+          >
             {/* User Quick Info */}
             <div className="p-3 bg-white rounded-xl border border-[#EAE2D7] flex items-center justify-between">
               {user ? (
