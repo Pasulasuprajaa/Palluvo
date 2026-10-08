@@ -160,9 +160,9 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
               handleCardClick();
             }}
             aria-label={`View details for ${product.name}`}
-            className="font-serif text-sm sm:text-base font-semibold text-[#1F1A1C] group-hover:text-[#5B1425] focus-visible:text-[#5B1425] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded transition line-clamp-2 leading-snug cursor-pointer block"
+            className="min-h-[44px] flex items-center font-serif text-sm sm:text-base font-semibold text-[#1F1A1C] group-hover:text-[#5B1425] focus-visible:text-[#5B1425] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded transition leading-snug cursor-pointer"
           >
-            <h3>{product.name}</h3>
+            <h3 className="line-clamp-2">{product.name}</h3>
           </a>
 
           {/* Rating & Silk Mark Certification */}

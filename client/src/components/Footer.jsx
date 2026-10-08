@@ -93,7 +93,7 @@ export default function Footer({ onNavigate }) {
         <div className="mb-10 lg:mb-12 max-w-2xl space-y-3">
           <button
             type="button"
-            className="flex items-center gap-1.5 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] rounded-sm"
+            className="min-h-[44px] inline-flex items-center gap-1.5 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] rounded-sm py-1"
             onClick={() => onNavigate('home')}
             aria-label="PALLUVO - Return to homepage"
           >
