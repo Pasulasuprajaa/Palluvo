@@ -107,6 +107,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
             <nav className="hidden lg:flex items-center justify-center gap-2 lg:gap-2.5 xl:gap-5 2xl:gap-7 text-xs xl:text-sm font-medium tracking-wide flex-1 h-full shrink-0">
               <button
                 onClick={() => handleNav('home')}
+                aria-current={currentPage === 'home' ? 'page' : undefined}
                 className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
                   currentPage === 'home'
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
@@ -118,6 +119,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
 
               <button
                 onClick={() => handleNav('shop')}
+                aria-current={isAllSareesActive ? 'page' : undefined}
                 className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
                   isAllSareesActive
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
@@ -129,6 +131,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
 
               <button
                 onClick={() => handleNav('shop', { filter: 'new_arrival' })}
+                aria-current={isNewArrivalActive ? 'page' : undefined}
                 className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-1 cursor-pointer whitespace-nowrap shrink-0 ${
                   isNewArrivalActive
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
@@ -148,6 +151,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                 <button
                   type="button"
                   onClick={() => setCollectionsDropdown((prev) => !prev)}
+                  aria-current={isCollectionsActive ? 'page' : undefined}
                   className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-0.5 xl:gap-1 cursor-pointer whitespace-nowrap shrink-0 ${
                     isCollectionsActive
                       ? 'border-[#5B1425] text-[#5B1425] font-bold'
@@ -198,6 +202,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
 
               <button
                 onClick={() => handleNav('shop', { filter: 'best_seller' })}
+                aria-current={isBestSellerActive ? 'page' : undefined}
                 className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
                   isBestSellerActive
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
@@ -209,6 +214,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
 
               <button
                 onClick={() => handleNav('offers')}
+                aria-current={isOffersActive ? 'page' : undefined}
                 className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-1 cursor-pointer whitespace-nowrap shrink-0 ${
                   isOffersActive
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'

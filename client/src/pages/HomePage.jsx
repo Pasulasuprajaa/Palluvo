@@ -478,7 +478,7 @@ export default function HomePage({ onNavigate }) {
         <div className="absolute -left-20 -top-20 w-96 h-96 rounded-full bg-[#C5A059]/20 blur-3xl" />
 
         <div className="relative z-10 max-w-4xl mx-auto px-4 text-center space-y-6">
-          <div className="text-[#C5A059] text-2xl">✦ ✦ ✦</div>
+          <div className="text-[#C5A059] text-2xl" aria-hidden="true">✦ ✦ ✦</div>
           <h2 className="font-serif text-3xl sm:text-5xl font-bold leading-tight">
             "A saree is not merely six yards of silk; <br className="hidden sm:inline" />
             it is centuries of art, woven into memory."
