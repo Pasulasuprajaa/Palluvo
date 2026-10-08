@@ -104,7 +104,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
             </div>
 
             {/* Center: Desktop Navigation — Compact Single-Line Layout */}
-            <nav className="hidden lg:flex items-center justify-center gap-2 lg:gap-2.5 xl:gap-5 2xl:gap-7 text-xs xl:text-sm font-medium tracking-wide flex-1 h-full shrink-0">
+            <nav aria-label="Main Navigation" className="hidden lg:flex items-center justify-center gap-2 lg:gap-2.5 xl:gap-5 2xl:gap-7 text-xs xl:text-sm font-medium tracking-wide flex-1 h-full shrink-0">
               <button
                 onClick={() => handleNav('home')}
                 aria-current={currentPage === 'home' ? 'page' : undefined}
@@ -218,7 +218,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                 className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-1 cursor-pointer whitespace-nowrap shrink-0 ${
                   isOffersActive
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
-                    : 'border-transparent text-[#9A7730] font-semibold hover:text-[#5B1425]'
+                    : 'border-transparent text-[#6E6467] font-semibold hover:text-[#5B1425]'
                 }`}
               >
                 <Sparkles className={`w-3.5 h-3.5 shrink-0 ${isOffersActive ? 'text-[#5B1425]' : 'text-[#C5A059]'}`} />
@@ -376,8 +376,9 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
 
         {/* Mobile Navigation Hamburger Drawer */}
         {mobileMenuOpen && (
-          <div
+          <nav
             id="mobile-navigation-menu"
+            aria-label="Mobile menu navigation"
             className="lg:hidden bg-[#FAF7F2] border-t border-[#EAE2D7] px-4 pt-3 pb-8 space-y-4 animate-fade-in shadow-2xl max-h-[85vh] overflow-y-auto"
           >
             {/* User Quick Info */}
@@ -544,7 +545,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                 </button>
               </div>
             )}
-          </div>
+          </nav>
         )}
       </header>
 
