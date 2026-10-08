@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, ArrowRight, ShieldCheck, Award, Heart, ShoppingBag, Star, ChevronRight, Check, RotateCcw } from 'lucide-react';
+import { Sparkles, ArrowRight, ShieldCheck, Award, Heart, ShoppingBag, Star, ChevronRight, RotateCcw } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 
 export default function HomePage({ onNavigate }) {
@@ -112,7 +112,7 @@ export default function HomePage({ onNavigate }) {
       name: 'Divya Venkat',
       location: 'Chennai',
       occasion: 'Muhurtham Ceremony',
-      comment: 'The gold luster on this Kanjivaram is unmatched. Wore it for my muhurtham ceremony and received countless compliments from all elders. Seamless delivery in Bengaluru within 2 days.',
+      comment: 'The gold luster on this Kanjivaram is unmatched. Wore it for my muhurtham ceremony and received countless compliments from all elders. Seamless delivery in Chennai within 2 days.',
       saree: 'Vaidarbhi Pure Kanjivaram Gold',
       slug: 'vaidarbhi-pure-kanjivaram-bridal-gold-silk-saree'
     },
@@ -576,15 +576,9 @@ export default function HomePage({ onNavigate }) {
                 </div>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-[#F4EFEB] flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-[#1F1A1C]">{t.name}</div>
-                  <div className="text-[11px] text-[#6E6467]">{t.location} • {t.occasion}</div>
-                </div>
-                <span className="inline-flex items-center gap-1 text-[10px] text-[#2E7D32] bg-[#E8F5E9] px-2.5 py-0.5 rounded-full font-semibold tracking-wide">
-                  <Check className="w-2.5 h-2.5 stroke-[3]" />
-                  <span>Verified Buyer</span>
-                </span>
+              <div className="mt-6 pt-4 border-t border-[#F4EFEB]">
+                <div className="text-xs font-bold text-[#1F1A1C]">{t.name}</div>
+                <div className="text-[11px] text-[#6E6467] mt-0.5">{t.location} • {t.occasion}</div>
               </div>
             </div>
           ))}
