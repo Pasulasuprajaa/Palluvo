@@ -4,8 +4,9 @@ import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { useCompare } from '../context/CompareContext';
 
-export default function ProductCard({ product, onNavigate }) {
+export default function ProductCard({ product, onNavigate, imageLoading = 'lazy', priority = false }) {
   const [isHovered, setIsHovered] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const { isWishlisted, toggleWishlist } = useWishlist();
   const { addToCart, setQuickViewProduct } = useCart();
   const { isInCompare, addToCompare } = useCompare();
@@ -55,6 +56,14 @@ export default function ProductCard({ product, onNavigate }) {
     >
       {/* Image Container */}
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#F4EFEB]">
+        {/* Shimmer Placeholder while Image Loads */}
+        <div
+          aria-hidden="true"
+          className={`absolute inset-0 bg-gradient-to-b from-[#EAE2D7]/80 via-[#FAF7F2]/60 to-[#EAE2D7]/80 animate-pulse transition-opacity duration-500 z-0 ${
+            imageLoaded ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
+        />
+
         <a
           href={`/sarees/${product.slug}`}
           onClick={(e) => {
@@ -64,14 +73,17 @@ export default function ProductCard({ product, onNavigate }) {
           }}
           tabIndex={-1}
           aria-hidden="true"
-          className="block w-full h-full cursor-pointer"
+          className="relative z-[1] block w-full h-full cursor-pointer"
         >
           <img
             src={isHovered ? secondaryImg : primaryImg}
             alt={product.name}
-            loading="lazy"
+            loading={priority ? 'eager' : imageLoading}
             decoding="async"
-            className="w-full h-full object-cover object-top transition-transform duration-700 ease-out group-hover:scale-105"
+            onLoad={() => setImageLoaded(true)}
+            className={`w-full h-full object-cover object-top transition-all duration-700 ease-out group-hover:scale-105 ${
+              imageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
+            }`}
           />
         </a>
 

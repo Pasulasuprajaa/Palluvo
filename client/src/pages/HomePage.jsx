@@ -153,37 +153,37 @@ export default function HomePage({ onNavigate }) {
   return (
     <div className="flex flex-col">
       {/* 1. HERO SECTION */}
-      <section className="relative flex flex-col justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] md:min-h-[85vh]">
-        {/* Background Image — Full 100% Brightness with Top-Aligned Portrait Crop on Mobile/Tablet */}
+      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] min-h-[560px] sm:min-h-[620px] md:min-h-[85vh]">
+        {/* Background Image — Clear Top Portrait Crop on Mobile and Right-Aligned Subject on Tablet/Desktop */}
         <div className="absolute inset-0 z-0">
           <picture>
-            <source media="(max-width: 768px)" srcSet="/images/occasions/wedding_edit.jpg" />
+            <source media="(max-width: 640px)" srcSet="/images/occasions/wedding_edit.jpg" />
             <img
               src="/images/occasions/wedding_edit.jpg"
               alt="Indian bride adorned in an ornate crimson and gold handcrafted silk saree"
               loading="eager"
               fetchpriority="high"
               decoding="async"
-              className="w-full h-full object-cover object-[center_12%] md:object-[75%_center] lg:object-right opacity-100 scale-100 transition-transform duration-1000 ease-out"
+              className="w-full h-full object-cover object-[center_top] sm:object-[center_8%] md:object-[right_center] lg:object-right opacity-100 scale-100 transition-transform duration-1000 ease-out"
             />
           </picture>
-          {/* Bottom-anchored gradient on mobile/tablet leaves the model's face & upper saree 100% unobstructed, while providing solid contrast for bottom copy */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/85 via-50% to-transparent md:bg-gradient-to-r md:from-[#1F1A1C]/85 md:via-[#1F1A1C]/40 md:via-45% md:to-transparent pointer-events-none" />
+          {/* Gradient Overlay: Deep bottom gradient on mobile and left gradient on tablet/desktop keeps bride face & saree clear */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/90 via-55% to-transparent md:bg-gradient-to-r md:from-[#1F1A1C] md:via-[#1F1A1C]/85 md:via-45% md:to-transparent pointer-events-none" />
         </div>
-        {/* Hero Content — Seamless Luxury Typography Positioned with Full Safe Area */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 sm:py-14 md:py-28 w-full">
-          <div className="flex flex-col items-start max-w-2xl">
+        {/* Hero Content — Constrained Width on Tablet & Mobile to Leave Model & Saree Visible */}
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-44 pb-8 sm:pt-52 sm:pb-12 md:py-24 lg:py-28 w-full">
+          <div className="flex flex-col items-start max-w-lg md:max-w-[420px] lg:max-w-xl xl:max-w-2xl">
             <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#1F1A1C]/90 backdrop-blur-md border border-[#C5A059]/50 text-[#E0C07F] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-2 md:mb-6 animate-fade-in shadow-sm">
               <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
               <span>The Festive & Bridal Heirloom Edit</span>
             </div>
 
-            <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-[1.15] sm:leading-[1.1] tracking-tight text-[#FAF7F2] drop-shadow-sm animate-slide-up">
+            <h1 className="font-serif text-2xl sm:text-4xl md:text-[2.6rem] lg:text-6xl xl:text-7xl font-bold leading-[1.18] sm:leading-[1.1] tracking-tight text-[#FAF7F2] drop-shadow-sm animate-slide-up">
               Timeless weaves, <br />
               <span className="italic font-normal gold-gradient-text">woven for generations.</span>
             </h1>
 
-            <p className="mt-2 md:mt-5 text-sm md:text-base text-[#FAF7F2]/85 leading-relaxed font-sans max-w-lg drop-shadow-xs">
+            <p className="mt-2 md:mt-5 text-xs sm:text-sm md:text-base text-[#FAF7F2]/85 leading-relaxed font-sans max-w-md md:max-w-[380px] lg:max-w-lg drop-shadow-xs">
               Handcrafted Banarasi, pure Kanjivaram, and ethereal organza sarees designed to make your celebratory moments unforgettable.
             </p>
 
@@ -216,7 +216,7 @@ export default function HomePage({ onNavigate }) {
             </div>
 
             {/* Micro Trust Stats */}
-            <div className="mt-3.5 md:mt-10 pt-3 md:pt-6 border-t border-white/15 grid grid-cols-3 gap-2 sm:gap-6 text-left w-full max-w-lg">
+            <div className="mt-3.5 md:mt-10 pt-3 md:pt-6 border-t border-white/15 grid grid-cols-3 gap-2 sm:gap-6 text-left w-full max-w-md md:max-w-[380px] lg:max-w-lg">
               <div>
                 <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">100%</div>
                 <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">
@@ -485,9 +485,9 @@ export default function HomePage({ onNavigate }) {
         ) : (
           <div>
             <div className="flex overflow-x-auto gap-3.5 sm:gap-6 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 pb-2">
-              {bestSellers.map((prod) => (
+              {bestSellers.map((prod, idx) => (
                 <div key={prod.id} className="w-56 sm:w-auto shrink-0 snap-item flex">
-                  <ProductCard product={prod} onNavigate={onNavigate} />
+                  <ProductCard product={prod} onNavigate={onNavigate} priority={idx < 4} />
                 </div>
               ))}
             </div>
