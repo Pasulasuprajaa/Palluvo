@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X, TrendingUp, Sparkles, ArrowRight, History, Trash2, Tag, Star } from 'lucide-react';
+import { Search, X, TrendingUp, Sparkles, ArrowRight, History, Trash2, Star } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
 export default function SearchModal({ onNavigate }) {
@@ -75,27 +75,41 @@ export default function SearchModal({ onNavigate }) {
   }, [isSearchOpen, setIsSearchOpen]);
 
   useEffect(() => {
-    if (!query.trim()) {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
       setResults({ products: [], categories: [] });
+      setLoading(false);
       return;
     }
+
+    const controller = new AbortController();
 
     const timer = setTimeout(async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/products/search/suggestions?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/products/search/suggestions?q=${encodeURIComponent(trimmedQuery)}`, {
+          signal: controller.signal
+        });
+        if (!res.ok) return;
         const data = await res.json();
-        if (res.ok) {
+        if (!controller.signal.aborted) {
           setResults(data);
         }
       } catch (e) {
-        console.error(e);
+        if (e.name !== 'AbortError') {
+          console.error(e);
+        }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }, 200);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [query]);
 
   if (!isSearchOpen) return null;
@@ -209,6 +223,24 @@ export default function SearchModal({ onNavigate }) {
               <X className="w-4 h-4" aria-hidden="true" />
             </button>
           </form>
+        </div>
+
+        {/* Screen Reader Live Status Region */}
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="sr-only"
+        >
+          {query.trim() ? (
+            loading ? (
+              'Searching PALLUVO handcrafted vault...'
+            ) : results.products && results.products.length > 0 ? (
+              `${results.products.length} saree result${results.products.length === 1 ? '' : 's'}${results.categories && results.categories.length > 0 ? ` and ${results.categories.length} suggested categor${results.categories.length === 1 ? 'y' : 'ies'}` : ''} found for "${query.trim()}".`
+            ) : (
+              `No matching sarees found for "${query.trim()}".`
+            )
+          ) : ''}
         </div>
 
         {/* Live Search Results / Trending / Recent */}
