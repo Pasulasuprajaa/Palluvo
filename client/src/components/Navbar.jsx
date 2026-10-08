@@ -85,6 +85,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               <a
                 href="/"
                 onClick={(e) => {
+                  if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
                   e.preventDefault();
                   handleNav('home');
                 }}

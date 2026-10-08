@@ -289,6 +289,7 @@ export default function HomePage({ onNavigate }) {
                   href={`/shop?category=${encodeURIComponent(cat.slug)}`}
                   key={cat.id}
                   onClick={(e) => {
+                    if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
                     e.preventDefault();
                     onNavigate('shop', { category: cat.slug });
                   }}
@@ -353,6 +354,7 @@ export default function HomePage({ onNavigate }) {
                 href={`/shop?${new URLSearchParams(col.filter).toString()}`}
                 key={idx}
                 onClick={(e) => {
+                  if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
                   e.preventDefault();
                   onNavigate('shop', col.filter);
                 }}
@@ -529,16 +531,20 @@ export default function HomePage({ onNavigate }) {
 
                 {/* Saree Featured in Testimonial */}
                 <div className="mt-3 pt-2.5 border-t border-[#F4EFEB]">
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('product', { slug: t.slug })}
+                  <a
+                    href={`/sarees/${t.slug}`}
+                    onClick={(e) => {
+                      if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+                      e.preventDefault();
+                      onNavigate('product', { slug: t.slug });
+                    }}
                     className="text-[11px] font-semibold text-[#5B1425] hover:text-[#7E1E34] hover:underline min-h-[44px] py-2 px-1 inline-flex items-center gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded text-left transition w-full"
                     aria-label={`View details for ${t.saree}`}
                   >
                     <span className="text-[#6E6467] font-normal">Draped:</span>
                     <span>{t.saree}</span>
                     <ArrowRight className="w-3 h-3 text-[#C5A059] shrink-0" />
-                  </button>
+                  </a>
                 </div>
               </div>
 

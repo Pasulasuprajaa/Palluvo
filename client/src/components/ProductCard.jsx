@@ -58,6 +58,7 @@ export default function ProductCard({ product, onNavigate }) {
         <a
           href={`/sarees/${product.slug}`}
           onClick={(e) => {
+            if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
             e.preventDefault();
             handleCardClick();
           }}
@@ -142,6 +143,7 @@ export default function ProductCard({ product, onNavigate }) {
           <a
             href={`/sarees/${product.slug}`}
             onClick={(e) => {
+              if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
               e.preventDefault();
               handleCardClick();
             }}
