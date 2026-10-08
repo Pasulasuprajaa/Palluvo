@@ -168,7 +168,6 @@ export default function ProductCard({ product, onNavigate }) {
               </div>
             ) : (
               <div
-                aria-label="No reviews yet"
                 className="flex items-center gap-1 bg-[#FAF7F2] px-1.5 py-0.5 rounded border border-[#EAE2D7] text-[10px] text-[#6E6467]"
               >
                 <Star className="w-3 h-3 text-[#A09699]" aria-hidden="true" />
