@@ -90,7 +90,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                   handleNav('home');
                 }}
                 aria-label="PALLUVO Home"
-                className="cursor-pointer group flex flex-col items-start select-none rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:ring-offset-2 transition"
+                className="cursor-pointer group inline-flex flex-col items-start justify-center min-h-[44px] py-1 select-none rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:ring-offset-2 transition"
               >
                 <div className="flex items-center gap-1">
                   <span className="font-cinzel text-xl sm:text-2xl lg:text-[26px] xl:text-3xl font-bold tracking-[0.16em] sm:tracking-[0.18em] xl:tracking-[0.2em] text-[#5B1425] group-hover:text-[#7E1E34] transition whitespace-nowrap">

@@ -182,9 +182,9 @@ export default function Footer({ onNavigate }) {
                 <li><button onClick={() => onNavigate('track-order')} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Track Order Shipment</button></li>
                 <li><button onClick={() => onNavigate('account')} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">My Orders & Account</button></li>
                 <li><button onClick={() => onNavigate('wishlist')} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Saved Wishlist</button></li>
-                <li className="min-h-[44px] py-2 px-1 flex items-center"><span>Concierge: +91 84988 54323</span></li>
-                <li className="min-h-[44px] py-2 px-1 flex items-center"><span>Support: +91 81067 89789</span></li>
-                <li className="min-h-[44px] py-2 px-1 flex items-center"><span>Email: contact@palluvo.com</span></li>
+                <li className="min-h-[44px] flex items-center"><a href="tel:+918498854323" className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] transition flex items-center text-left cursor-pointer">Concierge: +91 84988 54323</a></li>
+                <li className="min-h-[44px] flex items-center"><a href="tel:+918106789789" className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] transition flex items-center text-left cursor-pointer">Support: +91 81067 89789</a></li>
+                <li className="min-h-[44px] flex items-center"><a href="mailto:contact@palluvo.com" className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] transition flex items-center text-left cursor-pointer">Email: contact@palluvo.com</a></li>
                 <li className="min-h-[44px] py-2 px-1 flex items-center"><span className="text-[#FAF7F2]/60">Hours: Mon-Sat, 10 AM - 8 PM IST</span></li>
               </ul>
             )}
@@ -258,9 +258,9 @@ export default function Footer({ onNavigate }) {
               <li><button onClick={() => onNavigate('track-order')} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Track Order Shipment</button></li>
               <li><button onClick={() => onNavigate('account')} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">My Orders & Account</button></li>
               <li><button onClick={() => onNavigate('wishlist')} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Saved Wishlist</button></li>
-              <li className="min-h-[44px] py-2 flex items-center"><span className="text-[#FAF7F2]/80 font-medium">Concierge: +91 84988 54323</span></li>
-              <li className="min-h-[44px] py-2 flex items-center"><span className="text-[#FAF7F2]/80 font-medium">Support: +91 81067 89789</span></li>
-              <li className="min-h-[44px] py-2 flex items-center"><span className="text-[#FAF7F2]/80 font-medium">Email: contact@palluvo.com</span></li>
+              <li className="min-h-[44px] flex items-center"><a href="tel:+918498854323" className="min-h-[44px] py-2 hover:text-[#C5A059] transition flex items-center text-left cursor-pointer text-[#FAF7F2]/80 font-medium">Concierge: +91 84988 54323</a></li>
+              <li className="min-h-[44px] flex items-center"><a href="tel:+918106789789" className="min-h-[44px] py-2 hover:text-[#C5A059] transition flex items-center text-left cursor-pointer text-[#FAF7F2]/80 font-medium">Support: +91 81067 89789</a></li>
+              <li className="min-h-[44px] flex items-center"><a href="mailto:contact@palluvo.com" className="min-h-[44px] py-2 hover:text-[#C5A059] transition flex items-center text-left cursor-pointer text-[#FAF7F2]/80 font-medium">Email: contact@palluvo.com</a></li>
               <li className="min-h-[44px] py-2 flex items-center"><span className="text-[#FAF7F2]/60">Hours: Mon-Sat, 10 AM - 8 PM IST</span></li>
             </ul>
           </div>
