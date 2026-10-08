@@ -154,18 +154,24 @@ export default function ProductCard({ product, onNavigate }) {
           {/* Rating & Silk Mark Certification */}
           <div className="flex items-center justify-between mt-1.5">
             {Number(product.review_count) > 0 ? (
-              <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-xs">
-                <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                <span className="font-bold text-[#1F1A1C]">
+              <div
+                aria-label={`Rated ${(Number(product.rating) || 0).toFixed(1)} out of 5 based on ${product.review_count} review${Number(product.review_count) === 1 ? '' : 's'}`}
+                className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-xs"
+              >
+                <Star className="w-3 h-3 fill-amber-500 text-amber-500" aria-hidden="true" />
+                <span aria-hidden="true" className="font-bold text-[#1F1A1C]">
                   {(Number(product.rating) || 0).toFixed(1)}
                 </span>
-                <span className="text-[10px] text-gray-500">
+                <span aria-hidden="true" className="text-[10px] text-gray-500">
                   ({product.review_count})
                 </span>
               </div>
             ) : (
-              <div className="flex items-center gap-1 bg-[#FAF7F2] px-1.5 py-0.5 rounded border border-[#EAE2D7] text-[10px] text-[#6E6467]">
-                <Star className="w-3 h-3 text-[#A09699]" />
+              <div
+                aria-label="No reviews yet"
+                className="flex items-center gap-1 bg-[#FAF7F2] px-1.5 py-0.5 rounded border border-[#EAE2D7] text-[10px] text-[#6E6467]"
+              >
+                <Star className="w-3 h-3 text-[#A09699]" aria-hidden="true" />
                 <span className="font-medium">No reviews yet</span>
               </div>
             )}

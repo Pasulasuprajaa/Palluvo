@@ -173,7 +173,7 @@ export default function HomePage({ onNavigate }) {
         {/* Hero Content — Seamless Luxury Typography Positioned with Full Safe Area */}
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 sm:py-14 md:py-28 w-full">
           <div className="flex flex-col items-start max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#FAF7F2]/10 backdrop-blur-md border border-[#C5A059]/40 text-[#C5A059] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-2 md:mb-6 animate-fade-in shadow-sm">
+            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#1F1A1C]/90 backdrop-blur-md border border-[#C5A059]/50 text-[#E0C07F] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-2 md:mb-6 animate-fade-in shadow-sm">
               <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
               <span>The Festive & Bridal Heirloom Edit</span>
             </div>
