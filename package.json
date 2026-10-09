@@ -4,11 +4,12 @@
   "description": "PALLUVO — Luxury Indian Fashion & Saree E-Commerce Brand (Every drape, a little magic.)",
   "main": "server/index.js",
   "scripts": {
-    "dev:server": "cd server && node index.js",
-    "dev:client": "cd client && npm run dev",
-    "seed": "cd server && node db/seed.js",
-    "build": "cd client && npm install && npm run build",
-    "start": "cd server && node index.js"
+    "dev": "concurrently -n \"server,client\" -c \"bgBlue.bold,bgMagenta.bold\" \"node server/index.js\" \"npm run --prefix client dev\"",
+    "dev:server": "node server/index.js",
+    "dev:client": "npm run --prefix client dev",
+    "seed": "node server/db/seed.js",
+    "build": "npm run --prefix client build",
+    "start": "node server/index.js"
   },
   "workspaces": [
     "client",
@@ -24,5 +25,8 @@
     "razorpay"
   ],
   "author": "PALLUVO Team",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
 }
