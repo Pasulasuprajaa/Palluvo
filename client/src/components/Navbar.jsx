@@ -644,7 +644,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
             }`}
           >
             <User className="w-5 h-5 mb-0.5" />
-            <span>{user ? 'Account' : 'Sign In'}</span>
+            <span>Account</span>
           </button>
         </div>
       </nav>
