@@ -593,19 +593,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
             <span>Categories</span>
           </button>
 
-          {/* 3. Offers */}
-          <button
-            onClick={() => handleNav('offers')}
-            aria-current={currentPage === 'offers' ? 'page' : undefined}
-            className={`flex-1 flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
-              currentPage === 'offers' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
-            }`}
-          >
-            <Tag className="w-5 h-5 mb-0.5 text-[#C5A059]" />
-            <span>Offers</span>
-          </button>
-
-          {/* 4. Wishlist */}
+          {/* 3. Favorites / Wishlist */}
           <button
             onClick={() => handleNav('wishlist')}
             aria-current={currentPage === 'wishlist' ? 'page' : undefined}
@@ -621,7 +609,24 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                 </span>
               )}
             </div>
-            <span>Wishlist</span>
+            <span>Favorites</span>
+          </button>
+
+          {/* 4. Shopping Bag / Cart (Provided Bag Icon) */}
+          <button
+            onClick={() => setIsCartOpen(true)}
+            className="flex-1 relative flex flex-col items-center justify-center py-1 text-[10px] text-[#6E6467] hover:text-[#5B1425] transition-colors cursor-pointer"
+            aria-label="Shopping Bag"
+          >
+            <div className="relative">
+              <ShoppingBag className="w-5 h-5 mb-0.5 text-[#C5A059]" />
+              {itemCount > 0 && (
+                <span className="absolute -top-1 -right-2 bg-[#5B1425] text-white text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold">
+                  {itemCount}
+                </span>
+              )}
+            </div>
+            <span>Bag</span>
           </button>
 
           {/* 5. Account / Profile */}
