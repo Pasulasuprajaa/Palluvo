@@ -102,7 +102,7 @@ export default function HomePage({ onNavigate }) {
   return (
     <div className="flex flex-col">
       {/* 1. HERO SECTION */}
-      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] min-h-[600px] sm:min-h-[650px] md:min-h-[85vh]">
+      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] min-h-[560px] sm:min-h-[620px] md:min-h-[85vh]">
         {/* Background Image with Crisp Portrait Framing */}
         <div className="absolute inset-0 z-0">
           <picture>
@@ -116,32 +116,32 @@ export default function HomePage({ onNavigate }) {
               className="w-full h-full object-cover object-[center_top] sm:object-[center_10%] md:object-[right_center] lg:object-right opacity-100 transition-transform duration-1000 ease-out"
             />
           </picture>
-          {/* Refined Luxury Vignette Gradient - Lighter in upper area so model is clearly visible */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/60 via-45% to-transparent md:bg-gradient-to-r md:from-[#1F1A1C]/90 md:from-25% md:via-[#1F1A1C]/40 md:via-50% md:to-transparent pointer-events-none" />
+          {/* Subtle Vignette Gradient to keep photograph bright and clear */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/50 via-40% to-transparent md:bg-gradient-to-r md:from-[#1F1A1C]/90 md:from-25% md:via-[#1F1A1C]/35 md:via-50% md:to-transparent pointer-events-none" />
         </div>
 
-        {/* Hero Content with Luxury Framing */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 md:py-24 lg:py-28 w-full flex flex-col justify-end md:justify-center">
-          <div className="max-w-xl md:max-w-lg lg:max-w-xl xl:max-w-2xl bg-[#1F1A1C]/75 md:bg-transparent backdrop-blur-md md:backdrop-blur-none p-4 sm:p-6 md:p-0 rounded-2xl sm:rounded-3xl md:rounded-none border border-[#C5A059]/30 md:border-0 shadow-2xl md:shadow-none animate-fade-in">
+        {/* Hero Content with Sleek Compact Framing */}
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 md:py-20 lg:py-24 w-full flex flex-col justify-end md:justify-center">
+          <div className="max-w-xl md:max-w-lg lg:max-w-xl xl:max-w-2xl bg-[#1F1A1C]/65 md:bg-transparent backdrop-blur-sm md:backdrop-blur-none p-3.5 sm:p-5 md:p-0 rounded-2xl border border-[#C5A059]/25 md:border-0 shadow-xl md:shadow-none animate-fade-in">
             {/* Pill Tag */}
-            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#5B1425]/90 border border-[#C5A059]/40 text-[#E0C07F] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-2.5 sm:mb-4 shadow-md">
-              <Sparkles className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-              <span>The Royal Heirloom Edition 2026</span>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-[#5B1425]/90 border border-[#C5A059]/40 text-[#E0C07F] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-2 sm:mb-3 shadow-sm">
+              <Sparkles className="w-3 h-3 text-[#C5A059] shrink-0" />
+              <span>Royal Heirloom Edit</span>
             </div>
 
             {/* Headline */}
-            <h1 className="font-serif text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.18] sm:leading-[1.12] tracking-tight text-[#FAF7F2] drop-shadow-sm animate-slide-up">
+            <h1 className="font-serif text-xl sm:text-3xl md:text-5xl lg:text-6xl font-bold leading-tight tracking-tight text-[#FAF7F2] drop-shadow-sm animate-slide-up">
               Every Drape, <br />
-              <span className="italic font-normal text-[#E0C07F]">A Royal Masterpiece.</span>
+              <span className="italic font-normal text-[#E0C07F]">A Little Magic.</span>
             </h1>
 
-            {/* Description */}
-            <p className="mt-2 sm:mt-3.5 text-xs sm:text-sm md:text-base text-[#FAF7F2]/90 leading-relaxed font-sans max-w-lg drop-shadow-xs">
-              Handcrafted in pure zari and mulberry silk. Discover authentic weaves from Varanasi and Kanchipuram, sculpted with centuries-old artistry for life's grandest moments.
+            {/* Compact Description */}
+            <p className="mt-1.5 sm:mt-2.5 text-xs sm:text-sm md:text-base text-[#FAF7F2]/90 leading-relaxed font-sans max-w-lg drop-shadow-xs">
+              Authentic handloom sarees crafted in pure zari and raw silk by master artisans.
             </p>
 
-            {/* Action Buttons - Grid on mobile to prevent any border overflow */}
-            <div className="mt-3.5 sm:mt-6 grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:items-center sm:gap-4 w-full sm:w-auto">
+            {/* Action Buttons */}
+            <div className="mt-3 sm:mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:items-center sm:gap-3 w-full sm:w-auto">
               <a
                 href="/sarees"
                 onClick={(e) => {
@@ -149,7 +149,7 @@ export default function HomePage({ onNavigate }) {
                   e.preventDefault();
                   onNavigate('shop');
                 }}
-                className="px-3 sm:px-7 py-2.5 sm:py-3.5 min-h-[44px] bg-gradient-to-r from-[#5B1425] to-[#7E1E34] hover:from-[#7E1E34] hover:to-[#5B1425] text-[#FAF7F2] font-bold text-[11px] sm:text-xs uppercase tracking-wider sm:tracking-widest rounded-xl transition-all duration-300 shadow-xl flex items-center justify-center gap-1.5 border border-[#C5A059]/40 active:scale-95 cursor-pointer text-center"
+                className="px-3 sm:px-6 py-2 sm:py-3 min-h-[44px] bg-gradient-to-r from-[#5B1425] to-[#7E1E34] hover:from-[#7E1E34] hover:to-[#5B1425] text-[#FAF7F2] font-bold text-[11px] sm:text-xs uppercase tracking-wider rounded-xl transition-all duration-300 shadow-md flex items-center justify-center gap-1.5 border border-[#C5A059]/40 active:scale-95 cursor-pointer text-center"
               >
                 <span>Explore Sarees</span>
                 <ArrowRight className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
@@ -162,32 +162,19 @@ export default function HomePage({ onNavigate }) {
                   e.preventDefault();
                   onNavigate('shop', { occasion: 'Wedding' });
                 }}
-                className="px-3 sm:px-7 py-2.5 sm:py-3.5 min-h-[44px] bg-white/10 hover:bg-white/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-[11px] sm:text-xs uppercase tracking-wider sm:tracking-widest rounded-xl transition-all duration-300 border border-white/25 hover:border-[#C5A059] active:scale-95 flex items-center justify-center text-center cursor-pointer"
+                className="px-3 sm:px-6 py-2 sm:py-3 min-h-[44px] bg-white/10 hover:bg-white/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-[11px] sm:text-xs uppercase tracking-wider rounded-xl transition-all duration-300 border border-white/25 hover:border-[#C5A059] active:scale-95 flex items-center justify-center text-center cursor-pointer"
               >
-                Royal Bridal Edit
+                Bridal Edit
               </a>
             </div>
 
-            {/* Micro Trust Stats */}
-            <div className="mt-3.5 sm:mt-6 pt-3 sm:pt-4 border-t border-white/15 grid grid-cols-3 gap-2 sm:gap-4 text-center sm:text-left w-full">
-              <div>
-                <div className="font-serif text-sm sm:text-lg md:text-xl font-bold text-[#E0C07F]">100%</div>
-                <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/80 uppercase tracking-wider font-medium mt-0.5 leading-tight">
-                  Pure Mulberry Silk
-                </div>
-              </div>
-              <div className="border-x border-white/10 px-1 sm:px-0 sm:border-0">
-                <div className="font-serif text-sm sm:text-lg md:text-xl font-bold text-[#E0C07F]">Direct</div>
-                <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/80 uppercase tracking-wider font-medium mt-0.5 leading-tight">
-                  Master Weavers
-                </div>
-              </div>
-              <div>
-                <div className="font-serif text-sm sm:text-lg md:text-xl font-bold text-[#E0C07F]">Silk Mark</div>
-                <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/80 uppercase tracking-wider font-medium mt-0.5 leading-tight">
-                  Certified Pure
-                </div>
-              </div>
+            {/* Sleek Compact Trust Badges */}
+            <div className="mt-2.5 sm:mt-4 pt-2 sm:pt-3 border-t border-white/15 flex items-center justify-between sm:justify-start sm:gap-5 text-[10px] sm:text-xs text-[#E0C07F] font-medium">
+              <span className="flex items-center gap-1">✦ 100% Pure Silk</span>
+              <span className="text-white/30">•</span>
+              <span>Master Weavers</span>
+              <span className="text-white/30">•</span>
+              <span>Silk Mark Certified</span>
             </div>
           </div>
         </div>
