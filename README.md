@@ -99,7 +99,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 🛡️ Production Security & Administration Provisioning
 
-In production (`NODE_ENV=production`), default demo accounts are not seeded, and a strong `JWT_SECRET` (minimum 32 characters) is required.
+In production (`NODE_ENV=production`), default demo accounts are not seeded, and a strong `JWT_SECRET` (minimum 32 characters) is required. Quick 1-click demo login buttons in the frontend auth dialog are automatically disabled and hidden in production builds (`import.meta.env.DEV === false`).
 
 ### Provisioning Production Administrators:
 Production administrator accounts are provisioned out-of-band using the secure CLI tool without passing passwords on the command line:
@@ -111,6 +111,16 @@ npm run create-admin admin@palluvo.com ["Admin Name"]
 # Or using environment variables in automated CI/CD deployments:
 ADMIN_EMAIL="admin@palluvo.com" ADMIN_PASSWORD="<strong_password>" npm run create-admin
 ```
+
+---
+
+## 💾 Production Storage & Database Architecture
+
+For reliable e-commerce transactions across auto-scaling and serverless instances:
+
+- **Local Development**: By default, SQLite stores data locally at `server/data/palluvo.db`.
+- **Production Server / Container**: Configure `DATABASE_PATH` or `DATA_DIR` pointing to a persistent volume (e.g. Fly.io volumes, Railway persistent volumes, Render disks, or attached SSD).
+- **Serverless Deployments**: Ephemeral scratch space (`/tmp`) is isolated per function instance and recycled on cold starts. Production commerce deployments with multi-instance concurrency should attach durable shared storage or a managed cloud database via `DATABASE_PATH` or `DATABASE_URL`.
 
 ---
 

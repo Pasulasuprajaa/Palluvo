@@ -2,20 +2,53 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NOW_REGION);
-const dataDir = isServerless
-  ? path.join('/tmp', 'palluvo-data')
-  : path.join(__dirname, '..', 'data');
-
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+// Database storage resolution:
+// 1. Explicit path: DATABASE_PATH or SQLITE_DB_PATH (e.g. durable mounted storage, cloud volumes)
+// 2. Explicit directory: DATABASE_DIR or DATA_DIR
+// 3. Default local persistent directory: server/data/palluvo.db
+function resolveDatabasePath() {
+  if (process.env.DATABASE_PATH || process.env.SQLITE_DB_PATH) {
+    return process.env.DATABASE_PATH || process.env.SQLITE_DB_PATH;
+  }
+  const baseDir = process.env.DATABASE_DIR || process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+  return path.join(baseDir, 'palluvo.db');
 }
 
-const dbPath = path.join(dataDir, 'palluvo.db');
-const db = new Database(dbPath);
+const dbPath = resolveDatabasePath();
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NOW_REGION);
+
+if (isServerless && !process.env.DATABASE_PATH && !process.env.DATABASE_DIR && !process.env.DATA_DIR && !process.env.SQLITE_DB_PATH) {
+  console.warn(
+    '⚠️ ARCHITECTURE NOTE: Running on a serverless platform without configured persistent shared storage (DATABASE_PATH/DATABASE_URL). ' +
+    'Serverless function instances are ephemeral and isolated. For persistent multi-instance production commerce, attach a durable shared database or persistent volume.'
+  );
+}
+
+let db;
+try {
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+  db = new Database(dbPath);
+} catch (err) {
+  if (isServerless) {
+    console.warn(
+      '⚠️ Notice: Read-only serverless filesystem detected. Initializing in-memory fallback. ' +
+      'For durable production commerce data across serverless instances, configure a managed shared database or DATABASE_PATH.'
+    );
+    db = new Database(':memory:');
+  } else {
+    throw err;
+  }
+}
 
 // Enable foreign keys and WAL mode for high concurrency & reliability
-db.pragma('journal_mode = WAL');
+try {
+  db.pragma('journal_mode = WAL');
+} catch (e) {
+  // In-memory or certain environments may ignore WAL
+}
 db.pragma('foreign_keys = ON');
 
 function initSchema() {

@@ -188,31 +188,33 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
             )}
           </button>
 
-          {/* Quick Demo Access Bar */}
-          <div className="pt-3 border-t border-[#EAE2D7] text-center">
-            <div className="text-[11px] text-[#6E6467] font-semibold uppercase tracking-wider mb-2">
-              ⚡ Quick 1-Click Demo Accounts
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('priya@example.com', 'Pal_User_Dev_2026!')}
-                className="px-2 py-1.5 bg-[#F4EFEB] hover:bg-[#EAE2D7] text-[#1F1A1C] rounded-lg text-xs font-medium transition text-left"
-              >
-                <div className="font-bold text-[#5B1425]">Customer Demo</div>
-                <div className="text-[10px] text-[#6E6467]">Priya Sharma</div>
-              </button>
+          {/* Quick Demo Access Bar (Development only) */}
+          {import.meta.env.DEV && (
+            <div className="pt-3 border-t border-[#EAE2D7] text-center">
+              <div className="text-[11px] text-[#6E6467] font-semibold uppercase tracking-wider mb-2">
+                ⚡ Quick 1-Click Demo Accounts
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('priya@example.com', 'Pal_User_Dev_2026!')}
+                  className="px-2 py-1.5 bg-[#F4EFEB] hover:bg-[#EAE2D7] text-[#1F1A1C] rounded-lg text-xs font-medium transition text-left"
+                >
+                  <div className="font-bold text-[#5B1425]">Customer Demo</div>
+                  <div className="text-[10px] text-[#6E6467]">Priya Sharma</div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('admin@palluvo.com', 'Pal_Admin_Dev_2026!')}
-                className="px-2 py-1.5 bg-[#5B1425]/10 hover:bg-[#5B1425]/20 text-[#5B1425] rounded-lg text-xs font-medium transition text-left"
-              >
-                <div className="font-bold">Admin Demo ⚙️</div>
-                <div className="text-[10px] text-[#6E6467]">Concierge Admin</div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('admin@palluvo.com', 'Pal_Admin_Dev_2026!')}
+                  className="px-2 py-1.5 bg-[#5B1425]/10 hover:bg-[#5B1425]/20 text-[#5B1425] rounded-lg text-xs font-medium transition text-left"
+                >
+                  <div className="font-bold">Admin Demo ⚙️</div>
+                  <div className="text-[10px] text-[#6E6467]">Concierge Admin</div>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </form>
       </div>
     </div>
