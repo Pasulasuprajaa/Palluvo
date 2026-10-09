@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, ArrowRight, ArrowUpRight, ShieldCheck, Award, Heart, ShoppingBag, Star, ChevronRight, RotateCcw } from 'lucide-react';
+import { Sparkles, ArrowRight, ShieldCheck, Award, Heart, ShoppingBag, Star, ChevronRight, RotateCcw } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 
 export default function HomePage({ onNavigate }) {
@@ -135,33 +135,6 @@ export default function HomePage({ onNavigate }) {
       fullComment: 'Organza sarees can sometimes be stiff, but this one is incredibly soft and drapes cleanly. The rose gold scalloped embroidery is so delicate and photogenic.',
       saree: 'Noor Rose Gold Organza',
       slug: 'noor-rose-gold-embroidered-organza-saree'
-    }
-  ];
-
-  const instagramPosts = [
-    {
-      image: '/images/social/social_1.jpg',
-      handle: '@ananya_drapes',
-      text: 'Wrapped in timeless Banarasi magic.',
-      url: 'https://www.instagram.com/ananya_drapes/'
-    },
-    {
-      image: '/images/social/social_2.jpg',
-      handle: '@priyasharma_weddings',
-      text: 'The bridal glow in pure Kanjivaram gold.',
-      url: 'https://www.instagram.com/priyasharma_weddings/'
-    },
-    {
-      image: '/images/social/social_3.jpg',
-      handle: '@tarini_lifestyle',
-      text: 'Festive radiance in emerald silk.',
-      url: 'https://www.instagram.com/tarini_lifestyle/'
-    },
-    {
-      image: '/images/social/social_4.jpg',
-      handle: '@palluvo_official',
-      text: 'Featherlight organza blossoms.',
-      url: 'https://www.instagram.com/palluvo_official/'
     }
   ];
 
@@ -604,65 +577,6 @@ export default function HomePage({ onNavigate }) {
             </div>
             );
           })}
-        </div>
-      </section>
-
-      {/* 7. INSTAGRAM / JOURNEY GALLERY */}
-      <section className="bg-[#FAF7F2] py-8 sm:py-12 border-t border-[#EAE2D7] w-full">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-8">
-            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#1F1A1C]">
-              Follow the PALLUVO Journey
-            </h2>
-            <p className="text-sm text-[#6E6467] mt-1.5">
-              Tag @palluvo_official and #EveryDrapeMagic to be featured on our luxury editorial wall
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {instagramPosts.map((post, idx) => (
-              <a
-                key={idx}
-                href={post.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2 cursor-pointer"
-                aria-label={`View Instagram profile for ${post.handle} (opens in new tab)`}
-              >
-                <div className="relative aspect-square w-full overflow-hidden bg-[#FAF7F2]">
-                  <img
-                    src={post.image}
-                    alt={`Saree drape styling by ${post.handle}`}
-                    loading="lazy"
-                    decoding="async"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-black/40 backdrop-blur-md text-white shadow-sm">
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect width="20" height="20" x="2" y="2" rx="5" ry="5"/>
-                      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
-                      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between bg-white">
-                  <div>
-                    <span className="block text-xs font-bold text-[#5B1425] group-hover:text-[#7E1E34] transition truncate whitespace-nowrap leading-snug" title={post.handle}>
-                      {post.handle}
-                    </span>
-                    <p className="text-[11px] sm:text-xs text-[#6E6467] mt-1 line-clamp-2 leading-relaxed">
-                      {post.text}
-                    </p>
-                  </div>
-                  <div className="mt-2.5 pt-2 border-t border-[#F4EFEB] flex items-center justify-between text-[10px] sm:text-[11px] font-semibold text-[#855A16] uppercase tracking-wider">
-                    <span>View Profile</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 text-[#855A16] shrink-0" />
-                  </div>
-                </div>
-              </a>
-            ))}
-          </div>
         </div>
       </section>
     </div>
