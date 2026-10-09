@@ -198,39 +198,63 @@ router.post('/verify', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'Incomplete payment verification payload.' });
     }
 
-    // Verify cryptographic signature
+    // 1. Fetch exact order belonging strictly to the authenticated caller
+    const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, req.user.id);
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found or unauthorized access.' });
+    }
+
+    // 2. Validate current order state
+    if (order.payment_status === 'Paid') {
+      return res.status(400).json({ error: 'Order has already been paid and processed.' });
+    }
+    if (order.status === 'Cancelled') {
+      return res.status(400).json({ error: 'Cannot complete payment for a cancelled order.' });
+    }
+
+    // 3. Match persisted gateway order identifier
+    if (!order.razorpay_order_id || order.razorpay_order_id !== razorpay_order_id) {
+      return res.status(400).json({ error: 'Payment gateway order identifier mismatch.' });
+    }
+
+    // 4. Verify cryptographic signature with live vs. mock distinction
+    const isMockOrder = Boolean(order.razorpay_order_id && order.razorpay_order_id.startsWith('order_mock_'));
     const isValid = verifyPaymentSignature({
       razorpay_order_id,
       razorpay_payment_id,
-      razorpay_signature
+      razorpay_signature,
+      is_mock_order: isMockOrder
     });
 
     if (!isValid) {
-      db.prepare('UPDATE orders SET payment_status = ? WHERE id = ?').run('Failed', orderId);
+      db.prepare('UPDATE orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
+        .run('Failed', order.id, req.user.id);
       return res.status(400).json({ error: 'Payment signature verification failed. Please try again or contact support.' });
     }
 
-    // 1. Mark Order as Paid
-    db.prepare(`
+    // 5. Atomically transition order state only if currently Pending
+    const updateResult = db.prepare(`
       UPDATE orders SET
         payment_status = 'Paid',
         status = 'Placed',
-        razorpay_order_id = ?,
         razorpay_payment_id = ?,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(razorpay_order_id, razorpay_payment_id, orderId);
+      WHERE id = ? AND user_id = ? AND payment_status = 'Pending'
+    `).run(razorpay_payment_id, order.id, req.user.id);
 
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    if (updateResult.changes === 0) {
+      return res.status(400).json({ error: 'Order payment status transition failed or already processed.' });
+    }
 
-    // 2. Insert Payment Record
+    // 6. Record Payment
     db.prepare(`
       INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
       VALUES (?, ?, ?, ?, ?, 'INR', 'Captured', 'Razorpay')
-    `).run(orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature, order.total_amount * 100);
+    `).run(order.id, razorpay_order_id, razorpay_payment_id, razorpay_signature, order.total_amount * 100);
 
-    // 3. Decrement Inventory & Update Coupon Usage
-    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
+    // 7. Decrement Inventory & Update Coupon Usage
+    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
     for (const item of items) {
       db.prepare('UPDATE products SET stock_quantity = MAX(0, stock_quantity - ?) WHERE id = ?')
         .run(item.quantity, item.product_id);
@@ -240,7 +264,7 @@ router.post('/verify', authenticateToken, (req, res) => {
       db.prepare('UPDATE coupons SET times_used = times_used + 1 WHERE code = ?').run(order.coupon_code);
     }
 
-    // 4. Clear User Cart
+    // 8. Clear User Cart
     db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(req.user.id);
 
     let parsedAddress = {};
@@ -250,11 +274,13 @@ router.post('/verify', authenticateToken, (req, res) => {
       parsedAddress = { raw: order.address_data };
     }
 
+    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+
     res.json({
       success: true,
       message: '✨ Payment verified successfully! Your PALLUVO journey has begun.',
       order: {
-        ...order,
+        ...updatedOrder,
         address: parsedAddress,
         items
       }

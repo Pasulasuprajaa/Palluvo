@@ -15,8 +15,27 @@ try {
   console.warn('Razorpay instance initialization warning:', err.message);
 }
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 // Check if keys are real live/test keys or sandbox placeholders
-const isLiveCredentials = key_id && key_secret && !key_id.includes('sample') && !key_id.includes('palluvo2026');
+const isLiveCredentials = Boolean(
+  key_id &&
+  key_secret &&
+  !key_id.includes('sample') &&
+  !key_id.includes('palluvo2026') &&
+  key_secret !== 'rzp_sec_palluvo_drape_magic_key'
+);
+
+if (isLiveCredentials) {
+  try {
+    razorpayInstance = new Razorpay({
+      key_id: key_id,
+      key_secret: key_secret
+    });
+  } catch (err) {
+    console.warn('Razorpay instance initialization warning:', err.message);
+  }
+}
 
 async function createRazorpayOrder({ amount, currency = 'INR', receipt, notes = {} }) {
   // Amount in paise (1 INR = 100 paise)
@@ -39,12 +58,20 @@ async function createRazorpayOrder({ amount, currency = 'INR', receipt, notes = 
         is_mock: false
       };
     } catch (error) {
-      console.error('Razorpay live order error, falling back to secure test simulator:', error.message);
+      console.error('Razorpay live order error:', error.message);
+      if (isProduction) {
+        throw new Error('Payment gateway order creation failed.');
+      }
     }
   }
 
-  // Robust sandbox / simulator order creation
-  const mockOrderId = 'order_rzp_' + Math.random().toString(36).substring(2, 12).toUpperCase();
+  // In production, live gateway credentials are required
+  if (isProduction) {
+    throw new Error('Live Razorpay credentials (RAZORPAY_KEY_ID & RAZORPAY_KEY_SECRET) must be set in production.');
+  }
+
+  // Non-production sandbox / simulator order creation
+  const mockOrderId = 'order_mock_' + crypto.randomBytes(12).toString('hex');
   return {
     id: mockOrderId,
     amount: amountInPaise,
@@ -55,32 +82,49 @@ async function createRazorpayOrder({ amount, currency = 'INR', receipt, notes = 
   };
 }
 
-function verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature }) {
+function verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature, is_mock_order = false }) {
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
     return false;
   }
 
-  // If using simulation / test signature
-  if (razorpay_signature.startsWith('mock_sig_') || razorpay_signature.startsWith('mock_verified_')) {
-    return true;
+  // Strictly disallow mock verification in production, for live credentials, or for non-mock orders
+  if (isProduction || isLiveCredentials || !is_mock_order) {
+    if (razorpay_signature.startsWith('mock_')) {
+      return false;
+    }
+
+    try {
+      const generated_signature = crypto
+        .createHmac('sha256', key_secret)
+        .update(razorpay_order_id + '|' + razorpay_payment_id)
+        .digest('hex');
+
+      const expectedBuffer = Buffer.from(generated_signature, 'utf8');
+      const actualBuffer = Buffer.from(razorpay_signature, 'utf8');
+
+      if (expectedBuffer.length !== actualBuffer.length) {
+        return false;
+      }
+
+      return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+    } catch (error) {
+      console.error('Signature verification error:', error);
+      return false;
+    }
   }
 
-  try {
-    const generated_signature = crypto
-      .createHmac('sha256', key_secret)
-      .update(razorpay_order_id + '|' + razorpay_payment_id)
-      .digest('hex');
-
-    return generated_signature === razorpay_signature;
-  } catch (error) {
-    console.error('Signature verification error:', error);
-    return false;
+  // In non-production only: allow verified mock signature for explicitly marked mock orders
+  if (!isProduction && is_mock_order && razorpay_order_id.startsWith('order_mock_')) {
+    return razorpay_signature.startsWith('mock_verified_') || razorpay_signature.startsWith('mock_sig_');
   }
+
+  return false;
 }
 
 module.exports = {
   createRazorpayOrder,
   verifyPaymentSignature,
+  isLiveCredentials,
   key_id,
   key_secret
 };

@@ -84,15 +84,32 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 🔑 Demo Credentials
+## 🔑 Local Development Demo Credentials
+*(Strictly confined to local development environments; disabled in production deployments)*
 
 - **Customer Demo Account**:
   - Email: `priya@example.com`
   - Password: `password123`
-- **Admin Management Console**:
+- **Admin Demo Console**:
   - Email: `admin@palluvo.com`
   - Password: `admin123`
   - Route: `/admin`
+
+---
+
+## 🛡️ Production Security & Administration Provisioning
+
+In production (`NODE_ENV=production`), default demo accounts are not seeded, and a strong `JWT_SECRET` (minimum 32 characters) is required.
+
+### Provisioning Production Administrators:
+Production administrator accounts are provisioned out-of-band using the secure CLI script:
+
+```bash
+# Provision a new admin account or upgrade an existing user
+npm run create-admin <admin_email> <strong_password> ["Admin Name"]
+```
+
+Or by setting `INITIAL_ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD` in your production environment variables during initial setup.
 
 ---
 

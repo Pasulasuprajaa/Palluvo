@@ -4,14 +4,15 @@ const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
 
-// Initialize database schema and auto-seed if needed
+// Initialize auth configuration, database schema, and auto-seed catalog if empty
+const { JWT_SECRET } = require('./middleware/auth');
 const db = require('./db/database');
 const seedDatabase = require('./db/seed');
 
 try {
   const count = db.prepare('SELECT COUNT(*) as count FROM products').get()?.count || 0;
   if (count === 0) {
-    seedDatabase();
+    seedDatabase({ isProduction: process.env.NODE_ENV === 'production' });
   }
 } catch (e) {
   console.log('Auto-seed note:', e.message);
