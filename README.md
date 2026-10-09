@@ -102,14 +102,15 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 In production (`NODE_ENV=production`), default demo accounts are not seeded, and a strong `JWT_SECRET` (minimum 32 characters) is required.
 
 ### Provisioning Production Administrators:
-Production administrator accounts are provisioned out-of-band using the secure CLI script:
+Production administrator accounts are provisioned out-of-band using the secure CLI tool without passing passwords on the command line:
 
 ```bash
-# Provision a new admin account or upgrade an existing user
-npm run create-admin <admin_email> <strong_password> ["Admin Name"]
-```
+# Interactive secure prompt (password is prompted securely without echo)
+npm run create-admin admin@palluvo.com ["Admin Name"]
 
-Or by setting `INITIAL_ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD` in your production environment variables during initial setup.
+# Or using environment variables in automated CI/CD deployments:
+ADMIN_EMAIL="admin@palluvo.com" ADMIN_PASSWORD="<strong_password>" npm run create-admin
+```
 
 ---
 

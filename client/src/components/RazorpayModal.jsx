@@ -1,5 +1,20 @@
-import React, { useState } from 'react';
-import { ShieldCheck, CreditCard, Smartphone, Building, Wallet, Lock, CheckCircle2, AlertCircle, X, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ShieldCheck, CreditCard, Smartphone, Building, Wallet, Lock, CheckCircle2, AlertCircle, X, Sparkles, ExternalLink, RotateCcw } from 'lucide-react';
+
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (typeof window !== 'undefined' && window.Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
 
 export default function RazorpayModal({
   isOpen,
@@ -19,13 +34,116 @@ export default function RazorpayModal({
   });
   const [processing, setProcessing] = useState(false);
   const [simulatedFailure, setSimulatedFailure] = useState(false);
+  const [liveGatewayError, setLiveGatewayError] = useState(null);
+  const liveCheckoutTriggered = useRef(false);
+
+  const isMockOrder = Boolean(orderData?.isMock);
+
+  // For Live Razorpay Orders: Automatically launch Razorpay Checkout SDK
+  useEffect(() => {
+    if (isOpen && orderData && !isMockOrder && !liveCheckoutTriggered.current) {
+      liveCheckoutTriggered.current = true;
+      handleLiveRazorpayLaunch();
+    }
+    if (!isOpen) {
+      liveCheckoutTriggered.current = false;
+      setLiveGatewayError(null);
+      setProcessing(false);
+    }
+  }, [isOpen, orderData, isMockOrder]);
 
   if (!isOpen || !orderData) return null;
 
-  const handlePayNow = async (forceFail = false) => {
+  const handleLiveRazorpayLaunch = async () => {
+    setProcessing(true);
+    setLiveGatewayError(null);
+
+    const isLoaded = await loadRazorpayScript();
+    if (!isLoaded) {
+      setProcessing(false);
+      const errMsg = 'Failed to load Razorpay Checkout SDK. Please check your internet connection.';
+      setLiveGatewayError(errMsg);
+      if (onPaymentFailure) onPaymentFailure({ error: errMsg });
+      return;
+    }
+
+    try {
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount, // in paise
+        currency: orderData.currency || 'INR',
+        name: 'PALLUVO',
+        description: `Order #${orderData.orderNumber}`,
+        order_id: orderData.razorpayOrderId,
+        prefill: {
+          name: orderData.customer?.name || '',
+          email: orderData.customer?.email || '',
+          contact: orderData.customer?.phone || ''
+        },
+        theme: {
+          color: '#5B1425'
+        },
+        handler: async function (response) {
+          setProcessing(true);
+          try {
+            const verifyRes = await fetch('/api/payments/verify', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('palluvo_token')}`
+              },
+              body: JSON.stringify({
+                orderId: orderData.orderId,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              })
+            });
+
+            const data = await verifyRes.json();
+            setProcessing(false);
+
+            if (verifyRes.ok && data.success) {
+              onPaymentSuccess(data.order);
+            } else {
+              if (onPaymentFailure) {
+                onPaymentFailure({ error: data.error || 'Payment signature verification failed.' });
+              }
+            }
+          } catch (err) {
+            setProcessing(false);
+            if (onPaymentFailure) onPaymentFailure({ error: err.message });
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setProcessing(false);
+          }
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (resp) {
+        setProcessing(false);
+        const failMsg = resp.error?.description || 'Payment was declined or cancelled.';
+        setLiveGatewayError(failMsg);
+        if (onPaymentFailure) {
+          onPaymentFailure({ error: failMsg });
+        }
+      });
+      rzp.open();
+      setProcessing(false);
+    } catch (err) {
+      setProcessing(false);
+      setLiveGatewayError(err.message);
+      if (onPaymentFailure) onPaymentFailure({ error: err.message });
+    }
+  };
+
+  // Mock Sandbox Simulator Payment Handler (non-production only)
+  const handleMockPayNow = async (forceFail = false) => {
     setProcessing(true);
 
-    // Simulate payment response & generate signature verification payload
     setTimeout(async () => {
       if (forceFail || simulatedFailure) {
         setProcessing(false);
@@ -70,6 +188,87 @@ export default function RazorpayModal({
 
   const amountInRupees = orderData.summary?.totalAmount || (orderData.amount ? orderData.amount / 100 : 0);
 
+  // 1. LIVE RAZORPAY GATEWAY UI (Displays connection status, retry launcher, and payment summary)
+  if (!isMockOrder) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+        <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-[#EAE2D7] overflow-hidden relative text-center">
+          {/* Top Razorpay Header */}
+          <div className="bg-[#0C2340] text-white p-5 flex items-center justify-between text-left">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-[#C5A059] font-bold text-lg border border-white/20">
+                ₹
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-cinzel text-base tracking-widest text-[#E0C07F]">PALLUVO</span>
+                  <span className="text-[10px] bg-green-600/80 px-1.5 py-0.5 rounded font-medium">Live Gateway</span>
+                </div>
+                <div className="text-xs text-blue-200">
+                  Order #{orderData.orderNumber}
+                </div>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <div className="text-xs text-blue-200">Total</div>
+              <div className="text-lg font-bold text-white">₹{amountInRupees.toLocaleString('en-IN')}</div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {liveGatewayError ? (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-left space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-red-700">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>Payment Gateway Notice</span>
+                </div>
+                <p className="text-xs text-red-600 leading-relaxed">
+                  {liveGatewayError}
+                </p>
+              </div>
+            ) : (
+              <div className="py-4 space-y-3">
+                <div className="w-12 h-12 border-3 border-[#5B1425] border-t-transparent rounded-full animate-spin mx-auto" />
+                <h3 className="font-serif text-lg font-bold text-[#1F1A1C]">
+                  Connecting to Razorpay Secure Gateway
+                </h3>
+                <p className="text-xs text-[#6E6467] max-w-sm mx-auto">
+                  A secure Razorpay checkout window has been launched. Complete your payment using UPI, Cards, or NetBanking in the popup.
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={handleLiveRazorpayLaunch}
+                disabled={processing}
+                className="w-full py-3.5 bg-[#5B1425] hover:bg-[#7E1E34] text-white font-bold text-xs uppercase tracking-widest rounded-xl transition shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <Lock className="w-4 h-4 text-[#C5A059]" />
+                <span>Reopen Razorpay Checkout</span>
+              </button>
+
+              <button
+                onClick={onClose}
+                className="w-full py-2.5 text-xs text-[#6E6467] hover:text-[#1F1A1C] font-semibold transition"
+              >
+                Cancel and Return to Bag
+              </button>
+            </div>
+          </div>
+
+          {/* Security Footer */}
+          <div className="bg-[#FAF7F2] px-6 py-2.5 border-t border-[#EAE2D7] flex items-center justify-center gap-2 text-[11px] text-[#6E6467]">
+            <ShieldCheck className="w-4 h-4 text-green-700" />
+            <span>Official Razorpay India Production Gateway • 256-Bit SSL</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. SANDBOX SIMULATOR UI (For mock orders in non-production development)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
       <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-[#EAE2D7] overflow-hidden relative">
@@ -82,7 +281,7 @@ export default function RazorpayModal({
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-cinzel text-base tracking-widest text-[#E0C07F]">PALLUVO</span>
-                <span className="text-[10px] bg-blue-600/60 px-1.5 py-0.2 rounded font-mono">Secured by Razorpay</span>
+                <span className="text-[10px] bg-amber-500/80 text-black px-1.5 py-0.5 rounded font-mono font-bold">Simulator (Dev Mode)</span>
               </div>
               <div className="text-xs text-blue-200">
                 Order #{orderData.orderNumber}
@@ -265,33 +464,33 @@ export default function RazorpayModal({
           {/* Pay Button */}
           <div className="pt-3 space-y-2">
             <button
-              onClick={() => handlePayNow(false)}
+              onClick={() => handleMockPayNow(false)}
               disabled={processing}
-              className="w-full py-3.5 bg-[#0C2340] hover:bg-[#153a66] text-white font-bold text-sm rounded-xl transition shadow-xl flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-3.5 bg-[#0C2340] hover:bg-[#153a66] text-white font-bold text-sm rounded-xl transition shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               {processing ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Verifying Razorpay Signature...</span>
+                  <span>Verifying Mock Razorpay Signature...</span>
                 </>
               ) : (
                 <>
                   <Lock className="w-4 h-4 text-[#E0C07F]" />
-                  <span>Pay ₹{amountInRupees.toLocaleString('en-IN')} Securely</span>
+                  <span>Pay ₹{amountInRupees.toLocaleString('en-IN')} (Simulator Mode)</span>
                 </>
               )}
             </button>
 
             <div className="flex items-center justify-between text-[11px] text-[#6E6467] pt-1 px-1">
               <button
-                onClick={() => handlePayNow(true)}
-                className="text-red-600 hover:underline"
+                onClick={() => handleMockPayNow(true)}
+                className="text-red-600 hover:underline cursor-pointer"
               >
                 Test Payment Decline Simulation
               </button>
               <button
                 onClick={onClose}
-                className="text-[#6E6467] hover:text-[#1F1A1C]"
+                className="text-[#6E6467] hover:text-[#1F1A1C] cursor-pointer"
               >
                 Cancel
               </button>
@@ -301,8 +500,8 @@ export default function RazorpayModal({
 
         {/* Security Footer */}
         <div className="bg-[#FAF7F2] px-6 py-2.5 border-t border-[#EAE2D7] flex items-center justify-center gap-2 text-[11px] text-[#6E6467]">
-          <ShieldCheck className="w-4 h-4 text-green-700" />
-          <span>PCI-DSS Level 1 Certified • 256-bit Encryption • Razorpay India</span>
+          <ShieldCheck className="w-4 h-4 text-amber-600" />
+          <span>Local Development Sandbox • Simulates Razorpay Checkout Handlers</span>
         </div>
       </div>
     </div>
