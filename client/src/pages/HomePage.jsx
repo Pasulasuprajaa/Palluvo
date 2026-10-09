@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, ArrowRight, ShieldCheck, Award, Heart, ShoppingBag, Star, ChevronRight, RotateCcw } from 'lucide-react';
+import { Sparkles, ArrowRight, ArrowUpRight, ShieldCheck, Award, Heart, ShoppingBag, Star, ChevronRight, RotateCcw } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 
 export default function HomePage({ onNavigate }) {
@@ -198,7 +198,7 @@ export default function HomePage({ onNavigate }) {
               <span className="italic font-normal gold-gradient-text">woven for generations.</span>
             </h1>
 
-            <p className="mt-2 md:mt-5 text-xs sm:text-sm md:text-base text-[#FAF7F2]/85 leading-relaxed font-sans max-w-md md:max-w-[380px] lg:max-w-lg drop-shadow-xs">
+            <p className="mt-2 md:mt-5 text-sm md:text-base text-[#FAF7F2]/85 leading-relaxed font-sans max-w-md md:max-w-[380px] lg:max-w-lg drop-shadow-xs">
               Handcrafted Banarasi, pure Kanjivaram, and ethereal organza sarees designed to make your celebratory moments unforgettable.
             </p>
 
@@ -524,7 +524,7 @@ export default function HomePage({ onNavigate }) {
             “A saree is not merely six yards of silk; <br className="hidden sm:inline" />
             it is centuries of art, woven into memory.”
           </h2>
-          <p className="text-xs sm:text-sm text-[#FAF7F2]/80 leading-relaxed max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base text-[#FAF7F2]/80 leading-relaxed max-w-2xl mx-auto">
             At PALLUVO, every saree is born on the handloom through weeks of dedicated craftsmanship. We work closely with master weavers across Varanasi, Kanchipuram, and Chanderi to bring you authentic weaves that celebrate modern Indian grace.
           </p>
           <div className="pt-2">
@@ -614,7 +614,7 @@ export default function HomePage({ onNavigate }) {
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#1F1A1C]">
               Follow the PALLUVO Journey
             </h2>
-            <p className="text-xs text-[#6E6467] mt-1.5">
+            <p className="text-sm text-[#6E6467] mt-1.5">
               Tag @palluvo_official and #EveryDrapeMagic to be featured on our luxury editorial wall
             </p>
           </div>
@@ -657,7 +657,7 @@ export default function HomePage({ onNavigate }) {
                   </div>
                   <div className="mt-2.5 pt-2 border-t border-[#F4EFEB] flex items-center justify-between text-[10px] sm:text-[11px] font-semibold text-[#855A16] uppercase tracking-wider">
                     <span>View Profile</span>
-                    <span>↗</span>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-[#855A16] shrink-0" />
                   </div>
                 </div>
               </a>
