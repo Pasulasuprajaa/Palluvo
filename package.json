@@ -28,5 +28,8 @@
   "license": "ISC",
   "devDependencies": {
     "concurrently": "^10.0.6"
+  },
+  "overrides": {
+    "source-map-js": "^1.2.2"
   }
 }
