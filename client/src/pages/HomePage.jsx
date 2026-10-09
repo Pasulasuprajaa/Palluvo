@@ -102,8 +102,8 @@ export default function HomePage({ onNavigate }) {
   return (
     <div className="flex flex-col">
       {/* 1. HERO SECTION */}
-      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] min-h-[560px] sm:min-h-[620px] md:min-h-[85vh]">
-        {/* Background Image — Clear Top Portrait Crop on Mobile and Right-Aligned Subject on Tablet/Desktop */}
+      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] min-h-[580px] sm:min-h-[640px] md:min-h-[85vh]">
+        {/* Background Image with Crisp Portrait Framing */}
         <div className="absolute inset-0 z-0">
           <picture>
             <source media="(max-width: 640px)" srcSet="/images/occasions/wedding_edit.jpg" />
@@ -113,31 +113,35 @@ export default function HomePage({ onNavigate }) {
               loading="eager"
               fetchPriority="high"
               decoding="async"
-              className="w-full h-full object-cover object-[center_top] sm:object-[center_8%] md:object-[right_center] lg:object-right opacity-100 scale-100 transition-transform duration-1000 ease-out"
+              className="w-full h-full object-cover object-[center_top] sm:object-[center_12%] md:object-[right_center] lg:object-right opacity-100 transition-transform duration-1000 ease-out"
             />
           </picture>
-          {/* Gradient Overlay: Calibrated gradient maintains solid contrast behind copy while letting the model and silk weave retain full vibrant color and texture */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] from-15% via-[#1F1A1C]/70 via-40% to-transparent to-65% md:bg-gradient-to-r md:from-[#1F1A1C]/90 md:from-15% md:via-[#1F1A1C]/40 md:via-35% md:to-transparent md:to-55% pointer-events-none" />
+          {/* Refined Luxury Vignette Gradient */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/70 via-55% to-transparent md:bg-gradient-to-r md:from-[#1F1A1C]/95 md:from-20% md:via-[#1F1A1C]/60 md:via-45% md:to-transparent pointer-events-none" />
         </div>
-        {/* Hero Content — Constrained Width on Tablet & Mobile to Leave Model & Saree Visible */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-44 pb-8 sm:pt-52 sm:pb-12 md:py-24 lg:py-28 w-full">
-          <div className="flex flex-col items-start max-w-lg md:max-w-[420px] lg:max-w-xl xl:max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#1F1A1C]/90 backdrop-blur-md border border-[#C5A059]/50 text-[#E0C07F] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-2 md:mb-6 animate-fade-in shadow-sm">
-              <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
+
+        {/* Hero Content with Luxury Framing */}
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 md:py-24 lg:py-28 w-full flex flex-col justify-end md:justify-center">
+          <div className="max-w-xl md:max-w-lg lg:max-w-xl xl:max-w-2xl bg-[#1F1A1C]/75 md:bg-transparent backdrop-blur-md md:backdrop-blur-none p-5 sm:p-7 md:p-0 rounded-2xl sm:rounded-3xl md:rounded-none border border-[#C5A059]/30 md:border-0 shadow-2xl md:shadow-none animate-fade-in">
+            {/* Pill Tag */}
+            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#5B1425]/90 border border-[#C5A059]/40 text-[#E0C07F] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-3 sm:mb-4 shadow-md">
+              <Sparkles className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
               <span>The Festive & Bridal Heirloom Edit</span>
             </div>
 
-            <h1 className="font-serif text-2xl sm:text-4xl md:text-[2.6rem] lg:text-6xl xl:text-7xl font-bold leading-[1.18] sm:leading-[1.1] tracking-tight text-[#FAF7F2] drop-shadow-sm animate-slide-up">
-              Timeless weaves, <br />
-              <span className="italic font-normal gold-gradient-text">woven for generations.</span>
+            {/* Headline */}
+            <h1 className="font-serif text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.18] sm:leading-[1.12] tracking-tight text-[#FAF7F2] drop-shadow-sm animate-slide-up">
+              Timeless Weaves, <br />
+              <span className="italic font-normal text-[#E0C07F]">Woven for Generations.</span>
             </h1>
 
-            <p className="mt-2 md:mt-5 text-sm md:text-base text-[#FAF7F2]/85 leading-relaxed font-sans max-w-md md:max-w-[380px] lg:max-w-lg drop-shadow-xs">
+            {/* Description */}
+            <p className="mt-2.5 sm:mt-4 text-xs sm:text-sm md:text-base text-[#FAF7F2]/90 leading-relaxed font-sans max-w-lg drop-shadow-xs">
               Handcrafted Banarasi, pure Kanjivaram, and ethereal organza sarees designed to make your celebratory moments unforgettable.
             </p>
 
-            {/* Action CTAs: Side-by-side on mobile with 44px min touch target height */}
-            <div className="mt-4 md:mt-8 flex flex-row items-center gap-2.5 sm:gap-4 w-full sm:w-auto">
+            {/* Action Buttons */}
+            <div className="mt-4 sm:mt-6 flex flex-row items-center gap-2.5 sm:gap-4 w-full sm:w-auto">
               <a
                 href="/sarees"
                 onClick={(e) => {
@@ -145,7 +149,7 @@ export default function HomePage({ onNavigate }) {
                   e.preventDefault();
                   onNavigate('shop');
                 }}
-                className="flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 min-h-[44px] bg-[#5B1425] hover:bg-[#7E1E34] text-[#FAF7F2] font-bold text-[11px] sm:text-xs uppercase tracking-widest rounded-xl transition-all duration-300 shadow-2xl flex items-center justify-center gap-1.5 sm:gap-2.5 border border-[#C5A059]/30 active:scale-95 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none whitespace-nowrap"
+                className="flex-1 sm:flex-none px-5 sm:px-8 py-3 sm:py-3.5 min-h-[44px] bg-gradient-to-r from-[#5B1425] to-[#7E1E34] hover:from-[#7E1E34] hover:to-[#5B1425] text-[#FAF7F2] font-bold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 shadow-xl flex items-center justify-center gap-2 border border-[#C5A059]/40 active:scale-95 cursor-pointer whitespace-nowrap"
               >
                 <span>Explore Sarees</span>
                 <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#C5A059]" />
@@ -158,29 +162,29 @@ export default function HomePage({ onNavigate }) {
                   e.preventDefault();
                   onNavigate('shop', { occasion: 'Wedding' });
                 }}
-                className="flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 min-h-[44px] bg-[#FAF7F2]/10 hover:bg-[#FAF7F2]/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-[11px] sm:text-xs uppercase tracking-widest rounded-xl transition-all duration-300 border border-white/20 hover:border-[#C5A059] active:scale-95 flex items-center justify-center text-center cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none whitespace-nowrap"
+                className="flex-1 sm:flex-none px-5 sm:px-8 py-3 sm:py-3.5 min-h-[44px] bg-white/10 hover:bg-white/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 border border-white/25 hover:border-[#C5A059] active:scale-95 flex items-center justify-center text-center cursor-pointer whitespace-nowrap"
               >
                 Bridal Edit
               </a>
             </div>
 
             {/* Micro Trust Stats */}
-            <div className="mt-3.5 md:mt-10 pt-3 md:pt-6 border-t border-white/15 grid grid-cols-3 gap-2 sm:gap-6 text-left w-full max-w-md md:max-w-[380px] lg:max-w-lg">
+            <div className="mt-4 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/15 grid grid-cols-3 gap-2 sm:gap-4 text-center sm:text-left w-full">
               <div>
-                <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">100%</div>
-                <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">
+                <div className="font-serif text-sm sm:text-lg md:text-xl font-bold text-[#E0C07F]">100%</div>
+                <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/80 uppercase tracking-wider font-medium mt-0.5 leading-tight">
                   Pure Handloom
                 </div>
               </div>
-              <div>
-                <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">Direct</div>
-                <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">
-                  From Master Weavers
+              <div className="border-x border-white/10 px-1 sm:px-0 sm:border-0">
+                <div className="font-serif text-sm sm:text-lg md:text-xl font-bold text-[#E0C07F]">Direct</div>
+                <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/80 uppercase tracking-wider font-medium mt-0.5 leading-tight">
+                  Master Weavers
                 </div>
               </div>
               <div>
-                <div className="font-serif text-base sm:text-2xl font-bold text-[#C5A059]">Silk Mark</div>
-                <div className="text-[10.5px] sm:text-[11px] text-[#FAF7F2]/85 uppercase tracking-wider font-medium mt-0.5">
+                <div className="font-serif text-sm sm:text-lg md:text-xl font-bold text-[#E0C07F]">Silk Mark</div>
+                <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/80 uppercase tracking-wider font-medium mt-0.5 leading-tight">
                   Certified Pure
                 </div>
               </div>
