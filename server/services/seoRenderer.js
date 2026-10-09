@@ -53,6 +53,7 @@ function sanitizeUrl(rawUrl, fallback = DEFAULT_IMAGE) {
 
 const KNOWN_STATIC_ROUTES = new Set([
   '/',
+  '/index.html',
   '/sarees',
   '/shop',
   '/cart',
@@ -77,7 +78,10 @@ const KNOWN_STATIC_ROUTES = new Set([
 ]);
 
 function getMetaForRoute(urlPath, query = {}) {
-  const pathname = (urlPath || '/').toLowerCase().replace(/\/$/, '') || '/';
+  const cleanPath = (urlPath || '/').split('?')[0];
+  let pathname = (cleanPath || '/').toLowerCase().replace(/\/$/, '') || '/';
+  if (pathname === '/index.html') pathname = '/';
+
   let title = DEFAULT_TITLE;
   let description = DEFAULT_DESC;
   let canonicalUrl = `${BASE_URL}${pathname === '/' ? '' : pathname}`;
@@ -90,24 +94,25 @@ function getMetaForRoute(urlPath, query = {}) {
     description = DEFAULT_DESC;
     canonicalUrl = `${BASE_URL}/`;
   } else if (pathname.startsWith('/sarees/') || pathname.startsWith('/product/')) {
-    const slug = pathname.split('/')[2];
+    const rawSlug = pathname.split('/')[2];
+    const slug = rawSlug ? decodeURIComponent(rawSlug) : '';
     if (!slug) {
       isNotFound = true;
     } else {
       try {
         const product = db.prepare(`
           SELECT p.name, p.tagline, p.short_desc, p.description,
-                 (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 1 LIMIT 1) as primary_img
+                 (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) as primary_img
           FROM products p
           WHERE p.slug = ?
         `).get(slug);
 
         if (product) {
           title = `${product.name} | PALLUVO`;
-          description = product.tagline || product.short_desc || product.description?.slice(0, 160) || DEFAULT_DESC;
+          description = product.short_desc || product.tagline || product.description?.slice(0, 160) || DEFAULT_DESC;
           canonicalUrl = `${BASE_URL}/sarees/${encodeURIComponent(slug)}`;
           imageUrl = sanitizeUrl(product.primary_img, DEFAULT_IMAGE);
-          imageAlt = `${product.name} Handcrafted Saree`;
+          imageAlt = `${product.name} - Luxury Handcrafted Indian Saree | PALLUVO`;
         } else {
           isNotFound = true;
         }
@@ -232,13 +237,12 @@ function injectMetaTags(html, meta) {
     modified = modified.replace('</head>', `  <link rel="canonical" href="${escapedAttrCanonical}" />\n  </head>`);
   }
 
-  // Robots meta tag for 404 pages
-  if (meta.isNotFound) {
-    if (modified.includes('<meta name="robots"')) {
-      modified = modified.replace(/<meta\s+name="robots"\s+content=".*?"\s*\/?>/is, '<meta name="robots" content="noindex, nofollow" />');
-    } else {
-      modified = modified.replace('</head>', '  <meta name="robots" content="noindex, nofollow" />\n  </head>');
-    }
+  // Robots meta tag
+  const isNoIndex = meta.isNotFound || meta.isNoIndex;
+  if (modified.includes('<meta name="robots"')) {
+    modified = modified.replace(/<meta\s+name="robots"\s+content=".*?"\s*\/?>/is, `<meta name="robots" content="${isNoIndex ? 'noindex, nofollow' : 'index, follow'}" />`);
+  } else if (isNoIndex) {
+    modified = modified.replace('</head>', '  <meta name="robots" content="noindex, nofollow" />\n  </head>');
   }
 
   return modified;
