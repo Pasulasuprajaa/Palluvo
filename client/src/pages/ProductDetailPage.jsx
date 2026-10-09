@@ -328,7 +328,7 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
               </span>
               {product.mrp > product.price && (
                 <>
-                  <span className="text-sm text-gray-400 line-through">
+                  <span className="text-sm text-[#615559] line-through">
                     ₹{product.mrp?.toLocaleString('en-IN')}
                   </span>
                   <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">

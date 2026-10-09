@@ -114,7 +114,7 @@ export default function QuickViewModal({ onNavigate }) {
                 ₹{quickViewProduct.price?.toLocaleString('en-IN')}
               </span>
               {quickViewProduct.mrp && quickViewProduct.mrp > quickViewProduct.price && (
-                <span className="font-sans text-sm text-[#8A7E82] line-through font-normal">
+                <span className="font-sans text-sm text-[#615559] line-through font-normal">
                   ₹{quickViewProduct.mrp?.toLocaleString('en-IN')}
                 </span>
               )}

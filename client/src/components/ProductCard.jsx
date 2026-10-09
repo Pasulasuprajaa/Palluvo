@@ -100,19 +100,23 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
           ) : null}
         </div>
 
-        {/* Wishlist Button */}
-        <div className="absolute top-2.5 right-2.5 z-10">
+        {/* Wishlist Button (44x44px accessible touch target with compact visual badge) */}
+        <div className="absolute top-1 right-1 z-10">
           <button
             onClick={handleWishlistClick}
             aria-label={saved ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
             title={saved ? 'Remove from Wishlist' : 'Add to Wishlist'}
-            className={`w-7.5 h-7.5 sm:w-8 sm:h-8 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 shadow-xs focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none cursor-pointer ${
-              saved
-                ? 'bg-[#5B1425] text-white scale-105'
-                : 'bg-white/85 text-[#1F1A1C] hover:bg-white hover:text-[#5B1425] hover:scale-105'
-            }`}
+            className="w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer focus-visible:outline-none group/wishlist"
           >
-            <Heart className={`w-3.5 h-3.5 ${saved ? 'fill-current' : ''}`} />
+            <span
+              className={`w-8 h-8 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 shadow-xs focus-visible:ring-2 focus-visible:ring-[#C5A059] ${
+                saved
+                  ? 'bg-[#5B1425] text-white scale-105'
+                  : 'bg-white/85 text-[#1F1A1C] hover:bg-white hover:text-[#5B1425] group-hover/wishlist:scale-105'
+              }`}
+            >
+              <Heart className={`w-3.5 h-3.5 ${saved ? 'fill-current' : ''}`} />
+            </span>
           </button>
         </div>
 
@@ -191,7 +195,7 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
                 ₹{product.price?.toLocaleString('en-IN')}
               </span>
               {product.mrp && product.mrp > product.price && (
-                <span className="font-sans text-xs text-[#8A7E82] line-through font-normal">
+                <span className="font-sans text-xs text-[#615559] line-through font-normal">
                   ₹{product.mrp?.toLocaleString('en-IN')}
                 </span>
               )}
