@@ -124,7 +124,11 @@ export default function CompareDrawer({ onNavigate }) {
                             className="w-28 h-36 object-cover rounded-lg mb-2 shadow-xs cursor-pointer hover:scale-105 transition"
                             onClick={() => {
                               setIsCompareOpen(false);
-                              onNavigate('product', { slug: item.slug });
+                              onNavigate('product', {
+                                slug: item.slug,
+                                image: item.primary_image || item.images?.[0],
+                                name: item.name
+                              });
                             }}
                           />
 

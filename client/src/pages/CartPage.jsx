@@ -125,7 +125,11 @@ export default function CartPage({ onNavigate, onOpenAuth }) {
                 />
                 <div>
                   <h3
-                    onClick={() => onNavigate('product', { slug: item.slug })}
+                    onClick={() => onNavigate('product', {
+                      slug: item.slug,
+                      image: item.primary_image || item.image_url,
+                      name: item.name
+                    })}
                     className="font-serif text-base font-bold text-[#1F1A1C] hover:text-[#5B1425] cursor-pointer transition line-clamp-1"
                   >
                     {item.name}

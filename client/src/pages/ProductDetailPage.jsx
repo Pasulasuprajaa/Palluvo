@@ -16,6 +16,7 @@ import ReviewModal from '../components/ReviewModal';
 import FrequentlyBoughtTogether from '../components/FrequentlyBoughtTogether';
 import ProductQA from '../components/ProductQA';
 import RecentlyViewed from '../components/RecentlyViewed';
+import { updatePageMeta } from '../utils/seo';
 
 export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   const [product, setProduct] = useState(null);
@@ -77,6 +78,15 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
           if (data.product.variants && data.product.variants.length > 0) {
             setSelectedVariant(data.product.variants[0]);
           }
+
+          // Update SEO metadata with product details and primary image
+          updatePageMeta('product', {
+            slug,
+            product: data.product,
+            image: data.product.primary_image || (data.product.images && data.product.images[0]),
+            name: data.product.name,
+            description: data.product.short_desc || data.product.tagline || data.product.description
+          });
 
           // Save to Recently Viewed in localStorage (Amazon/Flipkart History)
           try {

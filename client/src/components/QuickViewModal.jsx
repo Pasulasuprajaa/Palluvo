@@ -28,8 +28,10 @@ export default function QuickViewModal({ onNavigate }) {
 
   const handleFullDetails = () => {
     const slug = quickViewProduct.slug;
+    const image = quickViewProduct.primary_image || (quickViewProduct.images && quickViewProduct.images[0]);
+    const name = quickViewProduct.name;
     setQuickViewProduct(null);
-    onNavigate('product', { slug });
+    onNavigate('product', { slug, image, name });
   };
 
   return (

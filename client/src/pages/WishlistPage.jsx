@@ -54,7 +54,11 @@ export default function WishlistPage({ onNavigate }) {
                 onClick={(e) => {
                   if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
                   e.preventDefault();
-                  onNavigate('product', { slug: item.slug });
+                  onNavigate('product', {
+                    slug: item.slug,
+                    image: item.primary_image || item.image_url,
+                    name: item.name
+                  });
                 }}
                 aria-label={`View ${item.name}`}
                 className="block w-full h-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:ring-inset"
@@ -85,7 +89,11 @@ export default function WishlistPage({ onNavigate }) {
                 onClick={(e) => {
                   if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
                   e.preventDefault();
-                  onNavigate('product', { slug: item.slug });
+                  onNavigate('product', {
+                    slug: item.slug,
+                    image: item.primary_image || item.image_url,
+                    name: item.name
+                  });
                 }}
                 className="block group-hover:text-[#5B1425] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] rounded-lg"
               >

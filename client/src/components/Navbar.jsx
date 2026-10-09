@@ -38,7 +38,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
       {/* Top Luxury Announcement Bar */}
       {bannerVisible && (
         <div className="relative bg-[#3F0D19] text-[#FAF7F2] text-[10.5px] sm:text-xs font-medium tracking-wide py-1.5 sm:py-2 px-2.5 sm:px-4 border-b border-[#C5A059]/30 transition-all duration-300">
-          <div className="max-w-7xl mx-auto flex items-center justify-between pr-7 sm:pr-8">
+          <div className="max-w-7xl mx-auto flex items-center justify-between pr-11 sm:pr-10">
             <div className="flex items-center gap-1 sm:gap-2 mx-auto sm:mx-0 text-center sm:text-left flex-wrap justify-center sm:justify-start">
               <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#C5A059] shrink-0 animate-pulse" />
               <span>Free Express Delivery &gt; ₹1,999</span>
@@ -62,15 +62,17 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               )}
             </div>
           </div>
-          {/* Dismiss Announcement Bar (X Button) */}
+          {/* Dismiss Announcement Bar (44x44px minimum touch target) */}
           <button
             type="button"
             onClick={() => setBannerVisible(false)}
             aria-label="Close announcement bar"
             title="Close"
-            className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 p-1 text-[#FAF7F2]/75 hover:text-[#FAF7F2] hover:bg-white/10 rounded-full transition cursor-pointer focus-visible:ring-1 focus-visible:ring-[#C5A059] focus-visible:outline-none"
+            className="absolute right-0 sm:right-1 top-1/2 -translate-y-1/2 w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center text-[#FAF7F2]/75 hover:text-[#FAF7F2] transition cursor-pointer focus-visible:ring-1 focus-visible:ring-[#C5A059] focus-visible:outline-none group/close"
           >
-            <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="p-1 rounded-full group-hover/close:bg-white/10 flex items-center justify-center transition">
+              <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </span>
           </button>
         </div>
       )}

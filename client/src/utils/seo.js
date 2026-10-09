@@ -29,12 +29,25 @@ function formatCategoryTitle(slug) {
     .join(' ');
 }
 
+function toAbsoluteUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return DEFAULT_IMAGE;
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    return rawUrl;
+  }
+  const cleanPath = rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`;
+  return `${BASE_URL}${cleanPath}`;
+}
+
 export function updatePageMeta(page, params = {}) {
   let title = 'PALLUVO | Luxury Indian Sarees & Fashion — Every drape, a little magic';
   let description = 'Discover pure Banarasi, Kanjivaram, Chanderi, and designer silk sarees handwoven for weddings, festivals, and unforgettable occasions.';
   let url = `${BASE_URL}/`;
   let image = DEFAULT_IMAGE;
   let imageAlt = 'PALLUVO Luxury Indian Handloom Sarees Collection';
+
+  if (params.image || params.primary_image) {
+    image = toAbsoluteUrl(params.image || params.primary_image);
+  }
 
   if (page === 'shop') {
     const categoryName = params.category ? formatCategoryTitle(params.category) : null;
@@ -45,14 +58,21 @@ export function updatePageMeta(page, params = {}) {
     url = params.category
       ? `${BASE_URL}/sarees?category=${encodeURIComponent(params.category)}`
       : `${BASE_URL}/sarees`;
-  } else if (page === 'product' && params.slug) {
-    const formattedName = params.slug
+  } else if (page === 'product' && (params.slug || params.product)) {
+    const rawSlug = params.slug || params.product?.slug || '';
+    const formattedName = (params.name || params.product?.name || rawSlug)
       .split('-')
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(' ');
     title = `${formattedName} | PALLUVO`;
-    description = `Shop authentic ${formattedName}. Handcrafted by master artisans with signature detailing and insured delivery.`;
-    url = `${BASE_URL}/sarees/${params.slug}`;
+    description = params.description || params.product?.short_desc || params.product?.tagline || `Shop authentic ${formattedName}. Handcrafted by master artisans with signature detailing and insured delivery.`;
+    url = `${BASE_URL}/sarees/${rawSlug}`;
+
+    const productImage = params.image || params.primary_image || params.product?.primary_image || (params.product?.images && params.product.images[0]);
+    if (productImage) {
+      image = toAbsoluteUrl(productImage);
+    }
+    imageAlt = `${formattedName} - PALLUVO Luxury Handcrafted Saree`;
   } else if (page === 'cart') {
     title = 'Shopping Bag | PALLUVO';
     description = 'Review your curated luxury saree selections in your PALLUVO bag.';

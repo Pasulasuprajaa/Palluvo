@@ -145,7 +145,11 @@ export default function SearchModal({ onNavigate }) {
   const handleSelectProduct = (product) => {
     saveRecentSearch(product.name);
     setIsSearchOpen(false);
-    onNavigate('product', { slug: product.slug });
+    onNavigate('product', {
+      slug: product.slug,
+      image: product.primary_image || (product.images && product.images[0]),
+      name: product.name
+    });
   };
 
   const handleSearchSubmit = (e) => {
