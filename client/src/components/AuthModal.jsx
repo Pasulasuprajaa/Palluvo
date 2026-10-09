@@ -196,7 +196,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => handleQuickLogin('priya@example.com', 'password123')}
+                onClick={() => handleQuickLogin('priya@example.com', 'Pal_User_Dev_2026!')}
                 className="px-2 py-1.5 bg-[#F4EFEB] hover:bg-[#EAE2D7] text-[#1F1A1C] rounded-lg text-xs font-medium transition text-left"
               >
                 <div className="font-bold text-[#5B1425]">Customer Demo</div>
@@ -205,7 +205,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
 
               <button
                 type="button"
-                onClick={() => handleQuickLogin('admin@palluvo.com', 'admin123')}
+                onClick={() => handleQuickLogin('admin@palluvo.com', 'Pal_Admin_Dev_2026!')}
                 className="px-2 py-1.5 bg-[#5B1425]/10 hover:bg-[#5B1425]/20 text-[#5B1425] rounded-lg text-xs font-medium transition text-left"
               >
                 <div className="font-bold">Admin Demo ⚙️</div>

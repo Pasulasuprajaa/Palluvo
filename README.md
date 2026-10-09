@@ -89,10 +89,10 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 - **Customer Demo Account**:
   - Email: `priya@example.com`
-  - Password: `password123`
+  - Password: `Pal_User_Dev_2026!`
 - **Admin Demo Console**:
   - Email: `admin@palluvo.com`
-  - Password: `admin123`
+  - Password: `Pal_Admin_Dev_2026!`
   - Route: `/admin`
 
 ---

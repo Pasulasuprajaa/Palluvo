@@ -38,8 +38,8 @@ function seedDatabase(options = {}) {
 
   // 1. Seed Users (Demo accounts strictly confined to local development)
   if (allowDemoAccounts) {
-    const passwordHashAdmin = bcrypt.hashSync('admin123', 10);
-    const passwordHashUser = bcrypt.hashSync('password123', 10);
+    const passwordHashAdmin = bcrypt.hashSync('Pal_Admin_Dev_2026!', 10);
+    const passwordHashUser = bcrypt.hashSync('Pal_User_Dev_2026!', 10);
 
     const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@palluvo.com');
     if (!existingAdmin) {

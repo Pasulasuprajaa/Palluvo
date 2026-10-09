@@ -103,7 +103,11 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`✨ PALLUVO Luxury E-Commerce Backend running on port ${PORT}`);
-});
+// Start Server when run directly
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`✨ PALLUVO Luxury E-Commerce Backend running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
