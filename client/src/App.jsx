@@ -12,6 +12,8 @@ import CartDrawer from './components/CartDrawer';
 import QuickViewModal from './components/QuickViewModal';
 import AuthModal from './components/AuthModal';
 import CompareDrawer from './components/CompareDrawer';
+import RouteErrorBoundary from './components/RouteErrorBoundary';
+import { updatePageMeta } from './utils/seo';
 
 import HomePage from './pages/HomePage';
 const ShopPage = lazy(() => import('./pages/ShopPage'));
@@ -139,6 +141,11 @@ function AppContent() {
     window.history.pushState({}, '', urlPath);
   };
 
+  // Sync SEO title, description, OG, Twitter, and canonical metadata with current route
+  useEffect(() => {
+    updatePageMeta(currentPage, pageParams);
+  }, [currentPage, pageParams]);
+
   const handleOpenAuth = (callback = null) => {
     setAuthSuccessCallback(() => callback);
     setIsAuthModalOpen(true);
@@ -171,66 +178,71 @@ function AppContent() {
 
       {/* Main Dynamic View */}
       <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
-        <Suspense fallback={<PageLoader />}>
-          {currentPage === 'home' && (
-            <HomePage onNavigate={navigate} />
-          )}
+        <RouteErrorBoundary
+          resetKey={`${currentPage}-${JSON.stringify(pageParams)}`}
+          onNavigate={navigate}
+        >
+          <Suspense fallback={<PageLoader />}>
+            {currentPage === 'home' && (
+              <HomePage onNavigate={navigate} />
+            )}
 
-          {currentPage === 'shop' && (
-            <ShopPage onNavigate={navigate} initialFilters={pageParams} key={JSON.stringify(pageParams)} />
-          )}
+            {currentPage === 'shop' && (
+              <ShopPage onNavigate={navigate} initialFilters={pageParams} key={JSON.stringify(pageParams)} />
+            )}
 
-          {currentPage === 'product' && (
-            <ProductDetailPage
-              slug={pageParams.slug}
-              onNavigate={navigate}
-              onOpenAuth={handleOpenAuth}
-            />
-          )}
+            {currentPage === 'product' && (
+              <ProductDetailPage
+                slug={pageParams.slug}
+                onNavigate={navigate}
+                onOpenAuth={handleOpenAuth}
+              />
+            )}
 
-          {currentPage === 'cart' && (
-            <CartPage onNavigate={navigate} onOpenAuth={handleOpenAuth} />
-          )}
+            {currentPage === 'cart' && (
+              <CartPage onNavigate={navigate} onOpenAuth={handleOpenAuth} />
+            )}
 
-          {currentPage === 'checkout' && (
-            <CheckoutPage onNavigate={navigate} />
-          )}
+            {currentPage === 'checkout' && (
+              <CheckoutPage onNavigate={navigate} />
+            )}
 
-          {currentPage === 'order-success' && (
-            <OrderSuccessPage order={pageParams.order} onNavigate={navigate} />
-          )}
+            {currentPage === 'order-success' && (
+              <OrderSuccessPage order={pageParams.order} onNavigate={navigate} />
+            )}
 
-          {currentPage === 'track-order' && (
-            <OrderTrackingPage
-              trackingId={pageParams.trackingId}
-              onNavigate={navigate}
-            />
-          )}
+            {currentPage === 'track-order' && (
+              <OrderTrackingPage
+                trackingId={pageParams.trackingId}
+                onNavigate={navigate}
+              />
+            )}
 
-          {currentPage === 'account' && (
-            <AccountPage onNavigate={navigate} />
-          )}
+            {currentPage === 'account' && (
+              <AccountPage onNavigate={navigate} />
+            )}
 
-          {currentPage === 'wishlist' && (
-            <WishlistPage onNavigate={navigate} />
-          )}
+            {currentPage === 'wishlist' && (
+              <WishlistPage onNavigate={navigate} />
+            )}
 
-          {currentPage === 'offers' && (
-            <OffersPage onNavigate={navigate} />
-          )}
+            {currentPage === 'offers' && (
+              <OffersPage onNavigate={navigate} />
+            )}
 
-          {currentPage === 'admin' && (
-            <AdminPage onNavigate={navigate} />
-          )}
+            {currentPage === 'admin' && (
+              <AdminPage onNavigate={navigate} />
+            )}
 
-          {currentPage === 'about' && (
-            <AboutPage initialTab={pageParams.tab || 'heritage'} onNavigate={navigate} />
-          )}
+            {currentPage === 'about' && (
+              <AboutPage initialTab={pageParams.tab || 'heritage'} onNavigate={navigate} />
+            )}
 
-          {currentPage === 'policy' && (
-            <PolicyPage initialTab={pageParams.tab || 'privacy'} onNavigate={navigate} />
-          )}
-        </Suspense>
+            {currentPage === 'policy' && (
+              <PolicyPage initialTab={pageParams.tab || 'privacy'} onNavigate={navigate} />
+            )}
+          </Suspense>
+        </RouteErrorBoundary>
       </main>
 
       {/* Luxury Footer */}

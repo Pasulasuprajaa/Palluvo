@@ -56,6 +56,41 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Serve client build static assets if present
+const fs = require('fs');
+const { getMetaForRoute, injectMetaTags } = require('./services/seoRenderer');
+const clientDist = path.join(__dirname, '..', 'client', 'dist');
+const clientIndex = path.join(clientDist, 'index.html');
+const devIndex = path.join(__dirname, '..', 'client', 'index.html');
+
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist, { index: false }));
+}
+
+// Serve dynamic SEO metadata for page routes and social crawlers
+app.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    return next();
+  }
+  if (req.path.startsWith('/api') || req.path.startsWith('/public')) {
+    return next();
+  }
+
+  const htmlPath = fs.existsSync(clientIndex) ? clientIndex : (fs.existsSync(devIndex) ? devIndex : null);
+  if (!htmlPath) return next();
+
+  try {
+    const rawHtml = fs.readFileSync(htmlPath, 'utf8');
+    const meta = getMetaForRoute(req.path, req.query);
+    const finalHtml = injectMetaTags(rawHtml, meta);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(finalHtml);
+  } catch (err) {
+    console.error('HTML SEO injection error:', err);
+    return next();
+  }
+});
+
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('Server error:', err);

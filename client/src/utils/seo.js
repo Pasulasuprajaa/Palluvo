@@ -1,0 +1,135 @@
+const BASE_URL = 'https://palluvo.com';
+const DEFAULT_IMAGE = `${BASE_URL}/images/occasions/wedding_collection.jpg`;
+
+function setMetaTag(attribute, value, content) {
+  let element = document.querySelector(`meta[${attribute}="${value}"]`);
+  if (!element) {
+    element = document.createElement('meta');
+    element.setAttribute(attribute, value);
+    document.head.appendChild(element);
+  }
+  element.setAttribute('content', content);
+}
+
+function setCanonicalUrl(url) {
+  let link = document.querySelector('link[rel="canonical"]');
+  if (!link) {
+    link = document.createElement('link');
+    link.setAttribute('rel', 'canonical');
+    document.head.appendChild(link);
+  }
+  link.setAttribute('href', url);
+}
+
+function formatCategoryTitle(slug) {
+  if (!slug) return 'Luxury Saree Collection';
+  return slug
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+export function updatePageMeta(page, params = {}) {
+  let title = 'PALLUVO | Luxury Indian Sarees & Fashion — Every drape, a little magic';
+  let description = 'Discover pure Banarasi, Kanjivaram, Chanderi, and designer silk sarees handwoven for weddings, festivals, and unforgettable occasions.';
+  let url = `${BASE_URL}/`;
+  let image = DEFAULT_IMAGE;
+  let imageAlt = 'PALLUVO Luxury Indian Handloom Sarees Collection';
+
+  if (page === 'shop') {
+    const categoryName = params.category ? formatCategoryTitle(params.category) : null;
+    title = categoryName
+      ? `${categoryName} | PALLUVO Luxury Sarees`
+      : 'Explore Luxury Handloom Sarees | PALLUVO';
+    description = `Browse authentic handwoven Indian sarees${categoryName ? ` in our ${categoryName} edit` : ''}. Verified pure silks with insured nationwide delivery.`;
+    url = params.category
+      ? `${BASE_URL}/sarees?category=${encodeURIComponent(params.category)}`
+      : `${BASE_URL}/sarees`;
+  } else if (page === 'product' && params.slug) {
+    const formattedName = params.slug
+      .split('-')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+    title = `${formattedName} | PALLUVO`;
+    description = `Shop authentic ${formattedName}. Handcrafted by master artisans with pure zari and certified silk purity.`;
+    url = `${BASE_URL}/sarees/${params.slug}`;
+  } else if (page === 'cart') {
+    title = 'Shopping Bag | PALLUVO';
+    description = 'Review your curated luxury saree selections in your PALLUVO bag.';
+    url = `${BASE_URL}/cart`;
+  } else if (page === 'checkout') {
+    title = 'Secure Checkout | PALLUVO';
+    description = 'Complete your order with secure payments and express insured shipping.';
+    url = `${BASE_URL}/checkout`;
+  } else if (page === 'order-success') {
+    title = 'Order Confirmed | PALLUVO';
+    description = 'Thank you for your order with PALLUVO. Your heirloom drape is being prepared.';
+    url = `${BASE_URL}/order-success`;
+  } else if (page === 'track-order') {
+    title = 'Track Your Order | PALLUVO';
+    description = 'Live milestone tracking for your handcrafted PALLUVO saree shipment.';
+    url = `${BASE_URL}/track-order`;
+  } else if (page === 'account') {
+    title = 'Customer Account | PALLUVO';
+    description = 'Manage your PALLUVO profile, order history, and saved addresses.';
+    url = `${BASE_URL}/account`;
+  } else if (page === 'wishlist') {
+    title = 'My Wishlist | PALLUVO';
+    description = 'Your curated wishlist of luxury handloom sarees and festive drapes.';
+    url = `${BASE_URL}/wishlist`;
+  } else if (page === 'offers') {
+    title = 'Exclusive Festive Offers & Promos | PALLUVO';
+    description = 'Discover special festive curations and exclusive savings on heirloom sarees.';
+    url = `${BASE_URL}/offers`;
+  } else if (page === 'admin') {
+    title = 'Admin Management Console | PALLUVO';
+    description = 'PALLUVO administration portal for orders, inventory, and fulfillment.';
+    url = `${BASE_URL}/admin`;
+  } else if (page === 'about') {
+    const tabName = params.tab === 'artisans'
+      ? 'Artisans & Master Weavers'
+      : params.tab === 'care'
+      ? 'Saree Care Guide'
+      : params.tab === 'sustainability'
+      ? 'Sustainable Silk Pledge'
+      : 'Handloom Heritage';
+    title = `${tabName} | PALLUVO`;
+    description = 'Learn about PALLUVO’s heritage weaving clusters across Varanasi, Kanchipuram, and Chanderi.';
+    url = `${BASE_URL}/about${params.tab ? `?tab=${params.tab}` : ''}`;
+  } else if (page === 'policy') {
+    const tabName = params.tab === 'shipping'
+      ? 'Shipping & Delivery Policy'
+      : params.tab === 'refund'
+      ? 'Returns & Exchanges Policy'
+      : params.tab === 'terms'
+      ? 'Terms of Service'
+      : 'Privacy Policy';
+    title = `${tabName} | PALLUVO`;
+    description = 'Learn about PALLUVO’s transparent policies, 7-day returns, and insured delivery.';
+    url = `${BASE_URL}/${params.tab || 'privacy'}`;
+  }
+
+  // Update browser document title
+  document.title = title;
+
+  // Primary meta
+  setMetaTag('name', 'title', title);
+  setMetaTag('name', 'description', description);
+
+  // Open Graph / Facebook
+  setMetaTag('property', 'og:title', title);
+  setMetaTag('property', 'og:description', description);
+  setMetaTag('property', 'og:url', url);
+  setMetaTag('property', 'og:image', image);
+  setMetaTag('property', 'og:image:alt', imageAlt);
+
+  // Twitter
+  setMetaTag('name', 'twitter:title', title);
+  setMetaTag('name', 'twitter:description', description);
+  setMetaTag('name', 'twitter:url', url);
+  setMetaTag('name', 'twitter:image', image);
+  setMetaTag('name', 'twitter:image:alt', imageAlt);
+
+  // Canonical Link
+  setCanonicalUrl(url);
+}

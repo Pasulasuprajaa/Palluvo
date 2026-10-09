@@ -177,7 +177,7 @@ export default function HomePage({ onNavigate }) {
               src="/images/occasions/wedding_edit.jpg"
               alt="Indian bride adorned in an ornate crimson and gold handcrafted silk saree"
               loading="eager"
-              fetchpriority="high"
+              fetchPriority="high"
               decoding="async"
               className="w-full h-full object-cover object-[center_top] sm:object-[center_8%] md:object-[right_center] lg:object-right opacity-100 scale-100 transition-transform duration-1000 ease-out"
             />
