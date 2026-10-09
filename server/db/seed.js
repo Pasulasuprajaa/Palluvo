@@ -279,6 +279,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 0,
       is_best_seller: 1,
+      silk_mark_certified: 1,
       color_name: 'Royal Crimson Wine',
       color_hex: '#5B1425',
       images: [
@@ -312,6 +313,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 1,
       color_name: 'Sunlit Ochre Gold',
       color_hex: '#C5A059',
       images: [
@@ -344,6 +346,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 1,
       is_best_seller: 1,
+      silk_mark_certified: 1,
       color_name: 'Peacock Teal Blue',
       color_hex: '#007A87',
       images: [
@@ -376,6 +379,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 0,
       color_name: 'Blush Rose Gold',
       color_hex: '#E0B5B2',
       images: [
@@ -408,6 +412,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 1,
       color_name: 'Royal Imperial Purple',
       color_hex: '#5E227F',
       images: [
@@ -440,6 +445,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 0,
       is_best_seller: 1,
+      silk_mark_certified: 0,
       color_name: 'Midnight Onyx Black',
       color_hex: '#161413',
       images: [
@@ -472,6 +478,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 0,
       is_best_seller: 0,
+      silk_mark_certified: 1,
       color_name: 'Deep Sindoor Crimson',
       color_hex: '#800C1F',
       images: [
@@ -502,6 +509,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 1,
       is_best_seller: 1,
+      silk_mark_certified: 0,
       color_name: 'Indigo & Sage',
       color_hex: '#2B4263',
       images: [
@@ -534,6 +542,7 @@ function seedDatabase(options = {}) {
       is_featured: 0,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 0,
       color_name: 'Ivory Champagne',
       color_hex: '#F0E6D2',
       images: [
@@ -565,6 +574,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 0,
       color_name: 'Marigold Sunshine Yellow',
       color_hex: '#F2A900',
       images: [
@@ -596,6 +606,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 1,
       color_name: 'Royal Mustard Gold',
       color_hex: '#C5A059',
       images: [
@@ -627,6 +638,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 1,
       color_name: 'Shimmer Silver Champagne',
       color_hex: '#D9D2C7',
       images: [
@@ -658,6 +670,7 @@ function seedDatabase(options = {}) {
       is_featured: 0,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 0,
       color_name: 'Off-White Dhakai Gold',
       color_hex: '#FAF6EE',
       images: [
@@ -689,6 +702,7 @@ function seedDatabase(options = {}) {
       is_featured: 0,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 0,
       color_name: 'Wine to Rose Ombre',
       color_hex: '#7A1C30',
       images: [
@@ -720,6 +734,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 1,
       color_name: '24K Royal Gilded Gold',
       color_hex: '#C5A059',
       images: [
@@ -750,6 +765,7 @@ function seedDatabase(options = {}) {
       is_featured: 0,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 1,
       color_name: 'Ruby Rose Magenta',
       color_hex: '#981855',
       images: [
@@ -781,6 +797,7 @@ function seedDatabase(options = {}) {
       is_featured: 0,
       is_new_arrival: 1,
       is_best_seller: 1,
+      silk_mark_certified: 1,
       color_name: 'Emerald Bottle Green',
       color_hex: '#0E4D34',
       images: [
@@ -812,6 +829,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 0,
       is_best_seller: 1,
+      silk_mark_certified: 1,
       color_name: 'Turmeric Saffron Gold',
       color_hex: '#E09F3E',
       images: [
@@ -843,6 +861,7 @@ function seedDatabase(options = {}) {
       is_featured: 0,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 0,
       color_name: 'Pearl White Flora',
       color_hex: '#FAF9F6',
       images: [
@@ -874,6 +893,7 @@ function seedDatabase(options = {}) {
       is_featured: 0,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 0,
       color_name: 'Natural Sand Beige',
       color_hex: '#D8C3A5',
       images: [
@@ -905,6 +925,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 1,
       is_best_seller: 1,
+      silk_mark_certified: 0,
       color_name: 'Metallic Bronze Gold',
       color_hex: '#8C6239',
       images: [
@@ -936,6 +957,7 @@ function seedDatabase(options = {}) {
       is_featured: 0,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 0,
       color_name: 'Crimson Wine Red',
       color_hex: '#5B1425',
       images: [
@@ -967,6 +989,7 @@ function seedDatabase(options = {}) {
       is_featured: 1,
       is_new_arrival: 1,
       is_best_seller: 0,
+      silk_mark_certified: 0,
       color_name: 'Imperial Maroon Velvet',
       color_hex: '#4A0E17',
       images: [
@@ -983,19 +1006,7 @@ function seedDatabase(options = {}) {
   const productMap = {};
   for (const prod of productsData) {
     const categoryId = categoryMap[prod.category_slug] || 1;
-    const isSilkMark = prod.silk_mark_certified !== undefined
-      ? prod.silk_mark_certified
-      : (
-          prod.fabric &&
-          (prod.fabric.toLowerCase().includes('pure') || prod.fabric.toLowerCase().includes('katan silk') || prod.fabric.toLowerCase().includes('kanjivaram') || prod.fabric.toLowerCase().includes('paithani') || prod.fabric.toLowerCase().includes('chanderi')) &&
-          !prod.fabric.toLowerCase().includes('velvet') &&
-          !prod.fabric.toLowerCase().includes('georgette') &&
-          !prod.fabric.toLowerCase().includes('cotton') &&
-          !prod.fabric.toLowerCase().includes('linen') &&
-          !prod.fabric.toLowerCase().includes('lurex') &&
-          !prod.fabric.toLowerCase().includes('viscose') &&
-          !prod.fabric.toLowerCase().includes('polyester')
-        ) ? 1 : 0;
+    const isSilkMark = Number(prod.silk_mark_certified) === 1 ? 1 : 0;
 
     insertProduct.run(
       prod.name,

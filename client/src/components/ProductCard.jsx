@@ -50,19 +50,7 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
   };
 
   const isSilkMarkCertified = Boolean(
-    product.silk_mark_certified === 1 ||
-    product.silk_mark_certified === true ||
-    (
-      product.fabric &&
-      (product.fabric.toLowerCase().includes('pure') || product.fabric.toLowerCase().includes('katan silk') || product.fabric.toLowerCase().includes('kanjivaram') || product.fabric.toLowerCase().includes('paithani') || product.fabric.toLowerCase().includes('chanderi')) &&
-      !product.fabric.toLowerCase().includes('velvet') &&
-      !product.fabric.toLowerCase().includes('georgette') &&
-      !product.fabric.toLowerCase().includes('cotton') &&
-      !product.fabric.toLowerCase().includes('linen') &&
-      !product.fabric.toLowerCase().includes('lurex') &&
-      !product.fabric.toLowerCase().includes('viscose') &&
-      !product.fabric.toLowerCase().includes('polyester')
-    )
+    product && (Number(product.silk_mark_certified) === 1 || product.silk_mark_certified === true)
   );
 
   return (

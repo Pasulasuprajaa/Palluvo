@@ -240,19 +240,7 @@ export default function CompareDrawer({ onNavigate }) {
                     </td>
                     {compareItems.map((item) => {
                       const isItemSilkMark = Boolean(
-                        item.silk_mark_certified === 1 ||
-                        item.silk_mark_certified === true ||
-                        (
-                          item.fabric &&
-                          (item.fabric.toLowerCase().includes('pure') || item.fabric.toLowerCase().includes('katan silk') || item.fabric.toLowerCase().includes('kanjivaram') || item.fabric.toLowerCase().includes('paithani') || item.fabric.toLowerCase().includes('chanderi')) &&
-                          !item.fabric.toLowerCase().includes('velvet') &&
-                          !item.fabric.toLowerCase().includes('georgette') &&
-                          !item.fabric.toLowerCase().includes('cotton') &&
-                          !item.fabric.toLowerCase().includes('linen') &&
-                          !item.fabric.toLowerCase().includes('lurex') &&
-                          !item.fabric.toLowerCase().includes('viscose') &&
-                          !item.fabric.toLowerCase().includes('polyester')
-                        )
+                        item && (Number(item.silk_mark_certified) === 1 || item.silk_mark_certified === true)
                       );
                       return (
                         <td key={item.id} className="p-3 text-center">

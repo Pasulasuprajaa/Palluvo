@@ -183,21 +183,7 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   const totalReviewsCount = reviews.length || product.review_count || 0;
 
   const isSilkMarkCertified = Boolean(
-    product && (
-      product.silk_mark_certified === 1 ||
-      product.silk_mark_certified === true ||
-      (
-        product.fabric &&
-        (product.fabric.toLowerCase().includes('pure') || product.fabric.toLowerCase().includes('katan silk') || product.fabric.toLowerCase().includes('kanjivaram') || product.fabric.toLowerCase().includes('paithani') || product.fabric.toLowerCase().includes('chanderi')) &&
-        !product.fabric.toLowerCase().includes('velvet') &&
-        !product.fabric.toLowerCase().includes('georgette') &&
-        !product.fabric.toLowerCase().includes('cotton') &&
-        !product.fabric.toLowerCase().includes('linen') &&
-        !product.fabric.toLowerCase().includes('lurex') &&
-        !product.fabric.toLowerCase().includes('viscose') &&
-        !product.fabric.toLowerCase().includes('polyester')
-      )
-    )
+    product && (Number(product.silk_mark_certified) === 1 || product.silk_mark_certified === true)
   );
 
   return (
@@ -661,15 +647,19 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
                 <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8E1D5] space-y-1.5">
-                  <h4 className="font-bold text-[#5B1425] text-xs">✨ Handloom Weave Technique</h4>
+                  <h4 className="font-bold text-[#5B1425] text-xs">✨ Artisanal Craft & Technique</h4>
                   <p className="text-xs text-gray-600">
-                    Woven on traditional pit-looms by national award-winning master artisans in Varanasi / Kanchipuram using electroplated real zari and mulberry silk warp.
+                    {isSilkMarkCertified
+                      ? 'Woven on traditional pit-looms by master handloom weavers using electroplated real zari and pure mulberry silk warp.'
+                      : 'Crafted with precision tailoring and heritage detailing by master artisans using premium specialized fabrics.'}
                   </p>
                 </div>
                 <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E8E1D5] space-y-1.5">
                   <h4 className="font-bold text-[#5B1425] text-xs">📦 Unboxing & Gifting Experience</h4>
                   <p className="text-xs text-gray-600">
-                    Arrives nestled in signature velvet-lined PALLUVO gold foil keepsake box, enclosed with an authentic Silk Mark Certificate of India and pure cotton storage pouch.
+                    {isSilkMarkCertified
+                      ? 'Arrives nestled in signature velvet-lined PALLUVO gold foil keepsake box, enclosed with an authentic Silk Mark Certificate of India and pure cotton storage pouch.'
+                      : 'Arrives nestled in signature velvet-lined PALLUVO gold foil keepsake box, enclosed with an artisan craftsmanship quality certificate and pure cotton storage pouch.'}
                   </p>
                 </div>
               </div>
