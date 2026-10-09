@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
@@ -14,18 +14,31 @@ import AuthModal from './components/AuthModal';
 import CompareDrawer from './components/CompareDrawer';
 
 import HomePage from './pages/HomePage';
-import ShopPage from './pages/ShopPage';
-import ProductDetailPage from './pages/ProductDetailPage';
-import CartPage from './pages/CartPage';
-import CheckoutPage from './pages/CheckoutPage';
-import OrderSuccessPage from './pages/OrderSuccessPage';
-import OrderTrackingPage from './pages/OrderTrackingPage';
-import AccountPage from './pages/AccountPage';
-import WishlistPage from './pages/WishlistPage';
-import OffersPage from './pages/OffersPage';
-import AdminPage from './pages/AdminPage';
-import PolicyPage from './pages/PolicyPage';
-import AboutPage from './pages/AboutPage';
+const ShopPage = lazy(() => import('./pages/ShopPage'));
+const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'));
+const CartPage = lazy(() => import('./pages/CartPage'));
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage'));
+const OrderSuccessPage = lazy(() => import('./pages/OrderSuccessPage'));
+const OrderTrackingPage = lazy(() => import('./pages/OrderTrackingPage'));
+const AccountPage = lazy(() => import('./pages/AccountPage'));
+const WishlistPage = lazy(() => import('./pages/WishlistPage'));
+const OffersPage = lazy(() => import('./pages/OffersPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const PolicyPage = lazy(() => import('./pages/PolicyPage'));
+const AboutPage = lazy(() => import('./pages/AboutPage'));
+
+function PageLoader() {
+  return (
+    <div className="min-h-[60vh] flex flex-col items-center justify-center bg-[#FAF7F2] py-20 animate-fade-in" role="status" aria-label="Loading page">
+      <div className="w-10 h-10 border-2 border-[#C5A059]/30 border-t-[#5B1425] rounded-full animate-spin mb-4" />
+      <div className="text-xs uppercase tracking-widest text-[#5B1425] font-semibold flex items-center gap-1.5 font-serif">
+        <span className="text-[#C5A059]" aria-hidden="true">✦</span>
+        <span>Loading PALLUVO</span>
+        <span className="text-[#C5A059]" aria-hidden="true">✦</span>
+      </div>
+    </div>
+  );
+}
 
 function getRouteFromPath(pathname = window.location.pathname, search = window.location.search) {
   const path = pathname.toLowerCase();
@@ -158,64 +171,66 @@ function AppContent() {
 
       {/* Main Dynamic View */}
       <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
-        {currentPage === 'home' && (
-          <HomePage onNavigate={navigate} />
-        )}
+        <Suspense fallback={<PageLoader />}>
+          {currentPage === 'home' && (
+            <HomePage onNavigate={navigate} />
+          )}
 
-        {currentPage === 'shop' && (
-          <ShopPage onNavigate={navigate} initialFilters={pageParams} key={JSON.stringify(pageParams)} />
-        )}
+          {currentPage === 'shop' && (
+            <ShopPage onNavigate={navigate} initialFilters={pageParams} key={JSON.stringify(pageParams)} />
+          )}
 
-        {currentPage === 'product' && (
-          <ProductDetailPage
-            slug={pageParams.slug}
-            onNavigate={navigate}
-            onOpenAuth={handleOpenAuth}
-          />
-        )}
+          {currentPage === 'product' && (
+            <ProductDetailPage
+              slug={pageParams.slug}
+              onNavigate={navigate}
+              onOpenAuth={handleOpenAuth}
+            />
+          )}
 
-        {currentPage === 'cart' && (
-          <CartPage onNavigate={navigate} onOpenAuth={handleOpenAuth} />
-        )}
+          {currentPage === 'cart' && (
+            <CartPage onNavigate={navigate} onOpenAuth={handleOpenAuth} />
+          )}
 
-        {currentPage === 'checkout' && (
-          <CheckoutPage onNavigate={navigate} />
-        )}
+          {currentPage === 'checkout' && (
+            <CheckoutPage onNavigate={navigate} />
+          )}
 
-        {currentPage === 'order-success' && (
-          <OrderSuccessPage order={pageParams.order} onNavigate={navigate} />
-        )}
+          {currentPage === 'order-success' && (
+            <OrderSuccessPage order={pageParams.order} onNavigate={navigate} />
+          )}
 
-        {currentPage === 'track-order' && (
-          <OrderTrackingPage
-            trackingId={pageParams.trackingId}
-            onNavigate={navigate}
-          />
-        )}
+          {currentPage === 'track-order' && (
+            <OrderTrackingPage
+              trackingId={pageParams.trackingId}
+              onNavigate={navigate}
+            />
+          )}
 
-        {currentPage === 'account' && (
-          <AccountPage onNavigate={navigate} />
-        )}
+          {currentPage === 'account' && (
+            <AccountPage onNavigate={navigate} />
+          )}
 
-        {currentPage === 'wishlist' && (
-          <WishlistPage onNavigate={navigate} />
-        )}
+          {currentPage === 'wishlist' && (
+            <WishlistPage onNavigate={navigate} />
+          )}
 
-        {currentPage === 'offers' && (
-          <OffersPage onNavigate={navigate} />
-        )}
+          {currentPage === 'offers' && (
+            <OffersPage onNavigate={navigate} />
+          )}
 
-        {currentPage === 'admin' && (
-          <AdminPage onNavigate={navigate} />
-        )}
+          {currentPage === 'admin' && (
+            <AdminPage onNavigate={navigate} />
+          )}
 
-        {currentPage === 'about' && (
-          <AboutPage initialTab={pageParams.tab || 'heritage'} onNavigate={navigate} />
-        )}
+          {currentPage === 'about' && (
+            <AboutPage initialTab={pageParams.tab || 'heritage'} onNavigate={navigate} />
+          )}
 
-        {currentPage === 'policy' && (
-          <PolicyPage initialTab={pageParams.tab || 'privacy'} onNavigate={navigate} />
-        )}
+          {currentPage === 'policy' && (
+            <PolicyPage initialTab={pageParams.tab || 'privacy'} onNavigate={navigate} />
+          )}
+        </Suspense>
       </main>
 
       {/* Luxury Footer */}
