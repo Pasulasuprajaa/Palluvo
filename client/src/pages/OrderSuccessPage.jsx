@@ -1,8 +1,33 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { CheckCircle, Sparkles, Truck, Package, ArrowRight, Printer, ShoppingBag } from 'lucide-react';
 
-export default function OrderSuccessPage({ order, onNavigate }) {
+export default function OrderSuccessPage({ order: initialOrder, orderId, onNavigate }) {
+  const [order, setOrder] = useState(initialOrder || null);
+  const [loading, setLoading] = useState(!initialOrder && !!orderId);
+
+  useEffect(() => {
+    if (initialOrder) {
+      setOrder(initialOrder);
+    } else if (orderId) {
+      async function fetchOrderDetails() {
+        try {
+          setLoading(true);
+          const res = await fetch(`/api/orders/track/${encodeURIComponent(orderId)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.order) setOrder(data.order);
+          }
+        } catch (err) {
+          console.error('Order fetch error on success page:', err);
+        } finally {
+          setLoading(false);
+        }
+      }
+      fetchOrderDetails();
+    }
+  }, [initialOrder, orderId]);
+
   useEffect(() => {
     // Launch celebratory luxury gold & burgundy confetti
     try {
@@ -34,16 +59,36 @@ export default function OrderSuccessPage({ order, onNavigate }) {
     }
   }, []);
 
+  if (loading) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center space-y-4 animate-fade-in">
+        <div className="w-10 h-10 border-2 border-[#C5A059]/30 border-t-[#5B1425] rounded-full animate-spin mx-auto mb-4" />
+        <h2 className="font-serif text-xl font-bold text-[#5B1425]">Retrieving Order Confirmation...</h2>
+      </div>
+    );
+  }
+
   if (!order) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-20 text-center space-y-4">
         <h2 className="font-serif text-2xl font-bold">No Recent Order Found</h2>
-        <button
-          onClick={() => onNavigate('shop')}
-          className="px-6 py-2.5 bg-[#5B1425] text-white rounded-xl text-xs font-bold uppercase"
-        >
-          Explore Sarees
-        </button>
+        <p className="text-xs text-[#6E6467] max-w-md mx-auto">
+          We could not locate an active order session. You can track your existing orders using your tracking number or order ID.
+        </p>
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            onClick={() => onNavigate('shop')}
+            className="px-6 py-2.5 bg-[#5B1425] text-white rounded-xl text-xs font-bold uppercase cursor-pointer"
+          >
+            Explore Sarees
+          </button>
+          <button
+            onClick={() => onNavigate('track-order')}
+            className="px-6 py-2.5 bg-white border border-[#EAE2D7] text-[#1F1A1C] rounded-xl text-xs font-bold uppercase cursor-pointer"
+          >
+            Track Order
+          </button>
+        </div>
       </div>
     );
   }

@@ -62,6 +62,9 @@ function getRouteFromPath(pathname = window.location.pathname, search = window.l
     return { page: 'cart', params: {} };
   } else if (path === '/checkout') {
     return { page: 'checkout', params: {} };
+  } else if (path === '/order-success') {
+    const orderId = searchParams.get('orderId') || searchParams.get('order_id') || searchParams.get('id') || '';
+    return { page: 'order-success', params: { orderId } };
   } else if (path === '/account') {
     return { page: 'account', params: {} };
   } else if (path === '/wishlist') {
@@ -131,6 +134,10 @@ function AppContent() {
     else if (page === 'product' && params.slug) urlPath = `/sarees/${params.slug}`;
     else if (page === 'cart') urlPath = '/cart';
     else if (page === 'checkout') urlPath = '/checkout';
+    else if (page === 'order-success') {
+      const orderId = params.order?.order_number || params.orderId || params.order_id || '';
+      urlPath = orderId ? `/order-success?orderId=${encodeURIComponent(orderId)}` : '/order-success';
+    }
     else if (page === 'account') urlPath = '/account';
     else if (page === 'wishlist') urlPath = '/wishlist';
     else if (page === 'offers') urlPath = '/offers';
@@ -210,7 +217,7 @@ function AppContent() {
             )}
 
             {currentPage === 'order-success' && (
-              <OrderSuccessPage order={pageParams.order} onNavigate={navigate} />
+              <OrderSuccessPage order={pageParams.order} orderId={pageParams.orderId} onNavigate={navigate} />
             )}
 
             {currentPage === 'track-order' && (

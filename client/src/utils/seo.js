@@ -105,14 +105,17 @@ export function updatePageMeta(page, params = {}) {
       ? 'Terms of Service'
       : 'Privacy Policy';
     title = `${tabName} | PALLUVO`;
+    description = 'Learn about PALLUVO’s transparent policies, 7-day returns, and insured delivery.';
+    url = `${BASE_URL}/${params.tab || 'privacy'}`;
   } else if (page === 'not-found' || page === '404') {
     title = 'Page Not Found | PALLUVO Luxury Sarees';
     description = 'The requested luxury drape, collection, or boutique page could not be found.';
     url = `${BASE_URL}/404`;
-    setMetaTag('name', 'robots', 'noindex, nofollow');
-  } else {
-    setMetaTag('name', 'robots', 'index, follow');
   }
+
+  // Set robots directive on every route update to reset properly when navigating away from 404
+  const isNoIndex = page === 'not-found' || page === '404' || page === 'admin';
+  setMetaTag('name', 'robots', isNoIndex ? 'noindex, nofollow' : 'index, follow');
 
   // Update browser document title
   document.title = title;
