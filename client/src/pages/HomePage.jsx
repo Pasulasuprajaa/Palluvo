@@ -149,8 +149,8 @@ export default function HomePage({ onNavigate }) {
               Authentic handloom sarees crafted in pure zari and raw silk by master artisans.
             </p>
 
-            {/* Action Buttons */}
-            <div className="mt-3 sm:mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:items-center sm:gap-3 w-full sm:w-auto">
+            {/* Action Button */}
+            <div className="mt-3 sm:mt-5 flex items-center w-full sm:w-auto">
               <a
                 href="/sarees"
                 onClick={(e) => {
@@ -158,22 +158,10 @@ export default function HomePage({ onNavigate }) {
                   e.preventDefault();
                   onNavigate('shop');
                 }}
-                className="px-3 sm:px-6 py-2 sm:py-3 min-h-[44px] bg-gradient-to-r from-[#5B1425] to-[#7E1E34] hover:from-[#7E1E34] hover:to-[#5B1425] text-[#FAF7F2] font-bold text-[11px] sm:text-xs uppercase tracking-wider rounded-xl transition-all duration-300 shadow-md flex items-center justify-center gap-1.5 border border-[#C5A059]/40 active:scale-95 cursor-pointer text-center"
+                className="px-5 sm:px-7 py-2.5 sm:py-3 min-h-[44px] bg-gradient-to-r from-[#5B1425] to-[#7E1E34] hover:from-[#7E1E34] hover:to-[#5B1425] text-[#FAF7F2] font-bold text-xs sm:text-sm uppercase tracking-wider rounded-xl transition-all duration-300 shadow-md hover:shadow-xl flex items-center justify-center gap-2 border border-[#C5A059]/40 active:scale-95 cursor-pointer text-center"
               >
                 <span>Explore Sarees</span>
-                <ArrowRight className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-              </a>
-
-              <a
-                href="/shop?occasion=Wedding"
-                onClick={(e) => {
-                  if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
-                  e.preventDefault();
-                  onNavigate('shop', { occasion: 'Wedding' });
-                }}
-                className="px-3 sm:px-6 py-2 sm:py-3 min-h-[44px] bg-white/10 hover:bg-white/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-[11px] sm:text-xs uppercase tracking-wider rounded-xl transition-all duration-300 border border-white/25 hover:border-[#C5A059] active:scale-95 flex items-center justify-center text-center cursor-pointer"
-              >
-                Bridal Edit
+                <ArrowRight className="w-4 h-4 text-[#C5A059] shrink-0" />
               </a>
             </div>
 
