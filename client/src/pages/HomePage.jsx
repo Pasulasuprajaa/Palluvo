@@ -438,40 +438,31 @@ export default function HomePage({ onNavigate }) {
         )}
       </section>
 
-      {/* 5. BRAND STORY BANNER */}
-      <section className="relative min-h-[480px] sm:min-h-[560px] flex items-center justify-center bg-[#FAF7F2] text-[#FAF7F2] py-12 sm:py-20 overflow-hidden">
-        {/* Clear, Light & Bright Saree Photography */}
-        <div className="absolute inset-0 z-0">
-          <img
-            src="/images/occasions/temple_heritage.jpg"
-            alt="Handcrafted luxury silk saree weave with gold zari heritage"
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover object-[center_30%] scale-100 opacity-100 brightness-105 transition-transform duration-700"
-          />
-          {/* Very Light Subtle Overlay so saree details are completely bright and visible */}
-          <div className="absolute inset-0 bg-black/20 pointer-events-none" />
-        </div>
+      {/* 5. EDITORIAL HERITAGE SHOWCASE BANNER */}
+      <section className="relative w-full overflow-hidden bg-[#FAF7F2] py-4 sm:py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="relative aspect-[4/5] sm:aspect-[21/9] w-full max-h-[560px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-lg group">
+            <img
+              src="/images/occasions/temple_heritage.jpg"
+              alt="Authentic handloom heritage sarees"
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover object-[center_28%] transition-transform duration-700 group-hover:scale-105"
+            />
+            {/* Subtle soft bottom vignette only */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C]/80 via-[#1F1A1C]/15 to-transparent pointer-events-none" />
 
-        {/* Brand Story Content Box */}
-        <div className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 w-full text-center">
-          <div className="bg-[#1F1A1C]/80 backdrop-blur-md p-6 sm:p-10 rounded-2xl sm:rounded-3xl border border-[#C5A059]/40 shadow-2xl space-y-4 sm:space-y-6">
-            <div className="inline-flex items-center gap-2 text-[#E0C07F] text-base sm:text-xl tracking-widest" aria-hidden="true">
-              <span>✦</span>
-              <span>✦</span>
-              <span>✦</span>
-            </div>
+            {/* Clean, Professional Editorial Bar */}
+            <div className="absolute inset-x-0 bottom-0 p-5 sm:p-8 md:p-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4 z-10">
+              <div>
+                <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-[#E0C07F] font-semibold mb-1">
+                  The Heritage Edit
+                </p>
+                <h2 className="font-serif text-xl sm:text-3xl text-[#FAF7F2] font-normal tracking-wide drop-shadow-sm">
+                  Pure Weaves. Timeless Grace.
+                </h2>
+              </div>
 
-            <h2 className="font-serif text-xl sm:text-3xl md:text-4xl font-bold leading-tight drop-shadow-md text-[#FAF7F2]">
-              “A saree is not merely six yards of silk; <br className="hidden sm:inline" />
-              <span className="italic font-normal text-[#E0C07F]">it is centuries of art, woven into memory.”</span>
-            </h2>
-
-            <p className="text-xs sm:text-sm text-[#FAF7F2]/90 leading-relaxed max-w-xl mx-auto font-sans drop-shadow-xs">
-              At PALLUVO, every saree is born on the handloom through weeks of dedicated craftsmanship. We work closely with master weavers across Varanasi, Kanchipuram, and Chanderi to bring you authentic weaves that celebrate modern Indian grace.
-            </p>
-
-            <div className="pt-2">
               <a
                 href="/shop?category=banarasi-sarees"
                 onClick={(e) => {
@@ -479,10 +470,10 @@ export default function HomePage({ onNavigate }) {
                   e.preventDefault();
                   onNavigate('shop', { category: 'banarasi-sarees' });
                 }}
-                className="inline-flex items-center justify-center gap-2 px-7 py-3 bg-gradient-to-r from-[#C5A059] to-[#E0C07F] hover:from-[#E0C07F] hover:to-[#C5A059] text-[#1F1A1C] font-bold text-xs uppercase tracking-widest rounded-xl transition shadow-xl focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none cursor-pointer text-center active:scale-95"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 bg-white/95 hover:bg-white text-[#1F1A1C] text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md hover:shadow-xl w-fit cursor-pointer active:scale-95 border border-white/40"
               >
-                <span>Explore Banarasi Sarees</span>
-                <ArrowRight className="w-4 h-4 text-[#1F1A1C]" />
+                <span>Explore Collection</span>
+                <ArrowRight className="w-3.5 h-3.5 text-[#5B1425]" />
               </a>
             </div>
           </div>
