@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
+const { requireDurableStorage } = require('../middleware/storageGuard');
 
 // GET /api/reviews/:productId
 router.get('/:productId', (req, res) => {
@@ -43,7 +44,7 @@ router.get('/:productId', (req, res) => {
 });
 
 // POST /api/reviews
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { product_id, rating, title, comment } = req.body;
 

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { requireDurableStorage } = require('../middleware/storageGuard');
 
 // Protect all admin routes
 router.use(authenticateToken, requireAdmin);
@@ -92,7 +93,7 @@ router.get('/products', (req, res) => {
 });
 
 // POST /api/admin/products (Create new saree product)
-router.post('/products', (req, res) => {
+router.post('/products', requireDurableStorage, (req, res) => {
   try {
     const {
       name,
@@ -193,7 +194,7 @@ router.post('/products', (req, res) => {
 });
 
 // PUT /api/admin/products/:id (Update saree)
-router.put('/products/:id', (req, res) => {
+router.put('/products/:id', requireDurableStorage, (req, res) => {
   try {
     const {
       name, tagline, description, short_desc, category_id, fabric, occasion, pattern,
@@ -266,7 +267,7 @@ router.put('/products/:id', (req, res) => {
 });
 
 // DELETE /api/admin/products/:id
-router.delete('/products/:id', (req, res) => {
+router.delete('/products/:id', requireDurableStorage, (req, res) => {
   try {
     db.prepare('DELETE FROM products WHERE id = ?').run(req.params.id);
     res.json({ message: 'Product deleted successfully.' });
@@ -305,7 +306,7 @@ router.get('/orders', (req, res) => {
 });
 
 // PUT /api/admin/orders/:id/status (Update order lifecycle status)
-router.put('/orders/:id/status', (req, res) => {
+router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
   try {
     const { status, tracking_number, courier_partner, estimated_delivery } = req.body;
 
@@ -355,7 +356,7 @@ router.get('/inventory', (req, res) => {
 });
 
 // PUT /api/admin/inventory/:id
-router.put('/inventory/:id', (req, res) => {
+router.put('/inventory/:id', requireDurableStorage, (req, res) => {
   try {
     const { stock_quantity } = req.body;
     if (stock_quantity === undefined || stock_quantity < 0) {
@@ -384,7 +385,7 @@ router.get('/coupons', (req, res) => {
 });
 
 // POST /api/admin/coupons
-router.post('/coupons', (req, res) => {
+router.post('/coupons', requireDurableStorage, (req, res) => {
   try {
     const { code, title, description, discount_percent, max_discount_amount = 2000, min_order_amount = 1999, expiry_date, usage_limit = 1000 } = req.body;
 
@@ -420,7 +421,7 @@ router.post('/coupons', (req, res) => {
 });
 
 // PUT /api/admin/coupons/:id/toggle
-router.put('/coupons/:id/toggle', (req, res) => {
+router.put('/coupons/:id/toggle', requireDurableStorage, (req, res) => {
   try {
     const coupon = db.prepare('SELECT is_active FROM coupons WHERE id = ?').get(req.params.id);
     if (!coupon) {
@@ -437,7 +438,7 @@ router.put('/coupons/:id/toggle', (req, res) => {
 });
 
 // DELETE /api/admin/coupons/:id
-router.delete('/coupons/:id', (req, res) => {
+router.delete('/coupons/:id', requireDurableStorage, (req, res) => {
   try {
     db.prepare('DELETE FROM coupons WHERE id = ?').run(req.params.id);
     res.json({ message: 'Coupon deleted.' });

@@ -116,11 +116,19 @@ ADMIN_EMAIL="admin@palluvo.com" ADMIN_PASSWORD="<strong_password>" npm run creat
 
 ## 💾 Production Storage & Database Architecture
 
-For reliable e-commerce transactions across auto-scaling and serverless instances:
+For reliable e-commerce transactions across auto-scaling servers and serverless environments:
 
-- **Local Development**: By default, SQLite stores data locally at `server/data/palluvo.db`.
-- **Production Server / Container**: Configure `DATABASE_PATH` or `DATA_DIR` pointing to a persistent volume (e.g. Fly.io volumes, Railway persistent volumes, Render disks, or attached SSD).
-- **Serverless Deployments**: Ephemeral scratch space (`/tmp`) is isolated per function instance and recycled on cold starts. Production commerce deployments with multi-instance concurrency should attach durable shared storage or a managed cloud database via `DATABASE_PATH` or `DATABASE_URL`.
+### Supported Storage Environment Variables:
+- **`DATABASE_URL`**: Database connection URL or path (e.g., `sqlite:///var/data/palluvo.db`, `file:/var/data/palluvo.db`, or `/var/data/palluvo.db`).
+- **`DATABASE_PATH`** / **`SQLITE_DB_PATH`**: Explicit file path to the SQLite database on a persistent mounted volume.
+- **`DATABASE_DIR`** / **`DATA_DIR`**: Directory path where `palluvo.db` will be located.
+
+### Environment Behaviors:
+- **Local Development**: Stores data locally at `server/data/palluvo.db` with full read/write support and WAL journaling mode enabled.
+- **Persistent Containers / VMs** *(Fly.io volumes, Railway persistent storage, Render disks, AWS ECS / EC2)*: Point `DATABASE_URL` or `DATABASE_PATH` to the mounted persistent volume.
+- **Serverless Deployments** *(Vercel, AWS Lambda)*: Serverless function filesystems and `/tmp` scratch spaces are ephemeral and isolated per instance. To prevent signups, carts, inventory, orders, and payment states from disappearing or diverging across function instances:
+  - Public catalog browsing, product search, filters, offers, and health checks operate smoothly in read-only mode.
+  - Mutating commerce operations (user registration, bag/cart mutations, wishlist, order creation, payment capture, customer reviews, admin catalog edits) are automatically guarded by `requireDurableStorage` and restricted (HTTP 503 `EPHEMERAL_STORAGE_RESTRICTED`) unless a durable persistent database location is configured via `DATABASE_URL` or `DATABASE_PATH`.
 
 ---
 

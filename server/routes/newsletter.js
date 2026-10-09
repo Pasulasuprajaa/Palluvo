@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
+const { requireDurableStorage } = require('../middleware/storageGuard');
 
 // Ensure newsletter_subscribers table exists
 db.exec(`
@@ -13,7 +14,7 @@ db.exec(`
 `);
 
 // POST /api/newsletter/subscribe
-router.post('/subscribe', (req, res) => {
+router.post('/subscribe', requireDurableStorage, (req, res) => {
   try {
     const { email } = req.body;
     if (!email || typeof email !== 'string' || !email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
+const { requireDurableStorage } = require('../middleware/storageGuard');
 
 // GET /api/addresses
 router.get('/', authenticateToken, (req, res) => {
@@ -20,7 +21,7 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // POST /api/addresses (Create new address)
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { name, phone, pincode, house_flat, area, city, state, landmark, address_type = 'home', is_default = 0 } = req.body;
 
@@ -64,7 +65,7 @@ router.post('/', authenticateToken, (req, res) => {
 });
 
 // PUT /api/addresses/:id (Update address)
-router.put('/:id', authenticateToken, (req, res) => {
+router.put('/:id', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { name, phone, pincode, house_flat, area, city, state, landmark, address_type, is_default } = req.body;
 
@@ -104,7 +105,7 @@ router.put('/:id', authenticateToken, (req, res) => {
 });
 
 // DELETE /api/addresses/:id
-router.delete('/:id', authenticateToken, (req, res) => {
+router.delete('/:id', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const result = db.prepare('DELETE FROM addresses WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
     if (result.changes === 0) {
@@ -118,7 +119,7 @@ router.delete('/:id', authenticateToken, (req, res) => {
 });
 
 // PUT /api/addresses/:id/set-default
-router.put('/:id/set-default', authenticateToken, (req, res) => {
+router.put('/:id/set-default', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     db.prepare('UPDATE addresses SET is_default = 0 WHERE user_id = ?').run(req.user.id);
     db.prepare('UPDATE addresses SET is_default = 1 WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);

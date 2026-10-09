@@ -53,6 +53,10 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     brand: 'PALLUVO',
     tagline: 'Every drape, a little magic.',
+    database: {
+      durable: db.isDurable,
+      storageType: db.storageType
+    },
     time: new Date().toISOString()
   });
 });

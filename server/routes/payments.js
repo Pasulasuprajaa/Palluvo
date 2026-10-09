@@ -4,9 +4,10 @@ const crypto = require('crypto');
 const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
 const { createRazorpayOrder, verifyPaymentSignature, key_id } = require('../services/razorpay');
+const { requireDurableStorage } = require('../middleware/storageGuard');
 
 // POST /api/payments/create-order
-router.post('/create-order', authenticateToken, async (req, res) => {
+router.post('/create-order', authenticateToken, requireDurableStorage, async (req, res) => {
   try {
     const { address_id, address_data, coupon_code, items: directItems } = req.body;
 
@@ -190,7 +191,7 @@ router.post('/create-order', authenticateToken, async (req, res) => {
 });
 
 // POST /api/payments/verify (Verify Razorpay signature and finalize order)
-router.post('/verify', authenticateToken, (req, res) => {
+router.post('/verify', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 

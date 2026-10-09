@@ -2,50 +2,115 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-// Database storage resolution:
-// 1. Explicit path: DATABASE_PATH or SQLITE_DB_PATH (e.g. durable mounted storage, cloud volumes)
-// 2. Explicit directory: DATABASE_DIR or DATA_DIR
-// 3. Default local persistent directory: server/data/palluvo.db
-function resolveDatabasePath() {
-  if (process.env.DATABASE_PATH || process.env.SQLITE_DB_PATH) {
-    return process.env.DATABASE_PATH || process.env.SQLITE_DB_PATH;
+/**
+ * Parses DATABASE_URL or file path into a resolved local filesystem path.
+ * Supports URL protocols like sqlite://, file://, sqlite:, file:, or raw paths.
+ */
+function parseDatabaseUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  let clean = rawUrl.trim();
+  if (clean.startsWith('sqlite://')) {
+    clean = clean.slice(9);
+  } else if (clean.startsWith('file://')) {
+    clean = clean.slice(7);
+  } else if (clean.startsWith('sqlite:')) {
+    clean = clean.slice(7);
+  } else if (clean.startsWith('file:')) {
+    clean = clean.slice(5);
   }
-  const baseDir = process.env.DATABASE_DIR || process.env.DATA_DIR || path.join(__dirname, '..', 'data');
-  return path.join(baseDir, 'palluvo.db');
+  // Remove leading slash for Windows drives (e.g. /C:/data -> C:/data)
+  if (/^\/[a-zA-Z]:/.test(clean)) {
+    clean = clean.slice(1);
+  }
+  return path.resolve(clean);
 }
 
-const dbPath = resolveDatabasePath();
-const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NOW_REGION);
+// Database storage resolution:
+// 1. DATABASE_URL (standard connection string or file path for managed volumes)
+// 2. DATABASE_PATH or SQLITE_DB_PATH (explicit file path)
+// 3. DATABASE_DIR or DATA_DIR (explicit directory)
+// 4. Default local directory: server/data/palluvo.db
+function resolveDatabaseLocation() {
+  const hasExplicitConfig = Boolean(
+    process.env.DATABASE_URL ||
+    process.env.DATABASE_PATH ||
+    process.env.SQLITE_DB_PATH ||
+    process.env.DATABASE_DIR ||
+    process.env.DATA_DIR
+  );
 
-if (isServerless && !process.env.DATABASE_PATH && !process.env.DATABASE_DIR && !process.env.DATA_DIR && !process.env.SQLITE_DB_PATH) {
+  let targetPath;
+  if (process.env.DATABASE_URL) {
+    targetPath = parseDatabaseUrl(process.env.DATABASE_URL);
+  } else if (process.env.DATABASE_PATH || process.env.SQLITE_DB_PATH) {
+    targetPath = path.resolve((process.env.DATABASE_PATH || process.env.SQLITE_DB_PATH).trim());
+  } else if (process.env.DATABASE_DIR || process.env.DATA_DIR) {
+    const baseDir = path.resolve((process.env.DATABASE_DIR || process.env.DATA_DIR).trim());
+    targetPath = path.join(baseDir, 'palluvo.db');
+  } else {
+    targetPath = path.join(__dirname, '..', 'data', 'palluvo.db');
+  }
+
+  return { targetPath, hasExplicitConfig };
+}
+
+const { targetPath: dbPath, hasExplicitConfig } = resolveDatabaseLocation();
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NOW_REGION);
+const isProduction = process.env.NODE_ENV === 'production';
+
+let db;
+let isDurable = false;
+let isEphemeral = false;
+let storageType = 'file';
+
+if (isServerless && !hasExplicitConfig) {
   console.warn(
-    '⚠️ ARCHITECTURE NOTE: Running on a serverless platform without configured persistent shared storage (DATABASE_PATH/DATABASE_URL). ' +
-    'Serverless function instances are ephemeral and isolated. For persistent multi-instance production commerce, attach a durable shared database or persistent volume.'
+    '⚠️ ARCHITECTURE WARNING: Running on a serverless platform without configured persistent shared storage (DATABASE_URL / DATABASE_PATH). ' +
+    'Function instances are ephemeral and isolated. Mutating commerce operations will be restricted until durable shared storage is attached.'
   );
 }
 
-let db;
 try {
   const dbDir = path.dirname(dbPath);
   if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true });
   }
   db = new Database(dbPath);
+  if (isServerless && !hasExplicitConfig) {
+    isDurable = false;
+    isEphemeral = true;
+    storageType = 'serverless-ephemeral-file';
+  } else {
+    isDurable = true;
+    isEphemeral = false;
+    storageType = hasExplicitConfig ? 'configured-durable-file' : 'local-file';
+  }
 } catch (err) {
   if (isServerless) {
     console.warn(
-      '⚠️ Notice: Read-only serverless filesystem detected. Initializing in-memory fallback. ' +
-      'For durable production commerce data across serverless instances, configure a managed shared database or DATABASE_PATH.'
+      '⚠️ Notice: Read-only serverless filesystem detected. Initializing in-memory fallback for read-only catalog browsing. ' +
+      'For durable production commerce writes across serverless instances, configure a managed shared database or persistent volume (DATABASE_URL / DATABASE_PATH).'
     );
     db = new Database(':memory:');
+    isDurable = false;
+    isEphemeral = true;
+    storageType = 'in-memory-fallback';
   } else {
     throw err;
   }
 }
 
+// Attach storage durability metadata to db
+db.isDurable = isDurable;
+db.isEphemeral = isEphemeral;
+db.storageType = storageType;
+db.storagePath = dbPath;
+
 // Enable foreign keys and WAL mode for high concurrency & reliability
 try {
-  db.pragma('journal_mode = WAL');
+  if (storageType !== 'in-memory-fallback') {
+    db.pragma('journal_mode = WAL');
+  }
 } catch (e) {
   // In-memory or certain environments may ignore WAL
 }

@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db/database');
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
 const { trackOrderLimiter } = require('../middleware/rateLimit');
+const { requireDurableStorage } = require('../middleware/storageGuard');
 
 // GET /api/orders (List user orders)
 router.get('/', authenticateToken, (req, res) => {
@@ -169,7 +170,7 @@ router.get('/:id', authenticateToken, (req, res) => {
 });
 
 // POST /api/orders/cancel/:id
-router.post('/cancel/:id', authenticateToken, (req, res) => {
+router.post('/cancel/:id', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
 
@@ -192,7 +193,7 @@ router.post('/cancel/:id', authenticateToken, (req, res) => {
 });
 
 // POST /api/orders/return/:id (Flipkart/Amazon style hassle-free 7-day return/exchange request)
-router.post('/return/:id', authenticateToken, (req, res) => {
+router.post('/return/:id', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { reason, return_type = 'Return & Refund', pickup_date } = req.body;
     const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
+const { requireDurableStorage } = require('../middleware/storageGuard');
 
 // GET /api/wishlist
 router.get('/', authenticateToken, (req, res) => {
@@ -36,7 +37,7 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // POST /api/wishlist/toggle
-router.post('/toggle', authenticateToken, (req, res) => {
+router.post('/toggle', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { product_id } = req.body;
 
@@ -60,7 +61,7 @@ router.post('/toggle', authenticateToken, (req, res) => {
 });
 
 // POST /api/wishlist/move-to-cart
-router.post('/move-to-cart', authenticateToken, (req, res) => {
+router.post('/move-to-cart', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { product_id } = req.body;
 

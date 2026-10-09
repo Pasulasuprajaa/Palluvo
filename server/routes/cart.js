@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
+const { requireDurableStorage } = require('../middleware/storageGuard');
 
 // GET /api/cart (Fetch user cart items with detailed product info)
 router.get('/', authenticateToken, (req, res) => {
@@ -59,7 +60,7 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // POST /api/cart/add (Add product to cart or increment)
-router.post('/add', authenticateToken, (req, res) => {
+router.post('/add', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { product_id, variant_id, quantity = 1 } = req.body;
 
@@ -99,7 +100,7 @@ router.post('/add', authenticateToken, (req, res) => {
 });
 
 // PUT /api/cart/update (Update quantity)
-router.put('/update', authenticateToken, (req, res) => {
+router.put('/update', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { cart_item_id, quantity } = req.body;
 
@@ -123,7 +124,7 @@ router.put('/update', authenticateToken, (req, res) => {
 });
 
 // DELETE /api/cart/remove/:id (Remove item)
-router.delete('/remove/:id', authenticateToken, (req, res) => {
+router.delete('/remove/:id', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     db.prepare('DELETE FROM cart_items WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
     res.json({ message: 'Item removed from bag.' });
@@ -134,7 +135,7 @@ router.delete('/remove/:id', authenticateToken, (req, res) => {
 });
 
 // DELETE /api/cart/clear (Clear all cart items)
-router.delete('/clear', authenticateToken, (req, res) => {
+router.delete('/clear', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(req.user.id);
     res.json({ message: 'Shopping bag cleared.' });
@@ -145,7 +146,7 @@ router.delete('/clear', authenticateToken, (req, res) => {
 });
 
 // POST /api/cart/sync (Merge client guest cart into user database cart)
-router.post('/sync', authenticateToken, (req, res) => {
+router.post('/sync', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { items = [] } = req.body;
 

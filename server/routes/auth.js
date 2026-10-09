@@ -4,9 +4,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db/database');
 const { authenticateToken, JWT_SECRET } = require('../middleware/auth');
+const { requireDurableStorage } = require('../middleware/storageGuard');
 
 // Register User
-router.post('/register', (req, res) => {
+router.post('/register', requireDurableStorage, (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
 
@@ -118,7 +119,7 @@ router.get('/me', authenticateToken, (req, res) => {
 });
 
 // Update Profile
-router.put('/profile', authenticateToken, (req, res) => {
+router.put('/profile', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { name, phone } = req.body;
     if (!name) {

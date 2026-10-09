@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
+const { requireDurableStorage } = require('../middleware/storageGuard');
 
 // GET /api/products (List with comprehensive filtering, search, and sorting)
 router.get('/', (req, res) => {
@@ -318,7 +319,7 @@ router.get('/:productId/qa', (req, res) => {
 });
 
 // POST /api/products/:productId/qa (Ask a new question)
-router.post('/:productId/qa', (req, res) => {
+router.post('/:productId/qa', requireDurableStorage, (req, res) => {
   try {
     const { question, user_name } = req.body;
     if (!question || !question.trim()) {
@@ -344,7 +345,7 @@ router.post('/:productId/qa', (req, res) => {
 });
 
 // POST /api/products/qa/:id/helpful (Upvote helpfulness)
-router.post('/qa/:id/helpful', (req, res) => {
+router.post('/qa/:id/helpful', requireDurableStorage, (req, res) => {
   try {
     db.prepare('UPDATE product_qa SET helpful_votes = helpful_votes + 1 WHERE id = ?').run(req.params.id);
     const item = db.prepare('SELECT * FROM product_qa WHERE id = ?').get(req.params.id);
