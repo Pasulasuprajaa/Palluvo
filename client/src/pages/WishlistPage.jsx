@@ -46,12 +46,20 @@ export default function WishlistPage({ onNavigate }) {
         {wishlistItems.map((item) => (
           <div
             key={item.product_id || item.id}
-            className="bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden shadow-sm hover:shadow-lg transition flex flex-col justify-between"
+            role="link"
+            tabIndex={0}
+            onClick={() => onNavigate('product', { slug: item.slug })}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                if (e.target === e.currentTarget) {
+                  e.preventDefault();
+                  onNavigate('product', { slug: item.slug });
+                }
+              }
+            }}
+            className="bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden shadow-sm hover:shadow-lg transition flex flex-col justify-between cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
           >
-            <div
-              className="relative aspect-[3/4] cursor-pointer bg-[#F4EFEB]"
-              onClick={() => onNavigate('product', { slug: item.slug })}
-            >
+            <div className="relative aspect-[3/4] bg-[#F4EFEB]">
               <img
                 src={item.primary_image || item.image_url || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=400&q=80'}
                 alt={item.name}
@@ -62,8 +70,9 @@ export default function WishlistPage({ onNavigate }) {
                   e.stopPropagation();
                   toggleWishlist(item);
                 }}
-                className="absolute top-3 right-3 p-2 rounded-full bg-white/80 text-red-700 hover:bg-white transition shadow-md"
-                title="Remove"
+                className="absolute top-3 right-3 p-2 rounded-full bg-white/80 text-red-700 hover:bg-white transition shadow-md cursor-pointer z-10"
+                title="Remove from Wishlist"
+                aria-label={`Remove ${item.name} from wishlist`}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -71,10 +80,7 @@ export default function WishlistPage({ onNavigate }) {
 
             <div className="p-4 space-y-3">
               <div>
-                <h3
-                  onClick={() => onNavigate('product', { slug: item.slug })}
-                  className="font-serif text-sm font-bold text-[#1F1A1C] hover:text-[#5B1425] cursor-pointer line-clamp-1"
-                >
+                <h3 className="font-serif text-sm font-bold text-[#1F1A1C] group-hover:text-[#5B1425] line-clamp-1">
                   {item.name}
                 </h3>
                 <div className="flex items-baseline gap-2 mt-1">
@@ -90,8 +96,11 @@ export default function WishlistPage({ onNavigate }) {
               </div>
 
               <button
-                onClick={() => moveToCart(item)}
-                className="w-full py-2.5 bg-[#5B1425] text-[#FAF7F2] rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#7E1E34] transition flex items-center justify-center gap-1.5 shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  moveToCart(item);
+                }}
+                className="w-full py-2.5 bg-[#5B1425] text-[#FAF7F2] rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#7E1E34] transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer z-10"
               >
                 <ShoppingBag className="w-3.5 h-3.5 text-[#C5A059]" />
                 <span>Move to Bag</span>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Heart, Eye, ShoppingBag, Star, Sparkles, Scale, Check } from 'lucide-react';
+import { Heart, Eye, ShoppingBag, Star, Check } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { useCompare } from '../context/CompareContext';
@@ -23,7 +23,13 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
   );
   const secondaryImg = hasItemSpecificAlternate ? rawSecondary : primaryImg;
 
-  const handleCardClick = () => {
+  const handleCardClick = (e) => {
+    if (e && (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0))) {
+      return;
+    }
+    if (e && e.preventDefault) {
+      e.preventDefault();
+    }
     onNavigate('product', { slug: product.slug });
   };
 
@@ -49,13 +55,24 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
 
   return (
     <div
+      role="link"
+      tabIndex={0}
       onClick={handleCardClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (e.target === e.currentTarget) {
+            e.preventDefault();
+            handleCardClick(e);
+          }
+        }
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="group relative bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col cursor-pointer"
+      aria-label={`${product.name} - ₹${product.price?.toLocaleString('en-IN')}`}
+      className="group relative bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none w-full select-none"
     >
-      {/* Image Container */}
-      <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#F4EFEB]">
+      {/* 1. Image Container (Entire surface clickable) */}
+      <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#F4EFEB] cursor-pointer">
         {/* Shimmer Placeholder while Image Loads */}
         <div
           aria-hidden="true"
@@ -64,30 +81,18 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
           }`}
         />
 
-        <a
-          href={`/sarees/${product.slug}`}
-          onClick={(e) => {
-            if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
-            e.preventDefault();
-            handleCardClick();
-          }}
-          tabIndex={-1}
-          aria-hidden="true"
-          className="relative z-[1] block w-full h-full cursor-pointer"
-        >
-          <img
-            src={isHovered ? secondaryImg : primaryImg}
-            alt={product.name}
-            loading={priority ? 'eager' : imageLoading}
-            decoding="async"
-            onLoad={() => setImageLoaded(true)}
-            className={`w-full h-full object-cover object-top transition-all duration-700 ease-out group-hover:scale-105 ${
-              imageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
-            }`}
-          />
-        </a>
+        <img
+          src={isHovered ? secondaryImg : primaryImg}
+          alt={product.name}
+          loading={priority ? 'eager' : imageLoading}
+          decoding="async"
+          onLoad={() => setImageLoaded(true)}
+          className={`w-full h-full object-cover object-top transition-all duration-700 ease-out group-hover:scale-105 pointer-events-none ${
+            imageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
+          }`}
+        />
 
-        {/* Single Prioritized Image Badge */}
+        {/* Single Prioritized Discount Badge */}
         <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
           {product.discount_percent > 0 ? (
             <span className="bg-[#5B1425] text-[#FAF7F2] text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
@@ -100,8 +105,8 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
           ) : null}
         </div>
 
-        {/* Wishlist Button (44x44px accessible touch target with compact visual badge) */}
-        <div className="absolute top-1 right-1 z-10">
+        {/* Wishlist Button (44x44px accessible touch target) */}
+        <div className="absolute top-1 right-1 z-20">
           <button
             onClick={handleWishlistClick}
             aria-label={saved ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
@@ -120,8 +125,8 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
           </button>
         </div>
 
-        {/* Desktop Quick View Button (Revealed on hover/focus on desktop screens only, keeping mobile photography completely unobstructed) */}
-        <div className="hidden sm:flex absolute inset-x-3 bottom-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-300 gap-2 z-10">
+        {/* Desktop Quick View Button (Revealed on hover/focus) */}
+        <div className="hidden sm:flex absolute inset-x-3 bottom-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-300 gap-2 z-20">
           <button
             onClick={handleQuickView}
             aria-label={`Quick view ${product.name}`}
@@ -133,8 +138,8 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
         </div>
       </div>
 
-      {/* Product Details */}
-      <div className="p-4 flex-1 flex flex-col justify-between space-y-2.5">
+      {/* 2. Product Details (Entire surface clickable) */}
+      <div className="p-4 flex-1 flex flex-col justify-between space-y-2.5 cursor-pointer">
         <div>
           {/* Fabric & Occasion Tag */}
           <div className="flex items-center justify-between text-[11px] text-[#6E6467] mb-1">
@@ -142,19 +147,10 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
             <span className="text-[#855A16] font-semibold shrink-0 ml-2">{product.occasion}</span>
           </div>
 
-          {/* Product Title (Keyboard accessible semantic link) */}
-          <a
-            href={`/sarees/${product.slug}`}
-            onClick={(e) => {
-              if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
-              e.preventDefault();
-              handleCardClick();
-            }}
-            aria-label={`View details for ${product.name}`}
-            className="min-h-[44px] flex items-center font-serif text-sm sm:text-base font-semibold text-[#1F1A1C] group-hover:text-[#5B1425] focus-visible:text-[#5B1425] focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded transition leading-snug cursor-pointer"
-          >
-            <h3 className="line-clamp-2">{product.name}</h3>
-          </a>
+          {/* Product Title */}
+          <h3 className="min-h-[44px] flex items-center font-serif text-sm sm:text-base font-semibold text-[#1F1A1C] group-hover:text-[#5B1425] transition leading-snug cursor-pointer line-clamp-2">
+            {product.name}
+          </h3>
 
           {/* Rating & Silk Mark Certification */}
           <div className="flex items-center justify-between mt-1.5">
@@ -205,7 +201,7 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto relative z-20">
             {/* Mobile Touch Quick View (44x44px accessible touch target) */}
             <button
               onClick={handleQuickView}
