@@ -51,7 +51,7 @@ export default function InvoiceModal({ isOpen, onClose, order }) {
               </div>
               <div className="text-gray-500 mt-2 space-y-0.5">
                 <div>PALLUVO Luxury Fashion Pvt Ltd</div>
-                <div>Silk Mark Certified Brand | GSTIN: 29AABCU9603R1ZM</div>
+                <div>Authentic Luxury Handlooms & Fashion | GSTIN: 29AABCU9603R1ZM</div>
                 <div>Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</div>
                 <div>Email: contact@palluvo.com | Support: +91 84988 54323 / +91 81067 89789</div>
               </div>
@@ -87,7 +87,7 @@ export default function InvoiceModal({ isOpen, onClose, order }) {
               <div><strong>Partner:</strong> {order.courier_partner || 'BlueDart Luxury Express'}</div>
               <div><strong>Handled By:</strong> PALLUVO Bengaluru Master Vault</div>
               <div><strong>Delivery Type:</strong> Insured Tamper-Evident Luxury Packaging</div>
-              <div><strong>Silk Mark Tag:</strong> Org. of India Registered & Verified</div>
+              <div><strong>Authenticity:</strong> Certified Handloom Quality & SMOI Verified (Where Applicable)</div>
             </div>
           </div>
 

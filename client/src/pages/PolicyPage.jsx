@@ -240,7 +240,7 @@ export default function PolicyPage({ initialTab = 'privacy', onNavigate }) {
                   <h3 className="font-serif text-lg font-bold text-[#1F1A1C]">2. Return Eligibility & Conditions</h3>
                   <ul className="list-disc pl-5 space-y-1.5 text-xs text-[#554B4E]">
                     <li>The saree must remain unworn, unwashed, and in its original pristine fold.</li>
-                    <li>All original brand security tags, Silk Mark tags, and authenticity cards must remain intact and attached.</li>
+                    <li>All original brand security tags, applicable Silk Mark / authenticity tags, and certificate cards must remain intact and attached.</li>
                     <li>Sarees with customized fall & pico or stitched blouse pieces are non-returnable unless received in damaged condition.</li>
                     <li>The saree must be returned in the original burgundy presentation box and muslin bag.</li>
                   </ul>
@@ -304,10 +304,10 @@ export default function PolicyPage({ initialTab = 'privacy', onNavigate }) {
             <div className="bg-white rounded-2xl border border-[#EAE2D7] p-5 space-y-3">
               <div className="flex items-center gap-2 text-[#5B1425] font-serif font-bold text-sm">
                 <ShieldCheck className="w-4 h-4 text-[#C5A059]" />
-                <span>Pure Silk Mark Certified</span>
+                <span>Certified Authenticity & Quality</span>
               </div>
               <p className="text-xs text-[#6E6467] leading-relaxed">
-                All pure silk sarees carry official Silk Mark Organization of India certification verifying 100% natural silk and tested zari.
+                All Silk Mark certified sarees carry official Silk Mark Organization of India certification verifying 100% natural silk and tested zari.
               </p>
             </div>
           </div>

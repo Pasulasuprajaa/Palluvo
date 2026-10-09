@@ -355,10 +355,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                 )}
               </div>
 
-              {/* Shopping Bag Button — Fully Visible Inside 1280px */}
+              {/* Shopping Bag Button — Desktop & Tablet */}
               <button
                 onClick={() => setIsCartOpen(true)}
-                className="relative min-w-[44px] min-h-[44px] p-2.5 sm:px-3 sm:py-2 bg-[#5B1425] text-[#FAF7F2] hover:bg-[#7E1E34] rounded-full transition shadow-md flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer shrink-0"
+                className="hidden sm:flex relative min-w-[44px] min-h-[44px] p-2.5 sm:px-3 sm:py-2 bg-[#5B1425] text-[#FAF7F2] hover:bg-[#7E1E34] rounded-full transition shadow-md items-center justify-center gap-1 sm:gap-1.5 cursor-pointer shrink-0"
                 aria-label="Shopping Bag"
               >
                 <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 xl:w-5 xl:h-5 text-[#C5A059]" />

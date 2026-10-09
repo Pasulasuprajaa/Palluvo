@@ -167,11 +167,11 @@ export default function HomePage({ onNavigate }) {
 
             {/* Sleek Compact Trust Badges */}
             <div className="mt-3 sm:mt-5 pt-2.5 sm:pt-3 border-t border-white/15 flex items-center justify-between sm:justify-start sm:gap-5 text-[10px] sm:text-xs text-[#E0C07F] font-medium">
-              <span className="flex items-center gap-1">✦ 100% Pure Silk</span>
+              <span className="flex items-center gap-1">✦ Handcrafted Luxury</span>
               <span className="text-white/30">•</span>
-              <span>Master Weavers</span>
+              <span>Master Artisans</span>
               <span className="text-white/30">•</span>
-              <span>Silk Mark Certified</span>
+              <span>Certified Silk Available</span>
             </div>
           </div>
         </div>

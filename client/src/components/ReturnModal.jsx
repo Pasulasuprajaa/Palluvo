@@ -164,7 +164,7 @@ export default function ReturnModal({ isOpen, onClose, order, onReturnSuccess })
               />
             </div>
             <p className="text-[10px] text-gray-500 mt-1">
-              • Our courier associate will verify the Silk Mark tag and original luxury gift box during pickup.
+              • Our courier associate will verify the product authenticity / security tag and original luxury gift box during pickup.
             </p>
           </div>
 

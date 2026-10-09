@@ -115,7 +115,7 @@ export default function AboutPage({ initialTab = 'heritage', onNavigate }) {
                 <div className="space-y-4 pt-2">
                   <h3 className="font-serif text-lg font-bold text-[#1F1A1C]">Certified Silk Mark Authenticity</h3>
                   <p>
-                    Every genuine silk drape from PALLUVO carries the authorized Silk Mark Organization of India certification tag. This ensures that every thread is 100% natural mulberry silk, free from synthetic viscose blends or powerloom counterfeits.
+                    All designated pure silk handloom drapes in the PALLUVO collection carry the authorized Silk Mark Organization of India certification tag. This ensures that verified pure silk drapes are woven from 100% natural mulberry silk, free from synthetic blends or powerloom counterfeits.
                   </p>
                 </div>
               </div>
@@ -322,10 +322,10 @@ export default function AboutPage({ initialTab = 'heritage', onNavigate }) {
             <div className="bg-white rounded-2xl border border-[#EAE2D7] p-5 space-y-3">
               <div className="flex items-center gap-2 text-[#5B1425] font-serif font-bold text-sm">
                 <ShieldCheck className="w-4 h-4 text-[#C5A059]" />
-                <span>Pure Silk Mark Certified</span>
+                <span>Certified Pure Silk Mark</span>
               </div>
               <p className="text-xs text-[#6E6467] leading-relaxed">
-                All PALLUVO handloom pure silk sarees are verified by the Silk Mark Organization of India, certifying authentic 100% natural silk threads.
+                All PALLUVO pure silk handloom drapes marked with Silk Mark certification are authenticated by the Silk Mark Organization of India, certifying authentic 100% natural silk threads.
               </p>
             </div>
           </div>
