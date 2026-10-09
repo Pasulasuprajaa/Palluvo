@@ -103,8 +103,17 @@ export default function HomePage({ onNavigate }) {
     <div className="flex flex-col">
       {/* 1. HERO SECTION */}
       <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] min-h-[560px] sm:min-h-[620px] md:min-h-[85vh]">
-        {/* Background Image with Crisp Portrait Framing */}
-        <div className="absolute inset-0 z-0">
+        {/* Background Image with Crisp Portrait Framing (Clickable to Explore Sarees) */}
+        <a
+          href="/sarees"
+          onClick={(e) => {
+            if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+            e.preventDefault();
+            onNavigate('shop');
+          }}
+          className="absolute inset-0 z-0 block cursor-pointer group"
+          aria-label="Explore Royal Heirloom Sarees Collection"
+        >
           <picture>
             <source media="(max-width: 640px)" srcSet="/images/occasions/wedding_collection.jpg" />
             <img
@@ -113,16 +122,16 @@ export default function HomePage({ onNavigate }) {
               loading="eager"
               fetchPriority="high"
               decoding="async"
-              className="w-full h-full object-cover object-[center_top] sm:object-[center_10%] md:object-[right_center] lg:object-right opacity-100 transition-transform duration-1000 ease-out"
+              className="w-full h-full object-cover object-[center_top] sm:object-[center_10%] md:object-[right_center] lg:object-right opacity-100 transition-transform duration-1000 ease-out group-hover:scale-105"
             />
           </picture>
           {/* Subtle Vignette Gradient to keep photograph bright and clear */}
           <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/50 via-40% to-transparent md:bg-gradient-to-r md:from-[#1F1A1C]/90 md:from-25% md:via-[#1F1A1C]/35 md:via-50% md:to-transparent pointer-events-none" />
-        </div>
+        </a>
 
         {/* Hero Content with Sleek Compact Framing */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 md:py-20 lg:py-24 w-full flex flex-col justify-end md:justify-center">
-          <div className="max-w-xl md:max-w-lg lg:max-w-xl xl:max-w-2xl bg-[#1F1A1C]/65 md:bg-transparent backdrop-blur-sm md:backdrop-blur-none p-3.5 sm:p-5 md:p-0 rounded-2xl border border-[#C5A059]/25 md:border-0 shadow-xl md:shadow-none animate-fade-in">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 md:py-20 lg:py-24 w-full flex flex-col justify-end md:justify-center pointer-events-none">
+          <div className="max-w-xl md:max-w-lg lg:max-w-xl xl:max-w-2xl bg-[#1F1A1C]/65 md:bg-transparent backdrop-blur-sm md:backdrop-blur-none p-3.5 sm:p-5 md:p-0 rounded-2xl border border-[#C5A059]/25 md:border-0 shadow-xl md:shadow-none animate-fade-in pointer-events-auto">
             {/* Pill Tag */}
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-[#5B1425]/90 border border-[#C5A059]/40 text-[#E0C07F] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-2 sm:mb-3 shadow-sm">
               <Sparkles className="w-3 h-3 text-[#C5A059] shrink-0" />
