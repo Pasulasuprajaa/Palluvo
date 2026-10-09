@@ -438,10 +438,19 @@ export default function HomePage({ onNavigate }) {
         )}
       </section>
 
-      {/* 5. EDITORIAL HERITAGE SHOWCASE BANNER */}
+      {/* 5. EDITORIAL HERITAGE SHOWCASE BANNER (Entire Banner Clickable) */}
       <section className="relative w-full overflow-hidden bg-[#FAF7F2] py-4 sm:py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative aspect-[4/5] sm:aspect-[21/9] w-full max-h-[560px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-lg group">
+          <a
+            href="/shop?category=banarasi-sarees"
+            onClick={(e) => {
+              if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+              e.preventDefault();
+              onNavigate('shop', { category: 'banarasi-sarees' });
+            }}
+            className="group relative block aspect-[4/5] sm:aspect-[21/9] w-full max-h-[560px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-lg cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
+            aria-label="Explore The Heritage Edit - Pure Weaves, Timeless Grace"
+          >
             <img
               src="/images/occasions/temple_heritage.jpg"
               alt="Authentic handloom heritage sarees"
@@ -453,7 +462,7 @@ export default function HomePage({ onNavigate }) {
             <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C]/80 via-[#1F1A1C]/15 to-transparent pointer-events-none" />
 
             {/* Clean, Professional Editorial Bar */}
-            <div className="absolute inset-x-0 bottom-0 p-5 sm:p-8 md:p-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4 z-10">
+            <div className="absolute inset-x-0 bottom-0 p-5 sm:p-8 md:p-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4 z-10 pointer-events-none">
               <div>
                 <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-[#E0C07F] font-semibold mb-1">
                   The Heritage Edit
@@ -463,20 +472,12 @@ export default function HomePage({ onNavigate }) {
                 </h2>
               </div>
 
-              <a
-                href="/shop?category=banarasi-sarees"
-                onClick={(e) => {
-                  if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
-                  e.preventDefault();
-                  onNavigate('shop', { category: 'banarasi-sarees' });
-                }}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 bg-white/95 hover:bg-white text-[#1F1A1C] text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md hover:shadow-xl w-fit cursor-pointer active:scale-95 border border-white/40"
-              >
+              <div className="inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 bg-white/95 group-hover:bg-white text-[#1F1A1C] text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md group-hover:shadow-xl w-fit border border-white/40 group-active:scale-95">
                 <span>Explore Collection</span>
-                <ArrowRight className="w-3.5 h-3.5 text-[#5B1425]" />
-              </a>
+                <ArrowRight className="w-3.5 h-3.5 text-[#5B1425] group-hover:translate-x-0.5 transition-transform" />
+              </div>
             </div>
-          </div>
+          </a>
         </div>
       </section>
     </div>
