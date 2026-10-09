@@ -307,7 +307,7 @@ export default function PolicyPage({ initialTab = 'privacy', onNavigate }) {
                 <span>Certified Authenticity & Quality</span>
               </div>
               <p className="text-xs text-[#6E6467] leading-relaxed">
-                All Silk Mark certified sarees carry official Silk Mark Organization of India certification verifying 100% natural silk and tested zari.
+                All Silk Mark certified sarees carry official Silk Mark Organization of India certification verifying 100% natural pure silk yarns.
               </p>
             </div>
           </div>

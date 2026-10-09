@@ -138,7 +138,7 @@ export default function InvoiceModal({ isOpen, onClose, order }) {
             <div className="max-w-xs space-y-1 text-gray-500 text-[11px]">
               <div className="flex items-center gap-1 text-emerald-800 font-semibold">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>100% Certified Pure Silk & Handcrafted Guarantee</span>
+                <span>100% Authentic Luxury & Handcrafted Quality Guarantee</span>
               </div>
               <p>This is a computer-generated invoice and requires no physical signature under Indian Information Technology Act, 2000.</p>
             </div>

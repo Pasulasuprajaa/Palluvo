@@ -41,7 +41,7 @@ export function updatePageMeta(page, params = {}) {
     title = categoryName
       ? `${categoryName} | PALLUVO Luxury Sarees`
       : 'Explore Luxury Handloom Sarees | PALLUVO';
-    description = `Browse authentic handwoven Indian sarees${categoryName ? ` in our ${categoryName} edit` : ''}. Verified pure silks with insured nationwide delivery.`;
+    description = `Browse authentic handcrafted Indian sarees${categoryName ? ` in our ${categoryName} edit` : ''}. Curated luxury drapes with insured nationwide delivery.`;
     url = params.category
       ? `${BASE_URL}/sarees?category=${encodeURIComponent(params.category)}`
       : `${BASE_URL}/sarees`;
@@ -51,7 +51,7 @@ export function updatePageMeta(page, params = {}) {
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(' ');
     title = `${formattedName} | PALLUVO`;
-    description = `Shop authentic ${formattedName}. Handcrafted by master artisans with pure zari and certified silk purity.`;
+    description = `Shop authentic ${formattedName}. Handcrafted by master artisans with signature detailing and insured delivery.`;
     url = `${BASE_URL}/sarees/${params.slug}`;
   } else if (page === 'cart') {
     title = 'Shopping Bag | PALLUVO';
