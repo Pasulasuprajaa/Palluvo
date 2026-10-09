@@ -1,11 +1,86 @@
 const fs = require('fs');
 const path = require('path');
-const db = require('../db/database');
 
 const BASE_URL = 'https://palluvo.com';
 const DEFAULT_IMAGE = `${BASE_URL}/images/occasions/wedding_collection.jpg`;
 const DEFAULT_TITLE = 'PALLUVO | Luxury Indian Sarees & Fashion — Every drape, a little magic';
 const DEFAULT_DESC = 'Discover pure Banarasi, Kanjivaram, Chanderi, and designer silk sarees handwoven for weddings, festivals, and unforgettable occasions.';
+
+let catalogData = null;
+function getCatalog() {
+  if (!catalogData) {
+    try {
+      const catalogPath = path.join(__dirname, '..', 'data', 'catalog.json');
+      if (fs.existsSync(catalogPath)) {
+        catalogData = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+      }
+    } catch (e) {
+      // Fallback
+    }
+  }
+  return catalogData || { categories: [], products: [] };
+}
+
+let db = null;
+function getDb() {
+  if (db === null) {
+    try {
+      db = require('../db/database');
+    } catch (e) {
+      db = false;
+    }
+  }
+  return db || null;
+}
+
+function findProductBySlug(slug) {
+  if (!slug) return null;
+  const database = getDb();
+  if (database) {
+    try {
+      const p = database.prepare(`
+        SELECT p.name, p.tagline, p.short_desc, p.description,
+               (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) as primary_img
+        FROM products p
+        WHERE p.slug = ?
+      `).get(slug);
+      if (p) return p;
+    } catch (e) {}
+  }
+  const catalog = getCatalog();
+  const found = (catalog.products || []).find(p => p.slug === slug);
+  if (found) {
+    return {
+      name: found.name,
+      tagline: found.tagline,
+      short_desc: found.short_desc,
+      description: found.description,
+      primary_img: found.primary_image || (found.images && found.images[0])
+    };
+  }
+  return null;
+}
+
+function findCategoryBySlug(slug) {
+  if (!slug) return null;
+  const database = getDb();
+  if (database) {
+    try {
+      const c = database.prepare('SELECT name, description, image_url FROM categories WHERE slug = ?').get(slug);
+      if (c) return c;
+    } catch (e) {}
+  }
+  const catalog = getCatalog();
+  const found = (catalog.categories || []).find(c => c.slug === slug);
+  if (found) {
+    return {
+      name: found.name,
+      description: found.description,
+      image_url: found.image_url
+    };
+  }
+  return null;
+}
 
 /**
  * Escapes characters for HTML text content (e.g. inside <title>)
@@ -89,61 +164,44 @@ function getMetaForRoute(urlPath, query = {}) {
   let imageAlt = 'PALLUVO Luxury Indian Handloom Sarees Collection';
   let isNotFound = false;
 
+  // Check category query parameter or category path (e.g. /sarees?category=slug, /sarees/category/slug, /category/slug)
+  const categorySlug = query.category || (
+    pathname.startsWith('/sarees/category/') ? pathname.split('/')[3] :
+    (pathname.startsWith('/category/') ? pathname.split('/')[2] : null)
+  );
+
   if (pathname === '/') {
     title = DEFAULT_TITLE;
     description = DEFAULT_DESC;
     canonicalUrl = `${BASE_URL}/`;
-  } else if (pathname.startsWith('/sarees/') || pathname.startsWith('/product/')) {
+  } else if (categorySlug && (pathname === '/sarees' || pathname === '/shop' || pathname.startsWith('/sarees/category/') || pathname.startsWith('/category/'))) {
+    const category = findCategoryBySlug(categorySlug);
+    if (category) {
+      title = `${category.name} Collection | PALLUVO`;
+      description = category.description || `Explore authentic ${category.name} handcrafted by master weavers across India.`;
+      canonicalUrl = `${BASE_URL}/sarees?category=${encodeURIComponent(categorySlug)}`;
+      imageUrl = sanitizeUrl(category.image_url, DEFAULT_IMAGE);
+      imageAlt = `${category.name} - Luxury Handloom Sarees | PALLUVO`;
+    } else {
+      isNotFound = true;
+    }
+  } else if ((pathname.startsWith('/sarees/') && !pathname.startsWith('/sarees/category/')) || pathname.startsWith('/product/')) {
     const rawSlug = pathname.split('/')[2];
     const slug = rawSlug ? decodeURIComponent(rawSlug) : '';
-    if (!slug) {
-      isNotFound = true;
+    const product = findProductBySlug(slug);
+    if (product) {
+      title = `${product.name} | PALLUVO`;
+      description = product.short_desc || product.tagline || product.description?.slice(0, 160) || DEFAULT_DESC;
+      canonicalUrl = `${BASE_URL}/sarees/${encodeURIComponent(slug)}`;
+      imageUrl = sanitizeUrl(product.primary_img, DEFAULT_IMAGE);
+      imageAlt = `${product.name} - Luxury Handcrafted Indian Saree | PALLUVO`;
     } else {
-      try {
-        const product = db.prepare(`
-          SELECT p.name, p.tagline, p.short_desc, p.description,
-                 (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) as primary_img
-          FROM products p
-          WHERE p.slug = ?
-        `).get(slug);
-
-        if (product) {
-          title = `${product.name} | PALLUVO`;
-          description = product.short_desc || product.tagline || product.description?.slice(0, 160) || DEFAULT_DESC;
-          canonicalUrl = `${BASE_URL}/sarees/${encodeURIComponent(slug)}`;
-          imageUrl = sanitizeUrl(product.primary_img, DEFAULT_IMAGE);
-          imageAlt = `${product.name} - Luxury Handcrafted Indian Saree | PALLUVO`;
-        } else {
-          isNotFound = true;
-        }
-      } catch (err) {
-        console.error('SEO DB product lookup error:', err);
-        isNotFound = true;
-      }
+      isNotFound = true;
     }
   } else if (pathname === '/sarees' || pathname === '/shop') {
-    const categorySlug = query.category;
-    if (categorySlug) {
-      try {
-        const category = db.prepare('SELECT name, description, image_url FROM categories WHERE slug = ?').get(categorySlug);
-        if (category) {
-          title = `${category.name} Collection | PALLUVO`;
-          description = category.description || `Explore authentic ${category.name} handcrafted by master weavers across India.`;
-          canonicalUrl = `${BASE_URL}/sarees?category=${encodeURIComponent(categorySlug)}`;
-          imageUrl = sanitizeUrl(category.image_url, DEFAULT_IMAGE);
-          imageAlt = `${category.name} Saree Collection`;
-        } else {
-          isNotFound = true;
-        }
-      } catch (err) {
-        console.error('SEO DB category lookup error:', err);
-        isNotFound = true;
-      }
-    } else {
-      title = 'Curated Luxury Sarees Collection | PALLUVO';
-      description = 'Browse pure Banarasi, Kanjivaram, Organza, and Mulberry silk sarees with bespoke craftsmanship.';
-      canonicalUrl = `${BASE_URL}/sarees`;
-    }
+    title = 'Curated Luxury Sarees Collection | PALLUVO';
+    description = 'Browse pure Banarasi, Kanjivaram, Organza, and Mulberry silk sarees with bespoke craftsmanship.';
+    canonicalUrl = `${BASE_URL}/sarees`;
   } else if (pathname === '/cart') {
     title = 'Shopping Bag | PALLUVO';
     description = 'Review your curated luxury saree selections in your PALLUVO bag.';

@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const db = require('../db/database');
 const { getMetaForRoute, injectMetaTags } = require('../services/seoRenderer');
 
 const distDir = path.join(__dirname, '..', '..', 'client', 'dist');
@@ -20,13 +19,32 @@ function writePrerenderedFile(routePath, htmlContent) {
   fs.writeFileSync(path.join(targetDir, 'index.html'), htmlContent, 'utf8');
 }
 
+function writeStaticHtmlFile(filePath, htmlContent) {
+  const cleanPath = filePath.replace(/^\//, '');
+  const targetFile = path.join(distDir, cleanPath);
+  fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+  fs.writeFileSync(targetFile, htmlContent, 'utf8');
+}
+
+function loadCatalog() {
+  try {
+    const catalogPath = path.join(__dirname, '..', 'data', 'catalog.json');
+    if (fs.existsSync(catalogPath)) {
+      return JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+    }
+  } catch (e) {}
+  return { categories: [], products: [] };
+}
+
 try {
   console.log('🚀 Prerendering route HTML with product social metadata...');
+  const catalog = loadCatalog();
 
   // 1. Static routes
   const staticRoutes = [
     '/',
     '/sarees',
+    '/shop',
     '/cart',
     '/checkout',
     '/order-success',
@@ -61,16 +79,19 @@ try {
   const rendered404 = injectMetaTags(templateHtml, notFoundMeta);
   fs.writeFileSync(path.join(distDir, '404.html'), rendered404, 'utf8');
 
-  // 3. Category routes
-  const categories = db.prepare('SELECT slug FROM categories').all();
+  // 3. Category routes (/sarees?category=<slug>, /sarees/category/<slug>, /category/<slug>)
+  const categories = catalog.categories || [];
   for (const cat of categories) {
     const meta = getMetaForRoute('/sarees', { category: cat.slug });
     const rendered = injectMetaTags(templateHtml, meta);
-    writePrerenderedFile(`/sarees/${cat.slug}`, rendered);
+    // Write for Vercel query rewrite (/sarees?category=:slug -> /sarees/category-:slug.html)
+    writeStaticHtmlFile(`sarees/category-${cat.slug}.html`, rendered);
+    writePrerenderedFile(`/sarees/category/${cat.slug}`, rendered);
+    writePrerenderedFile(`/category/${cat.slug}`, rendered);
   }
 
   // 4. Product routes (/sarees/:slug and /product/:slug)
-  const products = db.prepare('SELECT slug, name FROM products').all();
+  const products = catalog.products || [];
   for (const prod of products) {
     const meta = getMetaForRoute(`/sarees/${prod.slug}`);
     const rendered = injectMetaTags(templateHtml, meta);
@@ -78,7 +99,7 @@ try {
     writePrerenderedFile(`/product/${prod.slug}`, rendered);
   }
 
-  console.log(`✅ Prerendered ${staticRoutes.length + categories.length + products.length * 2} routes with custom social metadata.`);
+  console.log(`✅ Prerendered ${staticRoutes.length + categories.length * 3 + products.length * 2} route files without server db dependency.`);
 } catch (err) {
   console.error('❌ Prerender script error:', err);
   process.exit(1);
