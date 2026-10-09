@@ -106,38 +106,38 @@ export default function HomePage({ onNavigate }) {
         {/* Background Image with Crisp Portrait Framing */}
         <div className="absolute inset-0 z-0">
           <picture>
-            <source media="(max-width: 640px)" srcSet="/images/occasions/wedding_edit.jpg" />
+            <source media="(max-width: 640px)" srcSet="/images/occasions/wedding_collection.jpg" />
             <img
-              src="/images/occasions/wedding_edit.jpg"
-              alt="Indian bride adorned in an ornate crimson and gold handcrafted silk saree"
+              src="/images/occasions/wedding_collection.jpg"
+              alt="Royal Indian bride in magnificent gold and crimson handloom silk saree"
               loading="eager"
               fetchPriority="high"
               decoding="async"
-              className="w-full h-full object-cover object-[center_top] sm:object-[center_12%] md:object-[right_center] lg:object-right opacity-100 transition-transform duration-1000 ease-out"
+              className="w-full h-full object-cover object-[center_top] sm:object-[center_15%] md:object-[right_center] lg:object-right opacity-100 transition-transform duration-1000 ease-out"
             />
           </picture>
           {/* Refined Luxury Vignette Gradient */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/70 via-55% to-transparent md:bg-gradient-to-r md:from-[#1F1A1C]/95 md:from-20% md:via-[#1F1A1C]/60 md:via-45% md:to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/75 via-50% to-transparent md:bg-gradient-to-r md:from-[#1F1A1C]/95 md:from-25% md:via-[#1F1A1C]/65 md:via-50% md:to-transparent pointer-events-none" />
         </div>
 
         {/* Hero Content with Luxury Framing */}
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 md:py-24 lg:py-28 w-full flex flex-col justify-end md:justify-center">
-          <div className="max-w-xl md:max-w-lg lg:max-w-xl xl:max-w-2xl bg-[#1F1A1C]/75 md:bg-transparent backdrop-blur-md md:backdrop-blur-none p-5 sm:p-7 md:p-0 rounded-2xl sm:rounded-3xl md:rounded-none border border-[#C5A059]/30 md:border-0 shadow-2xl md:shadow-none animate-fade-in">
+          <div className="max-w-xl md:max-w-lg lg:max-w-xl xl:max-w-2xl bg-[#1F1A1C]/80 md:bg-transparent backdrop-blur-md md:backdrop-blur-none p-5 sm:p-7 md:p-0 rounded-2xl sm:rounded-3xl md:rounded-none border border-[#C5A059]/30 md:border-0 shadow-2xl md:shadow-none animate-fade-in">
             {/* Pill Tag */}
             <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#5B1425]/90 border border-[#C5A059]/40 text-[#E0C07F] text-[10px] sm:text-xs font-semibold uppercase tracking-widest mb-3 sm:mb-4 shadow-md">
               <Sparkles className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-              <span>The Festive & Bridal Heirloom Edit</span>
+              <span>The Royal Heirloom Edition 2026</span>
             </div>
 
             {/* Headline */}
             <h1 className="font-serif text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-[1.18] sm:leading-[1.12] tracking-tight text-[#FAF7F2] drop-shadow-sm animate-slide-up">
-              Timeless Weaves, <br />
-              <span className="italic font-normal text-[#E0C07F]">Woven for Generations.</span>
+              Every Drape, <br />
+              <span className="italic font-normal text-[#E0C07F]">A Royal Masterpiece.</span>
             </h1>
 
             {/* Description */}
             <p className="mt-2.5 sm:mt-4 text-xs sm:text-sm md:text-base text-[#FAF7F2]/90 leading-relaxed font-sans max-w-lg drop-shadow-xs">
-              Handcrafted Banarasi, pure Kanjivaram, and ethereal organza sarees designed to make your celebratory moments unforgettable.
+              Handcrafted in pure zari and mulberry silk. Discover authentic weaves from Varanasi and Kanchipuram, sculpted with centuries-old artistry for life's grandest moments.
             </p>
 
             {/* Action Buttons */}
@@ -164,7 +164,7 @@ export default function HomePage({ onNavigate }) {
                 }}
                 className="flex-1 sm:flex-none px-5 sm:px-8 py-3 sm:py-3.5 min-h-[44px] bg-white/10 hover:bg-white/20 backdrop-blur-md text-[#FAF7F2] font-semibold text-xs uppercase tracking-widest rounded-xl transition-all duration-300 border border-white/25 hover:border-[#C5A059] active:scale-95 flex items-center justify-center text-center cursor-pointer whitespace-nowrap"
               >
-                Bridal Edit
+                Royal Bridal Edit
               </a>
             </div>
 
@@ -173,7 +173,7 @@ export default function HomePage({ onNavigate }) {
               <div>
                 <div className="font-serif text-sm sm:text-lg md:text-xl font-bold text-[#E0C07F]">100%</div>
                 <div className="text-[10px] sm:text-[11px] text-[#FAF7F2]/80 uppercase tracking-wider font-medium mt-0.5 leading-tight">
-                  Pure Handloom
+                  Pure Mulberry Silk
                 </div>
               </div>
               <div className="border-x border-white/10 px-1 sm:px-0 sm:border-0">
