@@ -327,13 +327,13 @@ export default function HomePage({ onNavigate }) {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent group-hover:from-[#5B1425]/90 transition-colors duration-300" />
                   
-                  <div className="absolute inset-x-3 bottom-3 sm:bottom-4 text-center text-white">
-                    <h3 className="font-serif text-xs sm:text-lg font-bold tracking-wide leading-snug sm:leading-normal group-hover:text-[#E0C07F] transition line-clamp-2">
+                  <div className="absolute inset-x-2.5 sm:inset-x-3 bottom-3 sm:bottom-4 text-center text-white">
+                    <h3 className="font-serif text-sm sm:text-lg font-bold tracking-normal sm:tracking-wide leading-tight sm:leading-normal group-hover:text-[#E0C07F] transition line-clamp-2">
                       {cat.name}
                     </h3>
-                    <div className="mt-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-[#C5A059] inline-flex items-center gap-0.5">
+                    <div className="mt-1 text-[11px] sm:text-xs font-bold uppercase tracking-normal sm:tracking-wider text-[#C5A059] inline-flex items-center gap-0.5">
                       <span>Explore</span>
-                      <ChevronRight className="w-2.5 h-2.5" />
+                      <ChevronRight className="w-3 h-3" />
                     </div>
                   </div>
                 </a>
@@ -571,7 +571,7 @@ export default function HomePage({ onNavigate }) {
                     <button
                       type="button"
                       onClick={() => toggleReview(idx)}
-                      className="text-[11px] font-semibold text-[#8C6D23] hover:text-[#5B1425] hover:underline mt-2 inline-block focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded transition cursor-pointer"
+                      className="text-xs font-semibold text-[#8C6D23] hover:text-[#5B1425] hover:underline mt-1 py-1.5 px-2 -ml-2 min-h-[40px] inline-flex items-center rounded-lg transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
                       aria-expanded={isExpanded}
                     >
                       {isExpanded ? 'Show less' : 'Read full review'}
