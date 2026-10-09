@@ -46,27 +46,28 @@ export default function WishlistPage({ onNavigate }) {
         {wishlistItems.map((item) => (
           <div
             key={item.product_id || item.id}
-            role="link"
-            tabIndex={0}
-            onClick={() => onNavigate('product', { slug: item.slug })}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                if (e.target === e.currentTarget) {
-                  e.preventDefault();
-                  onNavigate('product', { slug: item.slug });
-                }
-              }
-            }}
-            className="bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden shadow-sm hover:shadow-lg transition flex flex-col justify-between cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
+            className="group relative bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden shadow-sm hover:shadow-lg transition flex flex-col justify-between"
           >
             <div className="relative aspect-[3/4] bg-[#F4EFEB]">
-              <img
-                src={item.primary_image || item.image_url || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=400&q=80'}
-                alt={item.name}
-                className="w-full h-full object-cover"
-              />
+              <a
+                href={`/product/${item.slug}`}
+                onClick={(e) => {
+                  if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+                  e.preventDefault();
+                  onNavigate('product', { slug: item.slug });
+                }}
+                aria-label={`View ${item.name}`}
+                className="block w-full h-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:ring-inset"
+              >
+                <img
+                  src={item.primary_image || item.image_url || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=400&q=80'}
+                  alt={item.name}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+              </a>
               <button
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   toggleWishlist(item);
                 }}
@@ -79,7 +80,15 @@ export default function WishlistPage({ onNavigate }) {
             </div>
 
             <div className="p-4 space-y-3">
-              <div>
+              <a
+                href={`/product/${item.slug}`}
+                onClick={(e) => {
+                  if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+                  e.preventDefault();
+                  onNavigate('product', { slug: item.slug });
+                }}
+                className="block group-hover:text-[#5B1425] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] rounded-lg"
+              >
                 <h3 className="font-serif text-sm font-bold text-[#1F1A1C] group-hover:text-[#5B1425] line-clamp-1">
                   {item.name}
                 </h3>
@@ -93,10 +102,11 @@ export default function WishlistPage({ onNavigate }) {
                     </span>
                   )}
                 </div>
-              </div>
+              </a>
 
               <button
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   moveToCart(item);
                 }}

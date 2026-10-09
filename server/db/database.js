@@ -82,6 +82,7 @@ function initSchema() {
       is_featured INTEGER DEFAULT 0,
       is_new_arrival INTEGER DEFAULT 0,
       is_best_seller INTEGER DEFAULT 0,
+      silk_mark_certified INTEGER DEFAULT 0,
       color_name TEXT DEFAULT 'Wine Red',
       color_hex TEXT DEFAULT '#5B1425',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -258,6 +259,10 @@ function initSchema() {
   } catch (e) {}
   try {
     db.exec(`ALTER TABLE orders ADD COLUMN gift_message TEXT DEFAULT NULL;`);
+  } catch (e) {}
+
+  try {
+    db.exec(`ALTER TABLE products ADD COLUMN silk_mark_certified INTEGER DEFAULT 0;`);
   } catch (e) {}
 
   // Migration: Ensure distinct primary and gallery images for all best-seller records across existing databases

@@ -220,8 +220,8 @@ function seedDatabase(options = {}) {
       name, slug, tagline, description, short_desc, category_id, fabric, occasion, pattern,
       saree_length, blouse_length, care_instructions, price, mrp, discount_percent, rating,
       review_count, stock_quantity, sku, is_featured, is_new_arrival, is_best_seller,
-      color_name, color_hex
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      silk_mark_certified, color_name, color_hex
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(slug) DO UPDATE SET
       name = excluded.name,
       tagline = excluded.tagline,
@@ -243,6 +243,7 @@ function seedDatabase(options = {}) {
       is_featured = excluded.is_featured,
       is_new_arrival = excluded.is_new_arrival,
       is_best_seller = excluded.is_best_seller,
+      silk_mark_certified = excluded.silk_mark_certified,
       color_name = excluded.color_name,
       color_hex = excluded.color_hex
   `);
@@ -982,6 +983,20 @@ function seedDatabase(options = {}) {
   const productMap = {};
   for (const prod of productsData) {
     const categoryId = categoryMap[prod.category_slug] || 1;
+    const isSilkMark = prod.silk_mark_certified !== undefined
+      ? prod.silk_mark_certified
+      : (
+          prod.fabric &&
+          (prod.fabric.toLowerCase().includes('pure') || prod.fabric.toLowerCase().includes('katan silk') || prod.fabric.toLowerCase().includes('kanjivaram') || prod.fabric.toLowerCase().includes('paithani') || prod.fabric.toLowerCase().includes('chanderi')) &&
+          !prod.fabric.toLowerCase().includes('velvet') &&
+          !prod.fabric.toLowerCase().includes('georgette') &&
+          !prod.fabric.toLowerCase().includes('cotton') &&
+          !prod.fabric.toLowerCase().includes('linen') &&
+          !prod.fabric.toLowerCase().includes('lurex') &&
+          !prod.fabric.toLowerCase().includes('viscose') &&
+          !prod.fabric.toLowerCase().includes('polyester')
+        ) ? 1 : 0;
+
     insertProduct.run(
       prod.name,
       prod.slug,
@@ -1005,6 +1020,7 @@ function seedDatabase(options = {}) {
       prod.is_featured,
       prod.is_new_arrival,
       prod.is_best_seller,
+      isSilkMark,
       prod.color_name,
       prod.color_hex
     );

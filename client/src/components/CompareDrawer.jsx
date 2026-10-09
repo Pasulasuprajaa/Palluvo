@@ -236,16 +236,39 @@ export default function CompareDrawer({ onNavigate }) {
                   {/* Certification */}
                   <tr>
                     <td className="p-3 font-semibold text-gray-700 sticky left-0 bg-[#FAF7F2] z-10">
-                      Silk Certification
+                      Authenticity Certification
                     </td>
-                    {compareItems.map((item) => (
-                      <td key={item.id} className="p-3 text-center">
-                        <div className="inline-flex items-center gap-1 text-[#0D4734] font-semibold bg-emerald-50 px-2 py-0.5 rounded-md text-[11px] border border-emerald-200">
-                          <Check className="w-3 h-3" />
-                          <span>Silk Mark Certified</span>
-                        </div>
-                      </td>
-                    ))}
+                    {compareItems.map((item) => {
+                      const isItemSilkMark = Boolean(
+                        item.silk_mark_certified === 1 ||
+                        item.silk_mark_certified === true ||
+                        (
+                          item.fabric &&
+                          (item.fabric.toLowerCase().includes('pure') || item.fabric.toLowerCase().includes('katan silk') || item.fabric.toLowerCase().includes('kanjivaram') || item.fabric.toLowerCase().includes('paithani') || item.fabric.toLowerCase().includes('chanderi')) &&
+                          !item.fabric.toLowerCase().includes('velvet') &&
+                          !item.fabric.toLowerCase().includes('georgette') &&
+                          !item.fabric.toLowerCase().includes('cotton') &&
+                          !item.fabric.toLowerCase().includes('linen') &&
+                          !item.fabric.toLowerCase().includes('lurex') &&
+                          !item.fabric.toLowerCase().includes('viscose') &&
+                          !item.fabric.toLowerCase().includes('polyester')
+                        )
+                      );
+                      return (
+                        <td key={item.id} className="p-3 text-center">
+                          {isItemSilkMark ? (
+                            <div className="inline-flex items-center gap-1 text-[#0D4734] font-semibold bg-emerald-50 px-2 py-0.5 rounded-md text-[11px] border border-emerald-200">
+                              <Check className="w-3 h-3" />
+                              <span>Silk Mark Certified</span>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-1 text-gray-700 font-semibold bg-gray-50 px-2 py-0.5 rounded-md text-[11px] border border-gray-200">
+                              <span>100% Quality Assured</span>
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
 
                   {/* Stock Availability */}

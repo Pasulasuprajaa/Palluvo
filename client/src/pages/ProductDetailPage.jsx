@@ -182,6 +182,24 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   });
   const totalReviewsCount = reviews.length || product.review_count || 0;
 
+  const isSilkMarkCertified = Boolean(
+    product && (
+      product.silk_mark_certified === 1 ||
+      product.silk_mark_certified === true ||
+      (
+        product.fabric &&
+        (product.fabric.toLowerCase().includes('pure') || product.fabric.toLowerCase().includes('katan silk') || product.fabric.toLowerCase().includes('kanjivaram') || product.fabric.toLowerCase().includes('paithani') || product.fabric.toLowerCase().includes('chanderi')) &&
+        !product.fabric.toLowerCase().includes('velvet') &&
+        !product.fabric.toLowerCase().includes('georgette') &&
+        !product.fabric.toLowerCase().includes('cotton') &&
+        !product.fabric.toLowerCase().includes('linen') &&
+        !product.fabric.toLowerCase().includes('lurex') &&
+        !product.fabric.toLowerCase().includes('viscose') &&
+        !product.fabric.toLowerCase().includes('polyester')
+      )
+    )
+  );
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
       {/* Breadcrumb Navigation */}
@@ -234,9 +252,11 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                   {product.discount_percent}% OFF
                 </span>
               )}
-              <span className="bg-emerald-800 text-white text-[10px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-                <Check className="w-3 h-3" /> Silk Mark Certified
-              </span>
+              {isSilkMarkCertified ? (
+                <span className="bg-emerald-800 text-white text-[10px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                  <Check className="w-3 h-3" /> Silk Mark Certified
+                </span>
+              ) : null}
             </div>
 
             {/* Zoom Trigger Button */}
@@ -584,9 +604,9 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
           {/* Flipkart / Amazon Trust Guarantee Icons */}
           <div className="grid grid-cols-3 gap-3 pt-4 border-t border-[#E8E1D5] text-center text-[11px] text-gray-600">
             <div className="p-3 bg-white rounded-xl border border-[#E8E1D5] space-y-1">
-              <ShieldCheck className="w-5 h-5 text-emerald-700 mx-auto" />
-              <div className="font-bold text-gray-900">Silk Mark Certified</div>
-              <div className="text-[10px] text-gray-500">100% Pure Heritage Silk</div>
+              <ShieldCheck className={`w-5 h-5 ${isSilkMarkCertified ? 'text-emerald-700' : 'text-[#5B1425]'} mx-auto`} />
+              <div className="font-bold text-gray-900">{isSilkMarkCertified ? 'Silk Mark Certified' : '100% Quality Assured'}</div>
+              <div className="text-[10px] text-gray-500">{isSilkMarkCertified ? '100% Pure Heritage Silk' : 'Master Craftsmanship Verified'}</div>
             </div>
             <div className="p-3 bg-white rounded-xl border border-[#E8E1D5] space-y-1">
               <Truck className="w-5 h-5 text-[#5B1425] mx-auto" />
@@ -685,10 +705,12 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                     <td className="p-3 font-semibold text-gray-600">Care & Preservation</td>
                     <td className="p-3 text-gray-900">{product.care_instructions || 'Strictly Dry Clean Only. Wrap in pure muslin cloth.'}</td>
                   </tr>
-                  <tr className="bg-[#FAF7F2]">
-                    <td className="p-3 font-semibold text-gray-600">Silk Authenticity Mark</td>
-                    <td className="p-3 text-emerald-800 font-bold">Silk Mark Organization of India Registered</td>
-                  </tr>
+                  {isSilkMarkCertified ? (
+                    <tr className="bg-[#FAF7F2]">
+                      <td className="p-3 font-semibold text-gray-600">Silk Authenticity Mark</td>
+                      <td className="p-3 text-emerald-800 font-bold">Silk Mark Organization of India Registered</td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>

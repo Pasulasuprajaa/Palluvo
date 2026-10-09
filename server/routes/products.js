@@ -29,7 +29,7 @@ router.get('/', (req, res) => {
         SELECT p.id, p.name, p.slug, p.tagline, p.description, p.short_desc, p.category_id,
           p.fabric, p.occasion, p.pattern, p.saree_length, p.blouse_length, p.care_instructions,
           p.price, p.mrp, p.discount_percent, p.stock_quantity, p.sku, p.is_featured,
-          p.is_new_arrival, p.is_best_seller, p.color_name, p.color_hex, p.created_at, p.updated_at,
+          p.is_new_arrival, p.is_best_seller, p.silk_mark_certified, p.color_name, p.color_hex, p.created_at, p.updated_at,
           c.name as category_name, c.slug as category_slug,
           (SELECT COUNT(*) FROM reviews WHERE product_id = p.id) as review_count,
           (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE product_id = p.id) as rating,
@@ -238,7 +238,7 @@ router.get('/:slugOrId', (req, res) => {
         SELECT p.id, p.name, p.slug, p.tagline, p.description, p.short_desc, p.category_id,
           p.fabric, p.occasion, p.pattern, p.saree_length, p.blouse_length, p.care_instructions,
           p.price, p.mrp, p.discount_percent, p.stock_quantity, p.sku, p.is_featured,
-          p.is_new_arrival, p.is_best_seller, p.color_name, p.color_hex, p.created_at, p.updated_at,
+          p.is_new_arrival, p.is_best_seller, p.silk_mark_certified, p.color_name, p.color_hex, p.created_at, p.updated_at,
           c.name as category_name, c.slug as category_slug,
           (SELECT COUNT(*) FROM reviews WHERE product_id = p.id) as review_count,
           (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE product_id = p.id) as rating
@@ -251,7 +251,7 @@ router.get('/:slugOrId', (req, res) => {
         SELECT p.id, p.name, p.slug, p.tagline, p.description, p.short_desc, p.category_id,
           p.fabric, p.occasion, p.pattern, p.saree_length, p.blouse_length, p.care_instructions,
           p.price, p.mrp, p.discount_percent, p.stock_quantity, p.sku, p.is_featured,
-          p.is_new_arrival, p.is_best_seller, p.color_name, p.color_hex, p.created_at, p.updated_at,
+          p.is_new_arrival, p.is_best_seller, p.silk_mark_certified, p.color_name, p.color_hex, p.created_at, p.updated_at,
           c.name as category_name, c.slug as category_slug,
           (SELECT COUNT(*) FROM reviews WHERE product_id = p.id) as review_count,
           (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE product_id = p.id) as rating

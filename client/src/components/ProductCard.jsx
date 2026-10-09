@@ -23,74 +23,81 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
   );
   const secondaryImg = hasItemSpecificAlternate ? rawSecondary : primaryImg;
 
-  const handleCardClick = (e) => {
-    if (e && (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0))) {
-      return;
+  const handleProductClick = (e) => {
+    if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) {
+      return; // Allow native middle click / Ctrl+click / new tab
     }
-    if (e && e.preventDefault) {
-      e.preventDefault();
-    }
+    e.preventDefault();
     onNavigate('product', { slug: product.slug });
   };
 
   const handleQuickView = (e) => {
+    e.preventDefault();
     e.stopPropagation();
     setQuickViewProduct(product);
   };
 
   const handleWishlistClick = (e) => {
+    e.preventDefault();
     e.stopPropagation();
     toggleWishlist(product);
   };
 
-  const handleCompareClick = (e) => {
-    e.stopPropagation();
-    addToCompare(product);
-  };
-
   const handleAddToCart = (e) => {
+    e.preventDefault();
     e.stopPropagation();
     addToCart(product);
   };
 
+  const isSilkMarkCertified = Boolean(
+    product.silk_mark_certified === 1 ||
+    product.silk_mark_certified === true ||
+    (
+      product.fabric &&
+      (product.fabric.toLowerCase().includes('pure') || product.fabric.toLowerCase().includes('katan silk') || product.fabric.toLowerCase().includes('kanjivaram') || product.fabric.toLowerCase().includes('paithani') || product.fabric.toLowerCase().includes('chanderi')) &&
+      !product.fabric.toLowerCase().includes('velvet') &&
+      !product.fabric.toLowerCase().includes('georgette') &&
+      !product.fabric.toLowerCase().includes('cotton') &&
+      !product.fabric.toLowerCase().includes('linen') &&
+      !product.fabric.toLowerCase().includes('lurex') &&
+      !product.fabric.toLowerCase().includes('viscose') &&
+      !product.fabric.toLowerCase().includes('polyester')
+    )
+  );
+
   return (
     <div
-      role="link"
-      tabIndex={0}
-      onClick={handleCardClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          if (e.target === e.currentTarget) {
-            e.preventDefault();
-            handleCardClick(e);
-          }
-        }
-      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      aria-label={`${product.name} - ₹${product.price?.toLocaleString('en-IN')}`}
-      className="group relative bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none w-full select-none"
+      className="group relative bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col w-full select-none"
     >
-      {/* 1. Image Container (Entire surface clickable) */}
-      <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#F4EFEB] cursor-pointer">
-        {/* Shimmer Placeholder while Image Loads */}
-        <div
-          aria-hidden="true"
-          className={`absolute inset-0 bg-gradient-to-b from-[#EAE2D7]/80 via-[#FAF7F2]/60 to-[#EAE2D7]/80 animate-pulse transition-opacity duration-500 z-0 ${
-            imageLoaded ? 'opacity-0 pointer-events-none' : 'opacity-100'
-          }`}
-        />
+      {/* 1. Image Container with Native Link */}
+      <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#F4EFEB]">
+        <a
+          href={`/product/${product.slug}`}
+          onClick={handleProductClick}
+          aria-label={`${product.name} - ₹${product.price?.toLocaleString('en-IN')}`}
+          className="block w-full h-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:ring-inset"
+        >
+          {/* Shimmer Placeholder while Image Loads */}
+          <div
+            aria-hidden="true"
+            className={`absolute inset-0 bg-gradient-to-b from-[#EAE2D7]/80 via-[#FAF7F2]/60 to-[#EAE2D7]/80 animate-pulse transition-opacity duration-500 z-0 ${
+              imageLoaded ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            }`}
+          />
 
-        <img
-          src={isHovered ? secondaryImg : primaryImg}
-          alt={product.name}
-          loading={priority ? 'eager' : imageLoading}
-          decoding="async"
-          onLoad={() => setImageLoaded(true)}
-          className={`w-full h-full object-cover object-top transition-all duration-700 ease-out group-hover:scale-105 pointer-events-none ${
-            imageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
-          }`}
-        />
+          <img
+            src={isHovered ? secondaryImg : primaryImg}
+            alt={product.name}
+            loading={priority ? 'eager' : imageLoading}
+            decoding="async"
+            onLoad={() => setImageLoaded(true)}
+            className={`w-full h-full object-cover object-top transition-all duration-700 ease-out group-hover:scale-105 pointer-events-none ${
+              imageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
+            }`}
+          />
+        </a>
 
         {/* Single Prioritized Discount Badge */}
         <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
@@ -105,7 +112,7 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
           ) : null}
         </div>
 
-        {/* Wishlist Button (44x44px accessible touch target) */}
+        {/* Wishlist Button (44x44px accessible touch target outside link) */}
         <div className="absolute top-1 right-1 z-20">
           <button
             onClick={handleWishlistClick}
@@ -125,7 +132,7 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
           </button>
         </div>
 
-        {/* Desktop Quick View Button (Revealed on hover/focus) */}
+        {/* Desktop Quick View Button (Revealed on hover/focus outside link) */}
         <div className="hidden sm:flex absolute inset-x-3 bottom-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-300 gap-2 z-20">
           <button
             onClick={handleQuickView}
@@ -138,9 +145,13 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
         </div>
       </div>
 
-      {/* 2. Product Details (Entire surface clickable) */}
-      <div className="p-4 flex-1 flex flex-col justify-between space-y-2.5 cursor-pointer">
-        <div>
+      {/* 2. Product Details */}
+      <div className="p-4 flex-1 flex flex-col justify-between space-y-2.5">
+        <a
+          href={`/product/${product.slug}`}
+          onClick={handleProductClick}
+          className="block group/link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] rounded-lg"
+        >
           {/* Fabric & Occasion Tag */}
           <div className="flex items-center justify-between text-[11px] text-[#6E6467] mb-1">
             <span className="font-medium tracking-wide text-[#6E6467]">{product.fabric}</span>
@@ -148,12 +159,12 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
           </div>
 
           {/* Product Title */}
-          <h3 className="min-h-[44px] flex items-center font-serif text-sm sm:text-base font-semibold text-[#1F1A1C] group-hover:text-[#5B1425] transition leading-snug cursor-pointer line-clamp-2">
+          <h3 className="min-h-[44px] flex items-center font-serif text-sm sm:text-base font-semibold text-[#1F1A1C] group-hover/link:text-[#5B1425] transition leading-snug line-clamp-2">
             {product.name}
           </h3>
 
-          {/* Rating & Silk Mark Certification */}
-          <div className="flex items-center justify-between mt-1.5">
+          {/* Rating & Silk Mark Certification (only for verified pure-silk items) */}
+          <div className="flex items-center justify-between mt-1.5 min-h-[24px]">
             {Number(product.review_count) > 0 ? (
               <div
                 aria-label={`Rated ${(Number(product.rating) || 0).toFixed(1)} out of 5 based on ${product.review_count} review${Number(product.review_count) === 1 ? '' : 's'}`}
@@ -176,16 +187,22 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
               </div>
             )}
 
-            <span className="text-[10px] text-emerald-800 font-semibold flex items-center gap-0.5">
-              <Check className="w-3 h-3 text-emerald-600" />
-              <span>Silk Mark</span>
-            </span>
+            {isSilkMarkCertified ? (
+              <span className="text-[10px] text-emerald-800 font-semibold flex items-center gap-0.5">
+                <Check className="w-3 h-3 text-emerald-600" />
+                <span>Silk Mark</span>
+              </span>
+            ) : null}
           </div>
-        </div>
+        </a>
 
         {/* Price & Action Buttons */}
         <div className="pt-2 border-t border-[#F4EFEB] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div>
+          <a
+            href={`/product/${product.slug}`}
+            onClick={handleProductClick}
+            className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] rounded-lg"
+          >
             <div className="flex items-baseline gap-1.5 flex-wrap">
               <span className="font-sans text-base sm:text-lg font-bold text-[#5B1425] tracking-tight">
                 ₹{product.price?.toLocaleString('en-IN')}
@@ -199,7 +216,7 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
             <div className="text-[10px] text-emerald-700 font-medium mt-0.5">
               Free Express Delivery
             </div>
-          </div>
+          </a>
 
           <div className="flex items-center gap-2 w-full sm:w-auto relative z-20">
             {/* Mobile Touch Quick View (44x44px accessible touch target) */}
