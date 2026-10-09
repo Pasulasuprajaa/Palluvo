@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { CheckCircle, Sparkles, Truck, Package, ArrowRight, Printer, ShoppingBag } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function OrderSuccessPage({ order: initialOrder, orderId, onNavigate }) {
   const [order, setOrder] = useState(initialOrder || null);
   const [loading, setLoading] = useState(!initialOrder && !!orderId);
+  const { token } = useAuth();
 
   useEffect(() => {
     if (initialOrder) {
@@ -13,20 +15,24 @@ export default function OrderSuccessPage({ order: initialOrder, orderId, onNavig
       async function fetchOrderDetails() {
         try {
           setLoading(true);
-          const res = await fetch(`/api/orders/track/${encodeURIComponent(orderId)}`);
+          const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+          const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, { headers });
           if (res.ok) {
             const data = await res.json();
             if (data.order) setOrder(data.order);
+          } else {
+            setOrder(null);
           }
         } catch (err) {
           console.error('Order fetch error on success page:', err);
+          setOrder(null);
         } finally {
           setLoading(false);
         }
       }
       fetchOrderDetails();
     }
-  }, [initialOrder, orderId]);
+  }, [initialOrder, orderId, token]);
 
   useEffect(() => {
     // Launch celebratory luxury gold & burgundy confetti

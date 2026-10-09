@@ -34,32 +34,33 @@ router.get('/', authenticateToken, (req, res) => {
   }
 });
 
-// GET /api/orders/track/:identifier (Track order by Order Number or Tracking Number)
+// GET /api/orders/track/:identifier (Track order by high-entropy Order Number or Tracking Number ONLY)
 router.get('/track/:identifier', optionalAuth, (req, res) => {
   try {
     const { identifier } = req.params;
-    const cleanId = identifier.trim();
+    const cleanId = (identifier || '').trim();
 
+    if (!cleanId) {
+      return res.status(400).json({ error: 'Please provide an Order Number or Tracking Number.' });
+    }
+
+    // High-entropy lookup only (do not allow auto-increment numeric id enumeration)
     const order = db.prepare(`
-      SELECT * FROM orders
-      WHERE order_number = ? OR tracking_number = ? OR id = ?
-    `).get(cleanId, cleanId, isNaN(cleanId) ? -1 : parseInt(cleanId));
+      SELECT id, order_number, tracking_number, courier_partner, estimated_delivery, status, payment_status, created_at
+      FROM orders
+      WHERE order_number = ? OR tracking_number = ?
+    `).get(cleanId, cleanId);
 
     if (!order) {
       return res.status(404).json({ error: 'Order not found. Please check your Order ID or Tracking Number.' });
     }
 
-    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
-    let address = {};
-    try {
-      address = JSON.parse(order.address_data);
-    } catch (e) {
-      address = { raw: order.address_data };
-    }
+    const items = db.prepare(`
+      SELECT product_name, variant_name, quantity, image_url, price 
+      FROM order_items 
+      WHERE order_id = ?
+    `).all(order.id);
 
-    // Build timeline milestones
-    const allStatuses = ['Placed', 'Payment Verified', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered'];
-    
     // Map current order status to milestone index
     const statusMap = {
       'Placed': 0,
@@ -113,14 +114,18 @@ router.get('/track/:identifier', optionalAuth, (req, res) => {
       }
     ];
 
+    // Return only minimum non-PII fields needed for tracking
     res.json({
       order: {
-        ...order,
-        address,
-        items,
+        order_number: order.order_number,
+        tracking_number: order.tracking_number,
+        courier_partner: order.courier_partner,
+        estimated_delivery: order.estimated_delivery,
+        status: order.status,
         timeline,
         currentStageIndex,
-        isCancelled: order.status === 'Cancelled'
+        isCancelled: order.status === 'Cancelled',
+        items
       }
     });
   } catch (err) {
@@ -129,14 +134,22 @@ router.get('/track/:identifier', optionalAuth, (req, res) => {
   }
 });
 
-// GET /api/orders/:id (Single order detail)
+// GET /api/orders/:id (Single order detail - Authenticated & Owner Checked)
 router.get('/:id', authenticateToken, (req, res) => {
   try {
-    const order = db.prepare('SELECT * FROM orders WHERE (id = ? OR order_number = ?) AND user_id = ?')
-      .get(req.params.id, req.params.id, req.user.id);
+    const { id } = req.params;
+    const cleanId = (id || '').trim();
+    const isNum = !isNaN(cleanId) && cleanId !== '';
+    const numericId = isNum ? parseInt(cleanId, 10) : -1;
+
+    const order = db.prepare(`
+      SELECT * FROM orders 
+      WHERE (id = ? OR order_number = ?) 
+        AND (user_id = ? OR ? = 'admin')
+    `).get(numericId, cleanId, req.user.id, req.user.role || 'user');
 
     if (!order) {
-      return res.status(404).json({ error: 'Order not found.' });
+      return res.status(404).json({ error: 'Order not found or unauthorized.' });
     }
 
     const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);

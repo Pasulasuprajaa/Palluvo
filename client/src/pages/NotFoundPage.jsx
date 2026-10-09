@@ -5,7 +5,7 @@ export default function NotFoundPage({ onNavigate, invalidPath }) {
   const quickLinks = [
     { label: 'Banarasi Sarees', category: 'banarasi-sarees' },
     { label: 'Kanjivaram Silk', category: 'kanjivaram-sarees' },
-    { label: 'Chanderi & Handloom', category: 'chanderi-sarees' },
+    { label: 'Cotton & Handloom', category: 'cotton-sarees' },
     { label: 'Organza Drapes', category: 'organza-sarees' }
   ];
 
