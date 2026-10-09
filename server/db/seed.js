@@ -4,27 +4,33 @@ const bcrypt = require('bcryptjs');
 function seedDatabase(options = {}) {
   const isProduction = options.isProduction ?? (process.env.NODE_ENV === 'production');
   const allowDemoAccounts = !isProduction && process.env.DISABLE_DEMO_ACCOUNTS !== 'true';
+  // Destructive reset is strictly forbidden in production and only allowed when explicitly requested in development
+  const isDestructive = !isProduction && (options.destructive === true || process.argv.includes('--reset') || process.argv.includes('--destructive'));
 
-  console.log(`--- Starting PALLUVO Database Seeding [Mode: ${isProduction ? 'Production' : 'Development'}] ---`);
+  console.log(`--- Starting PALLUVO Database Seeding [Mode: ${isProduction ? 'Production' : 'Development'}, Destructive: ${isDestructive}] ---`);
 
-  // Clear old data for fresh seed
-  db.exec(`
-    DELETE FROM payments;
-    DELETE FROM order_items;
-    DELETE FROM orders;
-    DELETE FROM reviews;
-    DELETE FROM cart_items;
-    DELETE FROM wishlist_items;
-    DELETE FROM product_variants;
-    DELETE FROM product_images;
-    DELETE FROM products;
-    DELETE FROM categories;
-    DELETE FROM coupons;
-    DELETE FROM addresses;
-    DELETE FROM users;
-  `);
+  // Clear old data ONLY if explicit destructive reset was requested in development
+  if (isDestructive) {
+    console.warn('⚠️ Performing destructive database reset (Development only)...');
+    db.exec(`
+      DELETE FROM payments;
+      DELETE FROM order_items;
+      DELETE FROM orders;
+      DELETE FROM reviews;
+      DELETE FROM cart_items;
+      DELETE FROM wishlist_items;
+      DELETE FROM product_variants;
+      DELETE FROM product_images;
+      DELETE FROM products;
+      DELETE FROM categories;
+      DELETE FROM coupons;
+      DELETE FROM addresses;
+      DELETE FROM users;
+    `);
+  }
 
-  let user1Result = null;
+  let userId1 = null;
+  let userId2 = null;
   const insertUser = db.prepare(`
     INSERT INTO users (name, email, password_hash, phone, role)
     VALUES (?, ?, ?, ?, ?)
@@ -35,75 +41,99 @@ function seedDatabase(options = {}) {
     const passwordHashAdmin = bcrypt.hashSync('admin123', 10);
     const passwordHashUser = bcrypt.hashSync('password123', 10);
 
-    insertUser.run(
-      'PALLUVO Concierge Admin',
-      'admin@palluvo.com',
-      passwordHashAdmin,
-      '+91 98765 43210',
-      'admin'
-    );
+    const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@palluvo.com');
+    if (!existingAdmin) {
+      insertUser.run(
+        'PALLUVO Concierge Admin',
+        'admin@palluvo.com',
+        passwordHashAdmin,
+        '+91 98765 43210',
+        'admin'
+      );
+    }
 
-    user1Result = insertUser.run(
-      'Priya Sharma',
-      'priya@example.com',
-      passwordHashUser,
-      '+91 98123 45678',
-      'user'
-    );
+    const existingUser1 = db.prepare('SELECT id FROM users WHERE email = ?').get('priya@example.com');
+    if (!existingUser1) {
+      const u1 = insertUser.run(
+        'Priya Sharma',
+        'priya@example.com',
+        passwordHashUser,
+        '+91 98123 45678',
+        'user'
+      );
+      userId1 = u1.lastInsertRowid;
+    } else {
+      userId1 = existingUser1.id;
+    }
 
-    insertUser.run(
-      'Ananya Iyer',
-      'ananya@example.com',
-      passwordHashUser,
-      '+91 99887 76655',
-      'user'
-    );
+    const existingUser2 = db.prepare('SELECT id FROM users WHERE email = ?').get('ananya@example.com');
+    if (!existingUser2) {
+      const u2 = insertUser.run(
+        'Ananya Iyer',
+        'ananya@example.com',
+        passwordHashUser,
+        '+91 99887 76655',
+        'user'
+      );
+      userId2 = u2.lastInsertRowid;
+    } else {
+      userId2 = existingUser2.id;
+    }
 
-    // 2. Seed Addresses for Demo User 1
-    const insertAddress = db.prepare(`
-      INSERT INTO addresses (user_id, name, phone, pincode, house_flat, area, city, state, landmark, is_default)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    // 2. Seed Addresses for Demo User 1 if none exists
+    if (userId1) {
+      const addrCount = db.prepare('SELECT COUNT(*) as count FROM addresses WHERE user_id = ?').get(userId1)?.count || 0;
+      if (addrCount === 0) {
+        const insertAddress = db.prepare(`
+          INSERT INTO addresses (user_id, name, phone, pincode, house_flat, area, city, state, landmark, is_default)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
 
-    insertAddress.run(
-      user1Result.lastInsertRowid,
-      'Priya Sharma',
-      '+91 98123 45678',
-      '560001',
-      'Flat 402, Royal Palms Residency',
-      'Lavelle Road, Shanthala Nagar',
-      'Bengaluru',
-      'Karnataka',
-      'Near UB City Mall',
-      1
-    );
+        insertAddress.run(
+          userId1,
+          'Priya Sharma',
+          '+91 98123 45678',
+          '560001',
+          'Flat 402, Royal Palms Residency',
+          'Lavelle Road, Shanthala Nagar',
+          'Bengaluru',
+          'Karnataka',
+          'Near UB City Mall',
+          1
+        );
 
-    insertAddress.run(
-      user1Result.lastInsertRowid,
-      'Priya Sharma (Work)',
-      '+91 98123 45678',
-      '560103',
-      'Tower B, 7th Floor, EcoWorld Tech Park',
-      'Outer Ring Road, Bellandur',
-      'Bengaluru',
-      'Karnataka',
-      'Opposite Central Mall',
-      0
-    );
+        insertAddress.run(
+          userId1,
+          'Priya Sharma (Work)',
+          '+91 98123 45678',
+          '560103',
+          'Tower B, 7th Floor, EcoWorld Tech Park',
+          'Outer Ring Road, Bellandur',
+          'Bengaluru',
+          'Karnataka',
+          'Opposite Central Mall',
+          0
+        );
+      }
+    }
   } else {
     // In production: check if INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD are provided via environment
     if (process.env.INITIAL_ADMIN_EMAIL && process.env.INITIAL_ADMIN_PASSWORD) {
-      const prodAdminHash = bcrypt.hashSync(process.env.INITIAL_ADMIN_PASSWORD, 12);
-      insertUser.run(
-        process.env.INITIAL_ADMIN_NAME || 'PALLUVO Administrator',
-        process.env.INITIAL_ADMIN_EMAIL.trim().toLowerCase(),
-        prodAdminHash,
-        process.env.INITIAL_ADMIN_PHONE || null,
-        'admin'
-      );
-      console.log(`✅ Production initial admin (${process.env.INITIAL_ADMIN_EMAIL}) provisioned via environment.`);
+      const cleanAdminEmail = process.env.INITIAL_ADMIN_EMAIL.trim().toLowerCase();
+      const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get(cleanAdminEmail);
+      if (!existingAdmin) {
+        const prodAdminHash = bcrypt.hashSync(process.env.INITIAL_ADMIN_PASSWORD, 12);
+        insertUser.run(
+          process.env.INITIAL_ADMIN_NAME || 'PALLUVO Administrator',
+          cleanAdminEmail,
+          prodAdminHash,
+          process.env.INITIAL_ADMIN_PHONE || null,
+          'admin'
+        );
+        console.log(`✅ Production initial admin (${cleanAdminEmail}) provisioned via environment.`);
+      }
     } else {
-      console.log('ℹ️ Production mode: Demo accounts omitted. Provision admin out-of-band via: npm run create-admin <email> <password>');
+      console.log('ℹ️ Production mode: Demo accounts omitted. Provision admin out-of-band via: npm run create-admin <email>');
     }
   }
 
@@ -111,6 +141,11 @@ function seedDatabase(options = {}) {
   const insertCategory = db.prepare(`
     INSERT INTO categories (name, slug, description, image_url, display_order)
     VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(slug) DO UPDATE SET
+      name = excluded.name,
+      description = excluded.description,
+      image_url = excluded.image_url,
+      display_order = excluded.display_order
   `);
 
   const categoriesData = [
@@ -174,8 +209,9 @@ function seedDatabase(options = {}) {
 
   const categoryMap = {};
   for (const cat of categoriesData) {
-    const res = insertCategory.run(cat.name, cat.slug, cat.description, cat.image_url, cat.display_order);
-    categoryMap[cat.slug] = res.lastInsertRowid;
+    insertCategory.run(cat.name, cat.slug, cat.description, cat.image_url, cat.display_order);
+    const catRow = db.prepare('SELECT id FROM categories WHERE slug = ?').get(cat.slug);
+    categoryMap[cat.slug] = catRow.id;
   }
 
   // 4. Seed Products with authentic saree images
@@ -186,6 +222,29 @@ function seedDatabase(options = {}) {
       review_count, stock_quantity, sku, is_featured, is_new_arrival, is_best_seller,
       color_name, color_hex
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(slug) DO UPDATE SET
+      name = excluded.name,
+      tagline = excluded.tagline,
+      description = excluded.description,
+      short_desc = excluded.short_desc,
+      category_id = excluded.category_id,
+      fabric = excluded.fabric,
+      occasion = excluded.occasion,
+      pattern = excluded.pattern,
+      saree_length = excluded.saree_length,
+      blouse_length = excluded.blouse_length,
+      care_instructions = excluded.care_instructions,
+      price = excluded.price,
+      mrp = excluded.mrp,
+      discount_percent = excluded.discount_percent,
+      rating = excluded.rating,
+      review_count = excluded.review_count,
+      sku = excluded.sku,
+      is_featured = excluded.is_featured,
+      is_new_arrival = excluded.is_new_arrival,
+      is_best_seller = excluded.is_best_seller,
+      color_name = excluded.color_name,
+      color_hex = excluded.color_hex
   `);
 
   const insertImage = db.prepare(`
@@ -923,7 +982,7 @@ function seedDatabase(options = {}) {
   const productMap = {};
   for (const prod of productsData) {
     const categoryId = categoryMap[prod.category_slug] || 1;
-    const res = insertProduct.run(
+    insertProduct.run(
       prod.name,
       prod.slug,
       prod.tagline,
@@ -949,18 +1008,26 @@ function seedDatabase(options = {}) {
       prod.color_name,
       prod.color_hex
     );
-    const prodId = res.lastInsertRowid;
+
+    const prodRow = db.prepare('SELECT id FROM products WHERE slug = ?').get(prod.slug);
+    const prodId = prodRow.id;
     productMap[prod.slug] = prodId;
 
-    // Insert Images
-    prod.images.forEach((imgUrl, idx) => {
-      insertImage.run(prodId, imgUrl, idx === 0 ? 1 : 0, idx + 1);
-    });
+    // Insert Images if none exist for this product
+    const imgCount = db.prepare('SELECT COUNT(*) as count FROM product_images WHERE product_id = ?').get(prodId)?.count || 0;
+    if (imgCount === 0) {
+      prod.images.forEach((imgUrl, idx) => {
+        insertImage.run(prodId, imgUrl, idx === 0 ? 1 : 0, idx + 1);
+      });
+    }
 
-    // Insert Variants
-    prod.variants.forEach((v) => {
-      insertVariant.run(prodId, v.color_name, v.color_hex, v.stock, v.sku);
-    });
+    // Insert Variants if none exist for this product
+    const varCount = db.prepare('SELECT COUNT(*) as count FROM product_variants WHERE product_id = ?').get(prodId)?.count || 0;
+    if (varCount === 0) {
+      prod.variants.forEach((v) => {
+        insertVariant.run(prodId, v.color_name, v.color_hex, v.stock, v.sku);
+      });
+    }
   }
 
   // 5. Seed Reviews
@@ -972,7 +1039,7 @@ function seedDatabase(options = {}) {
   const reviewsData = [
     {
       product_slug: 'royal-crimson-banarasi-katan-silk-saree',
-      user_id: user1Result.lastInsertRowid,
+      user_id: userId1,
       user_name: 'Priya Sharma',
       rating: 5,
       title: 'Breathtaking quality & royal packaging!',
@@ -981,7 +1048,7 @@ function seedDatabase(options = {}) {
     },
     {
       product_slug: 'royal-crimson-banarasi-katan-silk-saree',
-      user_id: user2Result.lastInsertRowid,
+      user_id: userId2,
       user_name: 'Ananya Iyer',
       rating: 5,
       title: 'Worth every rupee. Pure heritage.',
@@ -990,7 +1057,7 @@ function seedDatabase(options = {}) {
     },
     {
       product_slug: 'vaidarbhi-pure-kanjivaram-bridal-gold-silk-saree',
-      user_id: user1Result.lastInsertRowid,
+      user_id: userId1,
       user_name: 'Divya Venkat',
       rating: 5,
       title: 'Grandest bridal saree in my trousseau',
@@ -999,7 +1066,7 @@ function seedDatabase(options = {}) {
     },
     {
       product_slug: 'noor-rose-gold-embroidered-organza-saree',
-      user_id: user2Result.lastInsertRowid,
+      user_id: userId2,
       user_name: 'Kritika Roy',
       rating: 5,
       title: 'Ethereal drape and featherlight weight',
@@ -1008,7 +1075,7 @@ function seedDatabase(options = {}) {
     },
     {
       product_slug: 'midnight-velvet-sequined-cocktail-saree',
-      user_id: user1Result.lastInsertRowid,
+      user_id: userId1,
       user_name: 'Rhea Kapoor',
       rating: 5,
       title: 'Showstopper for evening parties',
@@ -1020,7 +1087,10 @@ function seedDatabase(options = {}) {
   for (const rev of reviewsData) {
     const prodId = productMap[rev.product_slug];
     if (prodId) {
-      insertReview.run(prodId, rev.user_id, rev.user_name, rev.rating, rev.title, rev.comment, rev.verified_purchase);
+      const existingRev = db.prepare('SELECT id FROM reviews WHERE product_id = ? AND title = ?').get(prodId, rev.title);
+      if (!existingRev) {
+        insertReview.run(prodId, rev.user_id, rev.user_name, rev.rating, rev.title, rev.comment, rev.verified_purchase);
+      }
     }
   }
 
@@ -1028,6 +1098,7 @@ function seedDatabase(options = {}) {
   const insertCoupon = db.prepare(`
     INSERT INTO coupons (code, title, description, discount_percent, max_discount_amount, min_order_amount, expiry_date, usage_limit, is_active)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(code) DO NOTHING
   `);
 
   const couponsData = [
@@ -1081,85 +1152,90 @@ function seedDatabase(options = {}) {
     insertCoupon.run(c.code, c.title, c.description, c.discount_percent, c.max_discount_amount, c.min_order_amount, c.expiry_date, c.usage_limit, c.is_active);
   }
 
-  // 7. Seed Sample Orders for Demo User (Development mode only)
-  if (allowDemoAccounts && user1Result) {
-    const insertOrder = db.prepare(`
-      INSERT INTO orders (
-        order_number, user_id, address_data, subtotal, discount_amount, coupon_code,
-        delivery_fee, tax_amount, total_amount, status, payment_status, payment_method,
-        razorpay_order_id, razorpay_payment_id, tracking_number, courier_partner, estimated_delivery, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+  // 7. Seed Sample Orders for Demo User (Development mode only when no orders exist)
+  if (allowDemoAccounts && userId1) {
+    const orderCount = db.prepare('SELECT COUNT(*) as count FROM orders WHERE user_id = ?').get(userId1)?.count || 0;
+    if (orderCount === 0) {
+      const insertOrder = db.prepare(`
+        INSERT INTO orders (
+          order_number, user_id, address_data, subtotal, discount_amount, coupon_code,
+          delivery_fee, tax_amount, total_amount, status, payment_status, payment_method,
+          razorpay_order_id, razorpay_payment_id, tracking_number, courier_partner, estimated_delivery, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
 
-    const insertOrderItem = db.prepare(`
-      INSERT INTO order_items (order_id, product_id, product_name, variant_name, color_hex, price, quantity, image_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+      const insertOrderItem = db.prepare(`
+        INSERT INTO order_items (order_id, product_id, product_name, variant_name, color_hex, price, quantity, image_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
 
-    const insertPayment = db.prepare(`
-      INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+      const insertPayment = db.prepare(`
+        INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
 
-    // Sample Order 1: Shipped
-    const order1Address = JSON.stringify({
-      name: 'Priya Sharma',
-      phone: '+91 98123 45678',
-      pincode: '560001',
-      house_flat: 'Flat 402, Royal Palms Residency',
-      area: 'Lavelle Road, Shanthala Nagar',
-      city: 'Bengaluru',
-      state: 'Karnataka',
-      landmark: 'Near UB City Mall'
-    });
+      // Sample Order 1: Shipped
+      const order1Address = JSON.stringify({
+        name: 'Priya Sharma',
+        phone: '+91 98123 45678',
+        pincode: '560001',
+        house_flat: 'Flat 402, Royal Palms Residency',
+        area: 'Lavelle Road, Shanthala Nagar',
+        city: 'Bengaluru',
+        state: 'Karnataka',
+        landmark: 'Near UB City Mall'
+      });
 
-    const order1Res = insertOrder.run(
-      'PAL-2026-98124',
-      user1Result.lastInsertRowid,
-      order1Address,
-      12999,
-      1299,
-      'WELCOME10',
-      0,
-      0,
-      11700,
-      'Shipped',
-      'Paid',
-      'Razorpay (UPI / GooglePay)',
-      'order_PAL_seed_001',
-      'pay_PAL_seed_001',
-      'BLR-BD-889921',
-      'BlueDart Luxury Express',
-      'Tomorrow, by 4:00 PM',
-      '2026-09-22 14:30:00'
-    );
+      const order1Res = insertOrder.run(
+        'PAL-2026-98124',
+        userId1,
+        order1Address,
+        12999,
+        1299,
+        'WELCOME10',
+        0,
+        0,
+        11700,
+        'Shipped',
+        'Paid',
+        'Razorpay (UPI / GooglePay)',
+        'order_PAL_seed_001',
+        'pay_PAL_seed_001',
+        'BLR-BD-889921',
+        'BlueDart Luxury Express',
+        'Tomorrow, by 4:00 PM',
+        '2026-09-22 14:30:00'
+      );
 
-    insertOrderItem.run(
-      order1Res.lastInsertRowid,
-      productMap['royal-crimson-banarasi-katan-silk-saree'],
-      'Royal Crimson Banarasi Katan Silk Saree',
-      'Royal Crimson Wine',
-      '#5B1425',
-      12999,
-      1,
-      '/images/categories/banarasi.jpg'
-    );
+      const crimsonProdId = productMap['royal-crimson-banarasi-katan-silk-saree'];
+      if (crimsonProdId) {
+        insertOrderItem.run(
+          order1Res.lastInsertRowid,
+          crimsonProdId,
+          'Royal Crimson Banarasi Katan Silk Saree',
+          'Royal Crimson Wine',
+          '#5B1425',
+          12999,
+          1,
+          '/images/categories/banarasi.jpg'
+        );
+      }
 
-    insertPayment.run(
-      order1Res.lastInsertRowid,
-      'order_PAL_seed_001',
-      'pay_PAL_seed_001',
-      'mock_verified_signature_001',
-      1170000,
-      'INR',
-      'Captured',
-      'UPI'
-    );
+      insertPayment.run(
+        order1Res.lastInsertRowid,
+        'order_PAL_seed_001',
+        'pay_PAL_seed_001',
+        'mock_verified_signature_001',
+        1170000,
+        'INR',
+        'Captured',
+        'UPI'
+      );
+    }
   }
 
   // 8. Seed Product Questions & Answers (Q&A)
   try {
-    db.exec(`DELETE FROM product_qa;`);
     const insertQA = db.prepare(`
       INSERT INTO product_qa (product_id, user_name, question, answer, answered_by, helpful_votes)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -1211,7 +1287,10 @@ function seedDatabase(options = {}) {
     for (const q of qas) {
       const prodId = productMap[q.slug];
       if (prodId) {
-        insertQA.run(prodId, q.user_name, q.question, q.answer, q.answered_by, q.helpful_votes);
+        const existingQA = db.prepare('SELECT id FROM product_qa WHERE product_id = ? AND question = ?').get(prodId, q.question);
+        if (!existingQA) {
+          insertQA.run(prodId, q.user_name, q.question, q.answer, q.answered_by, q.helpful_votes);
+        }
       }
     }
   } catch (e) {
@@ -1222,7 +1301,9 @@ function seedDatabase(options = {}) {
 }
 
 if (require.main === module) {
-  seedDatabase();
+  const isProduction = process.env.NODE_ENV === 'production';
+  const isDestructive = !isProduction && (process.argv.includes('--reset') || process.argv.includes('--destructive'));
+  seedDatabase({ isProduction, destructive: isDestructive });
 }
 
 module.exports = seedDatabase;

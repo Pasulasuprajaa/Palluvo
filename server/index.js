@@ -12,7 +12,7 @@ const seedDatabase = require('./db/seed');
 try {
   const count = db.prepare('SELECT COUNT(*) as count FROM products').get()?.count || 0;
   if (count === 0) {
-    seedDatabase({ isProduction: process.env.NODE_ENV === 'production' });
+    seedDatabase({ isProduction: process.env.NODE_ENV === 'production', destructive: false });
   }
 } catch (e) {
   console.log('Auto-seed note:', e.message);
