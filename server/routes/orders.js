@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
+const { trackOrderLimiter } = require('../middleware/rateLimit');
 
 // GET /api/orders (List user orders)
 router.get('/', authenticateToken, (req, res) => {
@@ -35,7 +36,7 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // GET /api/orders/track/:identifier (Track order by high-entropy Order Number or Tracking Number ONLY)
-router.get('/track/:identifier', optionalAuth, (req, res) => {
+router.get('/track/:identifier', trackOrderLimiter, optionalAuth, (req, res) => {
   try {
     const { identifier } = req.params;
     const cleanId = (identifier || '').trim();

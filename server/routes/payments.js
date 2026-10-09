@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
 const { createRazorpayOrder, verifyPaymentSignature, key_id } = require('../services/razorpay');
@@ -96,8 +97,9 @@ router.post('/create-order', authenticateToken, async (req, res) => {
     }
 
     const totalAmount = Math.max(0, subtotal - discountAmount + deliveryFee);
-    const orderNumber = 'PAL-' + new Date().getFullYear() + '-' + Math.floor(100000 + Math.random() * 900000);
-    const trackingNumber = 'BLR-BD-' + Math.floor(100000 + Math.random() * 900000);
+    // Generate cryptographically secure, unguessable high-entropy tokens (CSPRNG, 96 bits of entropy)
+    const orderNumber = `PAL-${new Date().getFullYear()}-${crypto.randomBytes(12).toString('hex').toUpperCase()}`;
+    const trackingNumber = `BLR-BD-${crypto.randomBytes(12).toString('hex').toUpperCase()}`;
 
     // 4. Create Razorpay Order
     const rzpOrder = await createRazorpayOrder({

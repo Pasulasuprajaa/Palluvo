@@ -100,8 +100,8 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
           ) : null}
         </div>
 
-        {/* Wishlist & Compare Buttons */}
-        <div className="absolute top-2.5 right-2.5 flex flex-col gap-1.5 z-10">
+        {/* Wishlist Button */}
+        <div className="absolute top-2.5 right-2.5 z-10">
           <button
             onClick={handleWishlistClick}
             aria-label={saved ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
@@ -113,19 +113,6 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
             }`}
           >
             <Heart className={`w-3.5 h-3.5 ${saved ? 'fill-current' : ''}`} />
-          </button>
-
-          <button
-            onClick={handleCompareClick}
-            aria-label={compared ? `Remove ${product.name} from comparison` : `Add ${product.name} to comparison`}
-            title={compared ? 'Remove from Comparison' : 'Add to Compare'}
-            className={`w-7.5 h-7.5 sm:w-8 sm:h-8 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 shadow-xs focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none cursor-pointer ${
-              compared
-                ? 'bg-[#C5A059] text-[#1F1A1C] scale-105 font-bold'
-                : 'bg-white/85 text-[#1F1A1C] hover:bg-white hover:text-[#C5A059] hover:scale-105'
-            }`}
-          >
-            <Scale className="w-3.5 h-3.5" />
           </button>
         </div>
 
