@@ -56,15 +56,6 @@ export default function HomePage({ onNavigate }) {
     fetchBestSellers();
   }, []);
 
-  const [expandedReviews, setExpandedReviews] = useState({});
-
-  const toggleReview = (idx) => {
-    setExpandedReviews((prev) => ({
-      ...prev,
-      [idx]: !prev[idx]
-    }));
-  };
-
   const occasionCollections = [
     {
       title: 'Wedding Edit',
@@ -107,36 +98,6 @@ export default function HomePage({ onNavigate }) {
   const weaveCategories = categories.filter((cat) =>
     !['designer-sarees', 'party-wear', 'bridal-collection'].includes(cat.slug)
   );
-
-  const testimonials = [
-    {
-      name: 'Priya Sharma',
-      location: 'Bengaluru',
-      occasion: 'Wedding Drape',
-      comment: 'The soft glow of the antique gold zari took my breath away. It draped like a dream all evening without feeling stiff.',
-      fullComment: 'The moment I unboxed it, the scent of fresh silk and the soft glow of the antique gold zari took my breath away. It draped like a dream all evening without feeling stiff.',
-      saree: 'Royal Crimson Banarasi Katan',
-      slug: 'royal-crimson-banarasi-katan-silk-saree'
-    },
-    {
-      name: 'Divya Venkat',
-      location: 'Chennai',
-      occasion: 'Muhurtham Ceremony',
-      comment: 'The gold luster on this Kanjivaram is unmatched. Wore it for my muhurtham and received countless compliments.',
-      fullComment: 'The gold luster on this Kanjivaram is unmatched. Wore it for my muhurtham ceremony and received countless compliments from all elders. Seamless delivery in Chennai within 2 days.',
-      saree: 'Vaidarbhi Pure Kanjivaram Gold',
-      slug: 'vaidarbhi-pure-kanjivaram-bridal-gold-silk-saree'
-    },
-    {
-      name: 'Kritika Roy',
-      location: 'Mumbai',
-      occasion: 'Reception Gala',
-      comment: 'Incredibly soft and drapes cleanly. The rose gold scalloped embroidery is so delicate and photogenic.',
-      fullComment: 'Organza sarees can sometimes be stiff, but this one is incredibly soft and drapes cleanly. The rose gold scalloped embroidery is so delicate and photogenic.',
-      saree: 'Noor Rose Gold Organza',
-      slug: 'noor-rose-gold-embroidered-organza-saree'
-    }
-  ];
 
   return (
     <div className="flex flex-col">
@@ -513,70 +474,6 @@ export default function HomePage({ onNavigate }) {
               Explore Banarasi Sarees
             </a>
           </div>
-        </div>
-      </section>
-
-      {/* 6. TESTIMONIALS */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full">
-        <div className="text-center max-w-2xl mx-auto mb-10">
-          <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C]">
-            Voices of the PALLUVO Circle
-          </h2>
-          <div className="w-16 h-0.5 bg-[#C5A059] mx-auto mt-3" />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {testimonials.map((t, idx) => {
-            const isExpanded = !!expandedReviews[idx];
-            return (
-              <div
-                key={idx}
-                className={`bg-white rounded-2xl p-6 border border-[#EAE2D7] shadow-sm hover:shadow-md transition flex flex-col justify-between ${idx === 2 ? 'md:col-span-2 lg:col-span-1 md:max-w-xl md:w-full md:mx-auto lg:max-w-none' : ''}`}
-              >
-                <div>
-                  <div className="text-[#C5A059] font-serif text-3xl leading-none mb-2 select-none" aria-hidden="true">
-                    “
-                  </div>
-                  <p className="text-xs sm:text-sm text-[#1F1A1C] italic leading-relaxed">
-                    {isExpanded ? t.fullComment : t.comment}
-                  </p>
-                  {t.fullComment && t.fullComment !== t.comment && (
-                    <button
-                      type="button"
-                      onClick={() => toggleReview(idx)}
-                      className="text-xs font-semibold text-[#8C6D23] hover:text-[#5B1425] hover:underline mt-1 py-1.5 px-2 -ml-2 min-h-[40px] inline-flex items-center rounded-lg transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
-                      aria-expanded={isExpanded}
-                    >
-                      {isExpanded ? 'Show less' : 'Read full review'}
-                    </button>
-                  )}
-
-                  {/* Saree Featured in Testimonial */}
-                  <div className="mt-3 pt-2.5 border-t border-[#F4EFEB]">
-                    <a
-                      href={`/sarees/${t.slug}`}
-                      onClick={(e) => {
-                        if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
-                        e.preventDefault();
-                        onNavigate('product', { slug: t.slug });
-                      }}
-                      className="text-[11px] font-semibold text-[#5B1425] hover:text-[#7E1E34] hover:underline min-h-[44px] py-2 px-1 inline-flex items-center gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded text-left transition w-full"
-                      aria-label={`View details for ${t.saree}`}
-                    >
-                      <span className="text-[#6E6467] font-normal">Draped:</span>
-                      <span>{t.saree}</span>
-                      <ArrowRight className="w-3 h-3 text-[#C5A059] shrink-0" />
-                    </a>
-                  </div>
-                </div>
-
-              <div className="mt-6 pt-4 border-t border-[#F4EFEB]">
-                <div className="text-xs font-bold text-[#1F1A1C]">{t.name}</div>
-                <div className="text-[11px] text-[#6E6467] mt-0.5">{t.location} • {t.occasion}</div>
-              </div>
-            </div>
-            );
-          })}
         </div>
       </section>
     </div>
