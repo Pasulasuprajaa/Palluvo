@@ -28,6 +28,7 @@ const OffersPage = lazy(() => import('./pages/OffersPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const PolicyPage = lazy(() => import('./pages/PolicyPage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 function PageLoader() {
   return (
@@ -83,7 +84,7 @@ function getRouteFromPath(pathname = window.location.pathname, search = window.l
     const tab = path === '/policies' || path === '/policy' ? (searchParams.get('tab') || 'privacy') : path.replace('/', '');
     return { page: 'policy', params: { tab } };
   }
-  return { page: 'home', params: {} };
+  return { page: 'not-found', params: { path: pathname } };
 }
 
 function AppContent() {
@@ -137,6 +138,7 @@ function AppContent() {
     else if (page === 'admin') urlPath = '/admin';
     else if (page === 'about') urlPath = params.tab ? `/about?tab=${params.tab}` : '/about';
     else if (page === 'policy') urlPath = `/${params.tab || 'privacy'}`;
+    else if (page === 'not-found' || page === '404') urlPath = params.path || '/404';
 
     window.history.pushState({}, '', urlPath);
   };
@@ -240,6 +242,10 @@ function AppContent() {
 
             {currentPage === 'policy' && (
               <PolicyPage initialTab={pageParams.tab || 'privacy'} onNavigate={navigate} />
+            )}
+
+            {(currentPage === 'not-found' || currentPage === '404') && (
+              <NotFoundPage onNavigate={navigate} invalidPath={pageParams?.path} />
             )}
           </Suspense>
         </RouteErrorBoundary>

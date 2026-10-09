@@ -84,6 +84,9 @@ app.use((req, res, next) => {
     const meta = getMetaForRoute(req.path, req.query);
     const finalHtml = injectMetaTags(rawHtml, meta);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    if (meta.isNotFound) {
+      return res.status(404).send(finalHtml);
+    }
     return res.send(finalHtml);
   } catch (err) {
     console.error('HTML SEO injection error:', err);
