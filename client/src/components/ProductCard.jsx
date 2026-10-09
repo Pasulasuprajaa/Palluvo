@@ -88,44 +88,44 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
         </a>
 
         {/* Single Prioritized Image Badge */}
-        <div className="absolute top-3 left-3 z-10 pointer-events-none">
+        <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
           {product.discount_percent > 0 ? (
-            <span className="bg-[#5B1425] text-[#FAF7F2] text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow-md">
+            <span className="bg-[#5B1425] text-[#FAF7F2] text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
               {product.discount_percent}% OFF
             </span>
           ) : product.is_new_arrival === 1 ? (
-            <span className="bg-[#1F1A1C] text-[#FAF7F2] text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-md">
+            <span className="bg-[#1F1A1C] text-[#FAF7F2] text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
               New
             </span>
           ) : null}
         </div>
 
         {/* Wishlist & Compare Buttons */}
-        <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
+        <div className="absolute top-2.5 right-2.5 flex flex-col gap-1.5 z-10">
           <button
             onClick={handleWishlistClick}
             aria-label={saved ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
             title={saved ? 'Remove from Wishlist' : 'Add to Wishlist'}
-            className={`w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full backdrop-blur-md transition-transform duration-200 shadow-md focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none cursor-pointer ${
+            className={`w-7.5 h-7.5 sm:w-8 sm:h-8 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 shadow-xs focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none cursor-pointer ${
               saved
                 ? 'bg-[#5B1425] text-white scale-105'
-                : 'bg-white/90 text-[#1F1A1C] hover:bg-white hover:text-[#5B1425] hover:scale-105'
+                : 'bg-white/85 text-[#1F1A1C] hover:bg-white hover:text-[#5B1425] hover:scale-105'
             }`}
           >
-            <Heart className={`w-4.5 h-4.5 ${saved ? 'fill-current' : ''}`} />
+            <Heart className={`w-3.5 h-3.5 ${saved ? 'fill-current' : ''}`} />
           </button>
 
           <button
             onClick={handleCompareClick}
             aria-label={compared ? `Remove ${product.name} from comparison` : `Add ${product.name} to comparison`}
             title={compared ? 'Remove from Comparison' : 'Add to Compare'}
-            className={`w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full backdrop-blur-md transition-transform duration-200 shadow-md focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none cursor-pointer ${
+            className={`w-7.5 h-7.5 sm:w-8 sm:h-8 flex items-center justify-center rounded-full backdrop-blur-md transition-all duration-200 shadow-xs focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none cursor-pointer ${
               compared
                 ? 'bg-[#C5A059] text-[#1F1A1C] scale-105 font-bold'
-                : 'bg-white/90 text-[#1F1A1C] hover:bg-white hover:text-[#C5A059] hover:scale-105'
+                : 'bg-white/85 text-[#1F1A1C] hover:bg-white hover:text-[#C5A059] hover:scale-105'
             }`}
           >
-            <Scale className="w-4.5 h-4.5" />
+            <Scale className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -200,16 +200,16 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
         <div className="pt-2 border-t border-[#F4EFEB] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
             <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="font-serif text-base sm:text-lg font-bold text-[#5B1425]">
+              <span className="font-sans text-base sm:text-lg font-bold text-[#5B1425] tracking-tight">
                 ₹{product.price?.toLocaleString('en-IN')}
               </span>
               {product.mrp && product.mrp > product.price && (
-                <span className="text-xs text-[#6E6467] line-through">
+                <span className="font-sans text-xs text-[#8A7E82] line-through font-normal">
                   ₹{product.mrp?.toLocaleString('en-IN')}
                 </span>
               )}
             </div>
-            <div className="text-[10px] text-emerald-700 font-medium">
+            <div className="text-[10px] text-emerald-700 font-medium mt-0.5">
               Free Express Delivery
             </div>
           </div>

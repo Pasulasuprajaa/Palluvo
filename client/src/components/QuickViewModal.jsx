@@ -110,11 +110,11 @@ export default function QuickViewModal({ onNavigate }) {
 
             {/* Pricing */}
             <div className="flex items-baseline gap-3 pt-1">
-              <span className="font-serif text-2xl font-bold text-[#5B1425]">
+              <span className="font-sans text-2xl font-extrabold text-[#5B1425] tracking-tight">
                 ₹{quickViewProduct.price?.toLocaleString('en-IN')}
               </span>
               {quickViewProduct.mrp && quickViewProduct.mrp > quickViewProduct.price && (
-                <span className="text-sm text-[#6E6467] line-through">
+                <span className="font-sans text-sm text-[#8A7E82] line-through font-normal">
                   ₹{quickViewProduct.mrp?.toLocaleString('en-IN')}
                 </span>
               )}
