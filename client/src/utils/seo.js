@@ -133,8 +133,8 @@ export function updatePageMeta(page, params = {}) {
     url = `${BASE_URL}/404`;
   }
 
-  // Set robots directive on every route update to reset properly when navigating away from 404
-  const isNoIndex = page === 'not-found' || page === '404' || page === 'admin';
+  // Set robots directive on every route update to reset properly when navigating away from transactional/noindex pages
+  const isNoIndex = page === 'not-found' || page === '404' || page === 'admin' || page === 'cart' || page === 'checkout' || page === 'order-success' || page === 'track-order' || page === 'account' || page === 'wishlist';
   setMetaTag('name', 'robots', isNoIndex ? 'noindex, nofollow' : 'index, follow');
 
   // Update browser document title

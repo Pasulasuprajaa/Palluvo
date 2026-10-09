@@ -163,6 +163,7 @@ function getMetaForRoute(urlPath, query = {}) {
   let imageUrl = DEFAULT_IMAGE;
   let imageAlt = 'PALLUVO Luxury Indian Handloom Sarees Collection';
   let isNotFound = false;
+  let isNoIndex = false;
 
   // Check category query parameter or category path (e.g. /sarees?category=slug, /sarees/category/slug, /category/slug)
   const categorySlug = query.category || (
@@ -206,22 +207,27 @@ function getMetaForRoute(urlPath, query = {}) {
     title = 'Shopping Bag | PALLUVO';
     description = 'Review your curated luxury saree selections in your PALLUVO bag.';
     canonicalUrl = `${BASE_URL}/cart`;
+    isNoIndex = true;
   } else if (pathname === '/checkout') {
     title = 'Secure Checkout | PALLUVO';
     description = 'Complete your order with secure payment options and express insured shipping.';
     canonicalUrl = `${BASE_URL}/checkout`;
+    isNoIndex = true;
   } else if (pathname === '/order-success') {
     title = 'Order Confirmed | PALLUVO';
     description = 'Thank you for your order with PALLUVO. Your heirloom drape is being prepared.';
     canonicalUrl = `${BASE_URL}/order-success`;
+    isNoIndex = true;
   } else if (pathname === '/account') {
     title = 'Customer Account | PALLUVO';
     description = 'Manage your PALLUVO profile, order history, and saved addresses.';
     canonicalUrl = `${BASE_URL}/account`;
+    isNoIndex = true;
   } else if (pathname === '/wishlist') {
     title = 'My Wishlist | PALLUVO';
     description = 'Your curated wishlist of luxury handloom sarees and festive drapes.';
     canonicalUrl = `${BASE_URL}/wishlist`;
+    isNoIndex = true;
   } else if (pathname === '/offers') {
     title = 'Festive Offers & Exclusive Curations | PALLUVO';
     description = 'Explore special bridal and festive curation savings on authentic Indian heirlooms.';
@@ -230,10 +236,12 @@ function getMetaForRoute(urlPath, query = {}) {
     title = 'Track Your Order | PALLUVO';
     description = 'Live milestone tracking for your handcrafted PALLUVO saree shipment.';
     canonicalUrl = `${BASE_URL}/track-order`;
+    isNoIndex = true;
   } else if (pathname === '/admin') {
     title = 'Admin Management Console | PALLUVO';
     description = 'PALLUVO administration portal for orders, inventory, and fulfillment.';
     canonicalUrl = `${BASE_URL}/admin`;
+    isNoIndex = true;
   } else if (['/about', '/heritage', '/artisans', '/care-guide', '/sustainability'].includes(pathname)) {
     title = 'About PALLUVO | Handloom Heritage & Master Artisans';
     description = 'Discover the legacy of Indian handlooms, sustainable silk pledges, and our artisan clusters.';
@@ -250,9 +258,10 @@ function getMetaForRoute(urlPath, query = {}) {
     title = 'Page Not Found | PALLUVO Luxury Sarees';
     description = 'The requested luxury drape, collection, or boutique page could not be found.';
     canonicalUrl = `${BASE_URL}/404`;
+    isNoIndex = true;
   }
 
-  return { title, description, canonicalUrl, imageUrl, imageAlt, isNotFound };
+  return { title, description, canonicalUrl, imageUrl, imageAlt, isNotFound, isNoIndex };
 }
 
 function injectMetaTags(html, meta) {
@@ -280,6 +289,10 @@ function injectMetaTags(html, meta) {
   modified = modified.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/is, `<meta property="og:url" content="${escapedAttrCanonical}" />`);
   modified = modified.replace(/<meta\s+property="og:image"\s+content=".*?"\s*\/?>/is, `<meta property="og:image" content="${escapedAttrImage}" />`);
   modified = modified.replace(/<meta\s+property="og:image:alt"\s+content=".*?"\s*\/?>/is, `<meta property="og:image:alt" content="${escapedAttrImageAlt}" />`);
+
+  // Strip hardcoded og:image:width and og:image:height so crawlers detect true image dimensions
+  modified = modified.replace(/<meta\s+property="og:image:width"\s+content=".*?"\s*\/?>\s*/is, '');
+  modified = modified.replace(/<meta\s+property="og:image:height"\s+content=".*?"\s*\/?>\s*/is, '');
 
   // Twitter
   modified = modified.replace(/<meta\s+name="twitter:title"\s+content=".*?"\s*\/?>/is, `<meta name="twitter:title" content="${escapedAttrTitle}" />`);
