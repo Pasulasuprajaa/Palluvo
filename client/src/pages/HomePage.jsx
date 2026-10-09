@@ -56,6 +56,15 @@ export default function HomePage({ onNavigate }) {
     fetchBestSellers();
   }, []);
 
+  const [expandedReviews, setExpandedReviews] = useState({});
+
+  const toggleReview = (idx) => {
+    setExpandedReviews((prev) => ({
+      ...prev,
+      [idx]: !prev[idx]
+    }));
+  };
+
   const occasionCollections = [
     {
       title: 'Wedding Edit',
@@ -104,7 +113,8 @@ export default function HomePage({ onNavigate }) {
       name: 'Priya Sharma',
       location: 'Bengaluru',
       occasion: 'Wedding Drape',
-      comment: 'The moment I unboxed it, the scent of fresh silk and the soft glow of the antique gold zari took my breath away. It draped like a dream all evening without feeling stiff.',
+      comment: 'The soft glow of the antique gold zari took my breath away. It draped like a dream all evening without feeling stiff.',
+      fullComment: 'The moment I unboxed it, the scent of fresh silk and the soft glow of the antique gold zari took my breath away. It draped like a dream all evening without feeling stiff.',
       saree: 'Royal Crimson Banarasi Katan',
       slug: 'royal-crimson-banarasi-katan-silk-saree'
     },
@@ -112,7 +122,8 @@ export default function HomePage({ onNavigate }) {
       name: 'Divya Venkat',
       location: 'Chennai',
       occasion: 'Muhurtham Ceremony',
-      comment: 'The gold luster on this Kanjivaram is unmatched. Wore it for my muhurtham ceremony and received countless compliments from all elders. Seamless delivery in Chennai within 2 days.',
+      comment: 'The gold luster on this Kanjivaram is unmatched. Wore it for my muhurtham and received countless compliments.',
+      fullComment: 'The gold luster on this Kanjivaram is unmatched. Wore it for my muhurtham ceremony and received countless compliments from all elders. Seamless delivery in Chennai within 2 days.',
       saree: 'Vaidarbhi Pure Kanjivaram Gold',
       slug: 'vaidarbhi-pure-kanjivaram-bridal-gold-silk-saree'
     },
@@ -120,7 +131,8 @@ export default function HomePage({ onNavigate }) {
       name: 'Kritika Roy',
       location: 'Mumbai',
       occasion: 'Reception Gala',
-      comment: 'Organza sarees can sometimes be stiff, but this one is incredibly soft and drapes cleanly. The rose gold scalloped embroidery is so delicate and photogenic.',
+      comment: 'Incredibly soft and drapes cleanly. The rose gold scalloped embroidery is so delicate and photogenic.',
+      fullComment: 'Organza sarees can sometimes be stiff, but this one is incredibly soft and drapes cleanly. The rose gold scalloped embroidery is so delicate and photogenic.',
       saree: 'Noor Rose Gold Organza',
       slug: 'noor-rose-gold-embroidered-organza-saree'
     }
@@ -509,8 +521,8 @@ export default function HomePage({ onNavigate }) {
         <div className="relative z-10 max-w-4xl mx-auto px-4 text-center space-y-6">
           <div className="text-[#C5A059] text-2xl" aria-hidden="true">✦ ✦ ✦</div>
           <h2 className="font-serif text-3xl sm:text-5xl font-bold leading-tight">
-            "A saree is not merely six yards of silk; <br className="hidden sm:inline" />
-            it is centuries of art, woven into memory."
+            “A saree is not merely six yards of silk; <br className="hidden sm:inline" />
+            it is centuries of art, woven into memory.”
           </h2>
           <p className="text-xs sm:text-sm text-[#FAF7F2]/80 leading-relaxed max-w-2xl mx-auto">
             At PALLUVO, every saree is born on the handloom through weeks of dedicated craftsmanship. We work closely with master weavers across Varanasi, Kanchipuram, and Chanderi to bring you authentic weaves that celebrate modern Indian grace.
@@ -541,44 +553,57 @@ export default function HomePage({ onNavigate }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {testimonials.map((t, idx) => (
-            <div
-              key={idx}
-              className={`bg-white rounded-2xl p-6 border border-[#EAE2D7] shadow-sm hover:shadow-md transition flex flex-col justify-between ${idx === 2 ? 'md:col-span-2 lg:col-span-1 md:max-w-xl md:w-full md:mx-auto lg:max-w-none' : ''}`}
-            >
-              <div>
-                <div className="text-[#C5A059] font-serif text-3xl leading-none mb-2 select-none" aria-hidden="true">
-                  “
-                </div>
-                <p className="text-xs sm:text-sm text-[#1F1A1C] italic leading-relaxed">
-                  {t.comment}
-                </p>
+          {testimonials.map((t, idx) => {
+            const isExpanded = !!expandedReviews[idx];
+            return (
+              <div
+                key={idx}
+                className={`bg-white rounded-2xl p-6 border border-[#EAE2D7] shadow-sm hover:shadow-md transition flex flex-col justify-between ${idx === 2 ? 'md:col-span-2 lg:col-span-1 md:max-w-xl md:w-full md:mx-auto lg:max-w-none' : ''}`}
+              >
+                <div>
+                  <div className="text-[#C5A059] font-serif text-3xl leading-none mb-2 select-none" aria-hidden="true">
+                    “
+                  </div>
+                  <p className="text-xs sm:text-sm text-[#1F1A1C] italic leading-relaxed">
+                    {isExpanded ? t.fullComment : t.comment}
+                  </p>
+                  {t.fullComment && t.fullComment !== t.comment && (
+                    <button
+                      type="button"
+                      onClick={() => toggleReview(idx)}
+                      className="text-[11px] font-semibold text-[#8C6D23] hover:text-[#5B1425] hover:underline mt-2 inline-block focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded transition cursor-pointer"
+                      aria-expanded={isExpanded}
+                    >
+                      {isExpanded ? 'Show less' : 'Read full review'}
+                    </button>
+                  )}
 
-                {/* Saree Featured in Testimonial */}
-                <div className="mt-3 pt-2.5 border-t border-[#F4EFEB]">
-                  <a
-                    href={`/sarees/${t.slug}`}
-                    onClick={(e) => {
-                      if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
-                      e.preventDefault();
-                      onNavigate('product', { slug: t.slug });
-                    }}
-                    className="text-[11px] font-semibold text-[#5B1425] hover:text-[#7E1E34] hover:underline min-h-[44px] py-2 px-1 inline-flex items-center gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded text-left transition w-full"
-                    aria-label={`View details for ${t.saree}`}
-                  >
-                    <span className="text-[#6E6467] font-normal">Draped:</span>
-                    <span>{t.saree}</span>
-                    <ArrowRight className="w-3 h-3 text-[#C5A059] shrink-0" />
-                  </a>
+                  {/* Saree Featured in Testimonial */}
+                  <div className="mt-3 pt-2.5 border-t border-[#F4EFEB]">
+                    <a
+                      href={`/sarees/${t.slug}`}
+                      onClick={(e) => {
+                        if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+                        e.preventDefault();
+                        onNavigate('product', { slug: t.slug });
+                      }}
+                      className="text-[11px] font-semibold text-[#5B1425] hover:text-[#7E1E34] hover:underline min-h-[44px] py-2 px-1 inline-flex items-center gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded text-left transition w-full"
+                      aria-label={`View details for ${t.saree}`}
+                    >
+                      <span className="text-[#6E6467] font-normal">Draped:</span>
+                      <span>{t.saree}</span>
+                      <ArrowRight className="w-3 h-3 text-[#C5A059] shrink-0" />
+                    </a>
+                  </div>
                 </div>
-              </div>
 
               <div className="mt-6 pt-4 border-t border-[#F4EFEB]">
                 <div className="text-xs font-bold text-[#1F1A1C]">{t.name}</div>
                 <div className="text-[11px] text-[#6E6467] mt-0.5">{t.location} • {t.occasion}</div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
