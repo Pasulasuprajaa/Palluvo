@@ -439,20 +439,42 @@ export default function HomePage({ onNavigate }) {
       </section>
 
       {/* 5. BRAND STORY BANNER */}
-      <section className="relative bg-[#3F0D19] text-[#FAF7F2] py-14 sm:py-20 overflow-hidden">
-        <div className="absolute -right-20 -bottom-20 w-96 h-96 rounded-full bg-[#5B1425]/50 blur-3xl" />
-        <div className="absolute -left-20 -top-20 w-96 h-96 rounded-full bg-[#C5A059]/20 blur-3xl" />
+      <section className="relative min-h-[460px] sm:min-h-[520px] flex items-center justify-center bg-[#3F0D19] text-[#FAF7F2] py-16 sm:py-24 overflow-hidden">
+        {/* Background Saree Photography with Rich Vignette */}
+        <div className="absolute inset-0 z-0">
+          <img
+            src="/images/occasions/temple_heritage.jpg"
+            alt="Handcrafted luxury silk saree weave with gold zari heritage"
+            loading="lazy"
+            decoding="async"
+            className="w-full h-full object-cover object-center scale-105 opacity-35 filter brightness-90"
+          />
+          {/* Opulent Wine Gradient Overlays */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#3F0D19] via-[#3F0D19]/80 to-[#3F0D19]/90 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#3F0D19]/90 via-transparent to-[#3F0D19]/90 pointer-events-none" />
+        </div>
 
-        <div className="relative z-10 max-w-4xl mx-auto px-4 text-center space-y-6">
-          <div className="text-[#C5A059] text-2xl" aria-hidden="true">✦ ✦ ✦</div>
-          <h2 className="font-serif text-3xl sm:text-5xl font-bold leading-tight">
+        {/* Ambient Lighting Glows */}
+        <div className="absolute -right-20 -bottom-20 w-96 h-96 rounded-full bg-[#5B1425]/60 blur-3xl pointer-events-none" />
+        <div className="absolute -left-20 -top-20 w-96 h-96 rounded-full bg-[#C5A059]/20 blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 text-center space-y-5 sm:space-y-6">
+          <div className="inline-flex items-center gap-2 text-[#E0C07F] text-base sm:text-xl tracking-widest" aria-hidden="true">
+            <span>✦</span>
+            <span>✦</span>
+            <span>✦</span>
+          </div>
+
+          <h2 className="font-serif text-2xl sm:text-4xl md:text-5xl font-bold leading-tight drop-shadow-md text-[#FAF7F2]">
             “A saree is not merely six yards of silk; <br className="hidden sm:inline" />
-            it is centuries of art, woven into memory.”
+            <span className="italic font-normal text-[#E0C07F]">it is centuries of art, woven into memory.”</span>
           </h2>
-          <p className="text-sm sm:text-base text-[#FAF7F2]/80 leading-relaxed max-w-2xl mx-auto">
+
+          <p className="text-xs sm:text-sm md:text-base text-[#FAF7F2]/90 leading-relaxed max-w-2xl mx-auto font-sans drop-shadow-xs">
             At PALLUVO, every saree is born on the handloom through weeks of dedicated craftsmanship. We work closely with master weavers across Varanasi, Kanchipuram, and Chanderi to bring you authentic weaves that celebrate modern Indian grace.
           </p>
-          <div className="pt-2">
+
+          <div className="pt-2 sm:pt-4">
             <a
               href="/shop?category=banarasi-sarees"
               onClick={(e) => {
@@ -460,9 +482,10 @@ export default function HomePage({ onNavigate }) {
                 e.preventDefault();
                 onNavigate('shop', { category: 'banarasi-sarees' });
               }}
-              className="inline-block px-8 py-3.5 bg-[#C5A059] text-[#1F1A1C] font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-[#E0C07F] transition shadow-xl focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none cursor-pointer text-center"
+              className="inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-gradient-to-r from-[#C5A059] to-[#E0C07F] hover:from-[#E0C07F] hover:to-[#C5A059] text-[#1F1A1C] font-bold text-xs uppercase tracking-widest rounded-xl transition shadow-2xl focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none cursor-pointer text-center active:scale-95"
             >
-              Explore Banarasi Sarees
+              <span>Explore Banarasi Sarees</span>
+              <ArrowRight className="w-4 h-4 text-[#1F1A1C]" />
             </a>
           </div>
         </div>
