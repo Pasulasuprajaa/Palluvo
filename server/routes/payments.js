@@ -12,6 +12,7 @@ const {
   fetchRazorpayRefund,
   fetchRazorpayPaymentRefunds,
   refundRazorpayPayment,
+  isGatewayConfigured,
   key_id
 } = require('../services/razorpay');
 const { requireDurableStorage } = require('../middleware/storageGuard');
@@ -37,6 +38,13 @@ async function reconcilePendingRefunds() {
 
   for (const pOrder of pendingOrders) {
     try {
+      const isMockPayment = typeof pOrder.razorpay_payment_id === 'string' &&
+        (pOrder.razorpay_payment_id.startsWith('pay_mock_') || pOrder.razorpay_payment_id.startsWith('mock_'));
+      if (!isMockPayment && !isGatewayConfigured) {
+        console.warn(`No Razorpay client configured for real payment order ${pOrder.id} (${pOrder.razorpay_payment_id}); keeping refund pending.`);
+        continue;
+      }
+
       let isCompleted = false;
       let finalRefundId = pOrder.refund_id;
 
@@ -198,11 +206,17 @@ async function reconcileExpiredReservations(options = {}) {
 
       // 1. Gateway Status Check: Verify with Razorpay before cancelling
       if (expOrder.razorpay_order_id) {
+        const isMockOrder = typeof expOrder.razorpay_order_id === 'string' && expOrder.razorpay_order_id.startsWith('order_mock_');
+        if (!isMockOrder && !isGatewayConfigured) {
+          console.warn(`No Razorpay client configured for real gateway order ${expOrder.id} (${expOrder.razorpay_order_id}); preserving reservation as pending.`);
+          continue;
+        }
+
         try {
           gatewayOrder = await fetchRazorpayOrder(expOrder.razorpay_order_id);
         } catch (fetchErr) {
           console.warn(`Gateway status lookup failed for order ${expOrder.id} (${expOrder.razorpay_order_id}); keeping reservation pending:`, fetchErr.message);
-          // State is UNKNOWN (network timeout / temporary failure): DO NOT release stock!
+          // State is UNKNOWN (network timeout / temporary failure / unconfigured client): DO NOT release stock!
           continue;
         }
 
@@ -369,6 +383,12 @@ async function reconcileSingleExpiredOrder(orderId, now = Date.now()) {
   let gatewayConfirmedUnpaid = false;
 
   if (order.razorpay_order_id) {
+    const isMockOrder = typeof order.razorpay_order_id === 'string' && order.razorpay_order_id.startsWith('order_mock_');
+    if (!isMockOrder && !isGatewayConfigured) {
+      console.warn(`No Razorpay client configured for real gateway order ${order.id} (${order.razorpay_order_id}); preserving reservation.`);
+      return false;
+    }
+
     try {
       gatewayOrder = await fetchRazorpayOrder(order.razorpay_order_id);
     } catch (err) {

@@ -194,18 +194,13 @@ async function fetchRazorpayOrder(orderId) {
     };
   }
 
+  // Real non-mock order ID: requires an active Razorpay client instance
   if (razorpayInstance) {
-    // Fail loudly if Razorpay API call fails; do not return null to avoid false-unpaid assumptions
     const order = await razorpayInstance.orders.fetch(orderId);
     return order;
   }
 
-  return {
-    id: orderId,
-    status: 'created',
-    amount_paid: 0,
-    is_mock: true
-  };
+  throw new Error(`Razorpay client instance is not configured; status of non-mock order ${orderId} is unknown`);
 }
 
 async function fetchRazorpayOrderPayments(orderId) {
@@ -225,12 +220,13 @@ async function fetchRazorpayOrderPayments(orderId) {
     return [];
   }
 
+  // Real non-mock order ID: requires an active Razorpay client instance
   if (razorpayInstance) {
     const payments = await razorpayInstance.orders.fetchPayments(orderId);
     return payments.items || [];
   }
 
-  return [];
+  throw new Error(`Razorpay client instance is not configured; payments for non-mock order ${orderId} are unknown`);
 }
 
 async function fetchRazorpayPayment(paymentId) {
@@ -280,13 +276,7 @@ async function fetchRazorpayPayment(paymentId) {
     return payment;
   }
 
-  return {
-    id: paymentId,
-    status: 'captured',
-    amount: 100000,
-    amount_refunded: 0,
-    is_mock: true
-  };
+  throw new Error(`Razorpay client instance is not configured; status of non-mock payment ${paymentId} is unknown`);
 }
 
 async function fetchRazorpayRefund(refundId) {
@@ -311,11 +301,7 @@ async function fetchRazorpayRefund(refundId) {
     return refund;
   }
 
-  return {
-    id: refundId,
-    status: 'processed',
-    is_mock: true
-  };
+  throw new Error(`Razorpay client instance is not configured; status of non-mock refund ${refundId} is unknown`);
 }
 
 async function fetchRazorpayPaymentRefunds(paymentId) {
@@ -345,7 +331,7 @@ async function fetchRazorpayPaymentRefunds(paymentId) {
     return refunds.items || [];
   }
 
-  return [];
+  throw new Error(`Razorpay client instance is not configured; refunds for non-mock payment ${paymentId} are unknown`);
 }
 
 async function refundRazorpayPayment(paymentId, options = {}) {
@@ -384,13 +370,7 @@ async function refundRazorpayPayment(paymentId, options = {}) {
     return refund;
   }
 
-  return {
-    id: 'rfnd_mock_' + crypto.randomBytes(8).toString('hex'),
-    payment_id: paymentId,
-    amount: options.amount,
-    status: 'processed',
-    is_mock: true
-  };
+  throw new Error(`Razorpay client instance is not configured; cannot process refund for non-mock payment ${paymentId}`);
 }
 
 module.exports = {
@@ -405,6 +385,7 @@ module.exports = {
   isLiveCredentials,
   isLiveKeyMode,
   isTestKeyMode,
+  isGatewayConfigured: Boolean(razorpayInstance),
   key_id,
   key_secret
 };
