@@ -22,13 +22,25 @@ const ORDER_RESERVATION_TTL_MS = 15 * 60 * 1000; // 15-minute pending reservatio
 /**
  * Reconciles pending or failed refunds until completion is positively confirmed by Razorpay.
  */
-async function reconcilePendingRefunds() {
-  const pendingOrders = db.prepare(`
+async function reconcilePendingRefunds(options = {}) {
+  let query = `
     SELECT id, order_number, user_id, razorpay_order_id, razorpay_payment_id, total_amount, refund_id, payment_status, refund_error
     FROM orders
     WHERE payment_status IN ('Refund_Pending', 'Refund_Failed')
       AND razorpay_payment_id IS NOT NULL
-  `).all();
+  `;
+  const params = [];
+
+  if (options && options.orderIds && Array.isArray(options.orderIds) && options.orderIds.length > 0) {
+    const placeholders = options.orderIds.map(() => '?').join(', ');
+    query += ` AND id IN (${placeholders})`;
+    params.push(...options.orderIds);
+  } else if (options && options.orderId) {
+    query += ` AND id = ?`;
+    params.push(options.orderId);
+  }
+
+  const pendingOrders = db.prepare(query).all(...params);
 
   if (!pendingOrders || pendingOrders.length === 0) {
     return 0;
@@ -167,9 +179,9 @@ async function reconcilePendingRefunds() {
         continue;
       }
 
-      // 4. Retry initiating refund with idempotency key
+      // 4. Retry initiating refund with consistent idempotency key
       try {
-        const idempotencyKey = `rfnd_retry_${pOrder.id}_${pOrder.order_number}`;
+        const idempotencyKey = `rfnd_${pOrder.id}_${pOrder.order_number}`;
         const refundResult = await refundRazorpayPayment(pOrder.razorpay_payment_id, {
           amount: pOrder.total_amount * 100,
           receipt: `rfnd_${pOrder.order_number}`.slice(0, 40),
@@ -245,7 +257,7 @@ async function reconcileExpiredReservations(options = {}) {
   let reconciledCount = 0;
 
   // 1. Reconcile any pending or retrying refunds
-  const resolvedRefunds = await reconcilePendingRefunds();
+  const resolvedRefunds = await reconcilePendingRefunds(options);
   reconciledCount += resolvedRefunds;
 
   // 2. Find pending orders that have exceeded their reservation lifetime

@@ -195,6 +195,10 @@ async function fetchRazorpayOrder(orderId) {
   }
 
   // Real non-mock order ID: requires an active Razorpay client instance
+  if (process.env.DISABLE_REAL_GATEWAY === 'true') {
+    throw new Error(`Real Razorpay gateway calls are disabled in this environment (test isolation); order ${orderId} cannot be fetched`);
+  }
+
   if (razorpayInstance) {
     const order = await razorpayInstance.orders.fetch(orderId);
     return order;
@@ -221,6 +225,10 @@ async function fetchRazorpayOrderPayments(orderId) {
   }
 
   // Real non-mock order ID: requires an active Razorpay client instance
+  if (process.env.DISABLE_REAL_GATEWAY === 'true') {
+    throw new Error(`Real Razorpay gateway calls are disabled in this environment (test isolation); payments for order ${orderId} cannot be fetched`);
+  }
+
   if (razorpayInstance) {
     const payments = await razorpayInstance.orders.fetchPayments(orderId);
     return payments.items || [];
@@ -271,6 +279,10 @@ async function fetchRazorpayPayment(paymentId) {
     };
   }
 
+  if (process.env.DISABLE_REAL_GATEWAY === 'true') {
+    throw new Error(`Real Razorpay gateway calls are disabled in this environment (test isolation); payment ${paymentId} cannot be fetched`);
+  }
+
   if (razorpayInstance) {
     const payment = await razorpayInstance.payments.fetch(paymentId);
     return payment;
@@ -301,6 +313,10 @@ async function fetchRazorpayRefund(refundId) {
       status: 'processed',
       is_mock: true
     };
+  }
+
+  if (process.env.DISABLE_REAL_GATEWAY === 'true') {
+    throw new Error(`Real Razorpay gateway calls are disabled in this environment (test isolation); refund ${refundId} cannot be fetched`);
   }
 
   if (razorpayInstance) {
@@ -344,6 +360,10 @@ async function fetchRazorpayPaymentRefunds(paymentId) {
     return [];
   }
 
+  if (process.env.DISABLE_REAL_GATEWAY === 'true') {
+    throw new Error(`Real Razorpay gateway calls are disabled in this environment (test isolation); refunds for payment ${paymentId} cannot be fetched`);
+  }
+
   if (razorpayInstance) {
     const refunds = await razorpayInstance.payments.allRefunds(paymentId);
     return refunds.items || [];
@@ -354,6 +374,8 @@ async function fetchRazorpayPaymentRefunds(paymentId) {
 
 async function refundRazorpayPayment(paymentId, options = {}) {
   if (!paymentId) throw new Error('Payment ID is required to process a refund.');
+
+  const idempotencyKey = options.idempotencyKey || null;
 
   if (paymentId.startsWith('pay_mock_refund_failed_')) {
     throw new Error('Simulated gateway refund failure (network error)');
@@ -366,6 +388,8 @@ async function refundRazorpayPayment(paymentId, options = {}) {
       amount: options.amount,
       status: 'pending',
       receipt: options.receipt || null,
+      idempotency_key: idempotencyKey,
+      headers: idempotencyKey ? { 'X-Refund-Idempotency': idempotencyKey } : {},
       is_mock: true
     };
   }
@@ -377,8 +401,14 @@ async function refundRazorpayPayment(paymentId, options = {}) {
       amount: options.amount,
       status: 'processed',
       receipt: options.receipt || null,
+      idempotency_key: idempotencyKey,
+      headers: idempotencyKey ? { 'X-Refund-Idempotency': idempotencyKey } : {},
       is_mock: true
     };
+  }
+
+  if (process.env.DISABLE_REAL_GATEWAY === 'true') {
+    throw new Error(`Real Razorpay gateway calls are disabled in this environment (test isolation); cannot refund payment ${paymentId}`);
   }
 
   if (razorpayInstance) {
@@ -390,7 +420,35 @@ async function refundRazorpayPayment(paymentId, options = {}) {
     if (options.receipt) {
       refundPayload.receipt = options.receipt;
     }
-    const refund = await razorpayInstance.payments.refund(paymentId, refundPayload);
+
+    const headers = {};
+    if (idempotencyKey) {
+      headers['X-Refund-Idempotency'] = idempotencyKey;
+    }
+
+    let refund;
+    // Razorpay's refund API requires the X-Refund-Idempotency header for idempotency.
+    // The underlying axios instance in razorpay SDK (razorpayInstance.api.rq) transmits custom headers.
+    if (idempotencyKey && razorpayInstance.api && razorpayInstance.api.rq) {
+      try {
+        const response = await razorpayInstance.api.rq.post(
+          `/v1/payments/${paymentId}/refund`,
+          refundPayload,
+          { headers }
+        );
+        refund = response.data;
+      } catch (err) {
+        if (err.response && err.response.data && err.response.data.error) {
+          const apiError = new Error(err.response.data.error.description || 'Razorpay refund failed');
+          apiError.statusCode = err.response.status;
+          apiError.error = err.response.data.error;
+          throw apiError;
+        }
+        throw err;
+      }
+    } else {
+      refund = await razorpayInstance.payments.refund(paymentId, refundPayload);
+    }
     return refund;
   }
 
@@ -409,7 +467,9 @@ module.exports = {
   isLiveCredentials,
   isLiveKeyMode,
   isTestKeyMode,
-  isGatewayConfigured: Boolean(razorpayInstance),
+  get isGatewayConfigured() {
+    return Boolean(razorpayInstance && process.env.DISABLE_REAL_GATEWAY !== 'true');
+  },
   key_id,
   key_secret
 };
