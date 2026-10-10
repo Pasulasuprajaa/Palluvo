@@ -20,11 +20,29 @@ const { requireDurableStorage } = require('../middleware/storageGuard');
 const ORDER_RESERVATION_TTL_MS = 15 * 60 * 1000; // 15-minute pending reservation TTL
 
 /**
+ * Helper to build identical refund payloads across initial verification and reconciliation retries.
+ * Razorpay idempotency requires the request body to be identical when reusing a key.
+ */
+function buildRefundPayload(order, idempotencyKey) {
+  return {
+    amount: order.total_amount * 100,
+    receipt: `rfnd_${order.order_number}`.slice(0, 40),
+    idempotencyKey,
+    notes: {
+      order_id: order.id,
+      order_number: order.order_number,
+      idempotency_key: idempotencyKey,
+      reason: 'Delayed payment on expired order with exhausted inventory'
+    }
+  };
+}
+
+/**
  * Reconciles pending or failed refunds until completion is positively confirmed by Razorpay.
  */
 async function reconcilePendingRefunds(options = {}) {
   let query = `
-    SELECT id, order_number, user_id, razorpay_order_id, razorpay_payment_id, total_amount, refund_id, payment_status, refund_error
+    SELECT id, order_number, user_id, razorpay_order_id, razorpay_payment_id, total_amount, refund_id, payment_status, refund_error, refund_idempotency_key
     FROM orders
     WHERE payment_status IN ('Refund_Pending', 'Refund_Failed')
       AND razorpay_payment_id IS NOT NULL
@@ -179,20 +197,23 @@ async function reconcilePendingRefunds(options = {}) {
         continue;
       }
 
-      // 4. Retry initiating refund with consistent idempotency key
+      // 4. Retry initiating refund:
+      // - Confirmed failed/cancelled attempt: Razorpay requires a fresh key for a distinct attempt. Persist the new key.
+      // - Ambiguous retry: keep the exact same key and 100% identical payload body.
       try {
-        const idempotencyKey = `rfnd_${pOrder.id}_${pOrder.order_number}`;
-        const refundResult = await refundRazorpayPayment(pOrder.razorpay_payment_id, {
-          amount: pOrder.total_amount * 100,
-          receipt: `rfnd_${pOrder.order_number}`.slice(0, 40),
-          idempotencyKey,
-          notes: {
-            order_id: pOrder.id,
-            order_number: pOrder.order_number,
-            idempotency_key: idempotencyKey,
-            reason: 'Reconciled retry for delayed payment on expired order'
+        let idempotencyKey;
+        if (confirmedFailedOrCancelled) {
+          idempotencyKey = `rfnd_${pOrder.id}_${pOrder.order_number}_att_${Date.now()}`;
+          db.prepare('UPDATE orders SET refund_idempotency_key = ? WHERE id = ?').run(idempotencyKey, pOrder.id);
+        } else {
+          idempotencyKey = pOrder.refund_idempotency_key || `rfnd_${pOrder.id}_${pOrder.order_number}`;
+          if (!pOrder.refund_idempotency_key) {
+            db.prepare('UPDATE orders SET refund_idempotency_key = ? WHERE id = ?').run(idempotencyKey, pOrder.id);
           }
-        });
+        }
+
+        const refundPayload = buildRefundPayload(pOrder, idempotencyKey);
+        const refundResult = await refundRazorpayPayment(pOrder.razorpay_payment_id, refundPayload);
 
         if (refundResult && refundResult.status === 'processed') {
           db.transaction(() => {
@@ -1144,19 +1165,10 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
     // Automated Refund Recovery: Items are no longer in stock
     let refundResult = null;
     let refundError = null;
+    const initialIdempotencyKey = order.refund_idempotency_key || `rfnd_${order.id}_${order.order_number}`;
     try {
-      const idempotencyKey = `rfnd_${order.id}_${order.order_number}`;
-      refundResult = await refundRazorpayPayment(razorpay_payment_id, {
-        amount: order.total_amount * 100,
-        receipt: `rfnd_${order.order_number}`.slice(0, 40),
-        idempotencyKey,
-        notes: {
-          order_id: order.id,
-          order_number: order.order_number,
-          idempotency_key: idempotencyKey,
-          reason: 'Delayed payment on expired order with exhausted inventory'
-        }
-      });
+      const refundPayload = buildRefundPayload(order, initialIdempotencyKey);
+      refundResult = await refundRazorpayPayment(razorpay_payment_id, refundPayload);
     } catch (refErr) {
       console.error('Automated refund error for expired order:', refErr);
       refundError = refErr.message || 'Refund initiation failed';
@@ -1176,9 +1188,10 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
           razorpay_payment_id = ?,
           refund_id = ?,
           refund_error = ?,
+          refund_idempotency_key = ?,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND user_id = ?
-      `).run(finalPaymentStatus, razorpay_payment_id, refundId, refundError, order.id, req.user.id);
+      `).run(finalPaymentStatus, razorpay_payment_id, refundId, refundError, initialIdempotencyKey, order.id, req.user.id);
 
       db.prepare(`
         INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)

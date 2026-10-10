@@ -341,6 +341,9 @@ function initSchema() {
       payment_method TEXT DEFAULT 'Razorpay',
       razorpay_order_id TEXT,
       razorpay_payment_id TEXT,
+      refund_id TEXT,
+      refund_error TEXT,
+      refund_idempotency_key TEXT,
       tracking_number TEXT,
       courier_partner TEXT DEFAULT 'BlueDart Luxury Express',
       estimated_delivery TEXT,
@@ -443,6 +446,9 @@ function initSchema() {
   } catch (e) {}
   try {
     db.exec(`ALTER TABLE orders ADD COLUMN refund_error TEXT DEFAULT NULL;`);
+  } catch (e) {}
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN refund_idempotency_key TEXT DEFAULT NULL;`);
   } catch (e) {}
   try {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_orders_pending_expiry ON orders(payment_status, expires_at);`);

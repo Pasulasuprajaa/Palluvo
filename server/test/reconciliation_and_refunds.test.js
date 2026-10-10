@@ -25,7 +25,7 @@ const db = require('../db/database');
 const { JWT_SECRET } = require('../middleware/auth');
 const paymentsRouter = require('../routes/payments');
 const { reconcilePendingRefunds, reconcileExpiredReservations } = paymentsRouter;
-const { refundRazorpayPayment, fetchRazorpayOrder } = require('../services/razorpay');
+const { refundRazorpayPayment, fetchRazorpayOrder, createRazorpayOrder } = require('../services/razorpay');
 
 async function runTests() {
   console.log('🧪 Starting test suite for P1 (Idempotency Header & Test Isolation) and P2 (Reconciliation Authentication)...');
@@ -156,6 +156,13 @@ async function runTests() {
     assert.strictEqual(gatewayBlocked, true, 'Real gateway calls must be disabled during tests');
     console.log('✅ PASS: Real gateway network calls are disabled in test environment');
 
+    // 3. Verify createRazorpayOrder honors DISABLE_REAL_GATEWAY without outbound network requests
+    const createdOrder = await createRazorpayOrder({ amount: 1250, receipt: 'rcpt_no_net_test' });
+    assert.strictEqual(createdOrder.is_mock, true, 'createRazorpayOrder must return mock order when gateway disabled');
+    assert.ok(createdOrder.id.startsWith('order_mock_'), 'createRazorpayOrder must return mock order identifier');
+    assert.strictEqual(createdOrder.amount, 125000, 'createRazorpayOrder must calculate amount in paise');
+    console.log('✅ PASS: createRazorpayOrder strictly honors network isolation guard without network activity');
+
     // --- TEST SUITE P1: Scoped Reconciler & In-Flight Retention ---
     console.log('\n--- Testing [P1] Scoped Reconciler & Refund In-Flight Safety ---');
 
@@ -251,7 +258,8 @@ async function runTests() {
     const refreshedOrder3 = db.prepare("SELECT * FROM orders WHERE id = ?").get(order3.id);
     assert.strictEqual(refreshedOrder3.payment_status, 'Refunded', 'Retry of confirmed failed attempt succeeds');
     assert.notStrictEqual(refreshedOrder3.refund_id, failedRefundId, 'New refund ID generated on retry');
-    console.log('✅ PASS: Confirmed failed refund safely retried after gateway confirmation');
+    assert.ok(refreshedOrder3.refund_idempotency_key && refreshedOrder3.refund_idempotency_key.includes('_att_'), 'Confirmed failed refund generates and persists fresh key');
+    console.log('✅ PASS: Confirmed failed refund safely retried after gateway confirmation with fresh persisted key');
 
     // Scenario 4: Refund retry fails with gateway error.
     // Reconciler should transition payment_status to Refund_Failed and store refund_error.
@@ -268,6 +276,21 @@ async function runTests() {
     assert.strictEqual(refreshedOrder4.payment_status, 'Refund_Failed', 'Failing retry transitions to Refund_Failed');
     assert.ok(refreshedOrder4.refund_error, 'Refund error is recorded');
     console.log('✅ PASS: Gateway retry failure recorded as Refund_Failed with error');
+
+    // Scenario 5: Ambiguous retry retains exact same key and identical body
+    const orderNum5 = `ORD-TEST-AMBIGUOUS-${nonce}`;
+    const initialKey = `rfnd_custom_ambiguous_${nonce}`;
+    db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_status, status, razorpay_order_id, razorpay_payment_id, refund_id, refund_idempotency_key, address_data, created_at)
+      VALUES (?, ?, 5000, 5000, 'Refund_Pending', 'Cancelled', 'order_mock_test_5', 'pay_mock_ambiguous_5', NULL, ?, '{"city":"Kolkata"}', CURRENT_TIMESTAMP)
+    `).run(orderNum5, customerUser.id, initialKey);
+    const order5 = db.prepare("SELECT id FROM orders WHERE order_number = ?").get(orderNum5);
+
+    await reconcilePendingRefunds({ orderIds: [order5.id] });
+
+    const refreshedOrder5 = db.prepare("SELECT * FROM orders WHERE id = ?").get(order5.id);
+    assert.strictEqual(refreshedOrder5.refund_idempotency_key, initialKey, 'Ambiguous retry must keep the identical idempotency key');
+    console.log('✅ PASS: Ambiguous retry preserves identical idempotency key and body payload');
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {

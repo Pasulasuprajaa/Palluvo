@@ -47,6 +47,20 @@ async function createRazorpayOrder({ amount, currency = 'INR', receipt, notes = 
   // Amount in paise (1 INR = 100 paise)
   const amountInPaise = Math.round(amount * 100);
 
+  // Network isolation guard for tests and offline development:
+  // Return simulated mock order without making outbound gateway calls
+  if (process.env.DISABLE_REAL_GATEWAY === 'true') {
+    const mockOrderId = 'order_mock_' + crypto.randomBytes(12).toString('hex');
+    return {
+      id: mockOrderId,
+      amount: amountInPaise,
+      currency,
+      receipt,
+      key_id: key_id || 'rzp_test_mock_palluvo',
+      is_mock: true
+    };
+  }
+
   // In production: Fail closed unless genuine Live Mode credentials (rzp_live_...) are configured
   if (isProduction) {
     if (!isLiveKeyMode || !razorpayInstance || key_id.startsWith('rzp_test_')) {
