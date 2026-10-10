@@ -354,6 +354,7 @@ function initSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id INTEGER NOT NULL,
       product_id INTEGER NOT NULL,
+      variant_id INTEGER,
       product_name TEXT NOT NULL,
       variant_name TEXT,
       color_hex TEXT,
@@ -361,7 +362,8 @@ function initSchema() {
       quantity INTEGER NOT NULL,
       image_url TEXT,
       FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
+      FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE SET NULL
     );
 
     -- Payments Table
@@ -435,6 +437,10 @@ function initSchema() {
 
   try {
     db.exec(`ALTER TABLE products ADD COLUMN silk_mark_certified INTEGER DEFAULT 0;`);
+  } catch (e) {}
+
+  try {
+    db.exec(`ALTER TABLE order_items ADD COLUMN variant_id INTEGER DEFAULT NULL;`);
   } catch (e) {}
 
   // Migration: Ensure distinct primary and gallery images for all best-seller records across existing databases

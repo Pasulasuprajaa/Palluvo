@@ -178,12 +178,35 @@ router.post('/cancel/:id', authenticateToken, requireDurableStorage, (req, res) 
       return res.status(404).json({ error: 'Order not found.' });
     }
 
+    if (order.status === 'Cancelled') {
+      return res.status(400).json({ error: 'Order is already cancelled.' });
+    }
+
     if (order.status === 'Shipped' || order.status === 'Delivered') {
       return res.status(400).json({ error: 'Orders that are already shipped or delivered cannot be cancelled. Please contact concierge support for returns.' });
     }
 
-    db.prepare('UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run('Cancelled', order.id);
+    const cancelTx = db.transaction(() => {
+      db.prepare('UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run('Cancelled', order.id);
+
+      const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+      for (const item of items) {
+        db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')
+          .run(item.quantity, item.product_id);
+        if (item.variant_id) {
+          db.prepare('UPDATE product_variants SET stock_quantity = stock_quantity + ? WHERE id = ?')
+            .run(item.quantity, item.variant_id);
+        }
+      }
+
+      if (order.coupon_code) {
+        db.prepare('UPDATE coupons SET times_used = MAX(0, times_used - 1) WHERE code = ?')
+          .run(order.coupon_code);
+      }
+    });
+
+    cancelTx();
 
     res.json({ message: 'Order cancelled successfully. Refund will be credited within 3-5 business days.' });
   } catch (err) {

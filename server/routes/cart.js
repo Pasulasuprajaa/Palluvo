@@ -68,13 +68,21 @@ router.post('/add', authenticateToken, requireDurableStorage, (req, res) => {
       return res.status(400).json({ error: 'Product ID is required.' });
     }
 
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      return res.status(400).json({ error: 'Quantity must be a positive integer.' });
+    }
+
     const product = db.prepare('SELECT id, name, stock_quantity FROM products WHERE id = ?').get(product_id);
     if (!product) {
       return res.status(404).json({ error: 'Product not found.' });
     }
 
-    if (product.stock_quantity < quantity) {
-      return res.status(400).json({ error: 'Selected quantity exceeds available stock.' });
+    let variant = null;
+    if (variant_id) {
+      variant = db.prepare('SELECT id, product_id, color_name, stock_quantity FROM product_variants WHERE id = ?').get(variant_id);
+      if (!variant || variant.product_id !== product.id) {
+        return res.status(400).json({ error: 'Invalid product variant.' });
+      }
     }
 
     const existing = db.prepare(`
@@ -82,9 +90,22 @@ router.post('/add', authenticateToken, requireDurableStorage, (req, res) => {
       WHERE user_id = ? AND product_id = ? AND (variant_id = ? OR (variant_id IS NULL AND ? IS NULL))
     `).get(req.user.id, product_id, variant_id || null, variant_id || null);
 
+    const totalRequestedQty = (existing ? existing.quantity : 0) + quantity;
+
+    if (product.stock_quantity < totalRequestedQty) {
+      return res.status(400).json({
+        error: `Selected quantity exceeds available stock for "${product.name}". Only ${product.stock_quantity} available.`
+      });
+    }
+
+    if (variant && variant.stock_quantity < totalRequestedQty) {
+      return res.status(400).json({
+        error: `Selected quantity exceeds available stock for "${product.name} (${variant.color_name})". Only ${variant.stock_quantity} available.`
+      });
+    }
+
     if (existing) {
-      const newQty = existing.quantity + quantity;
-      db.prepare('UPDATE cart_items SET quantity = ? WHERE id = ?').run(newQty, existing.id);
+      db.prepare('UPDATE cart_items SET quantity = ? WHERE id = ?').run(totalRequestedQty, existing.id);
     } else {
       db.prepare(`
         INSERT INTO cart_items (user_id, product_id, variant_id, quantity)
@@ -108,9 +129,37 @@ router.put('/update', authenticateToken, requireDurableStorage, (req, res) => {
       return res.status(400).json({ error: 'Cart item ID and quantity are required.' });
     }
 
-    if (quantity <= 0) {
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      return res.status(400).json({ error: 'Quantity must be a valid non-negative integer.' });
+    }
+
+    if (quantity === 0) {
       db.prepare('DELETE FROM cart_items WHERE id = ? AND user_id = ?').run(cart_item_id, req.user.id);
       return res.json({ message: 'Item removed from bag.' });
+    }
+
+    const item = db.prepare(`
+      SELECT ci.id, ci.product_id, ci.variant_id, p.name, p.stock_quantity as product_stock, pv.color_name as variant_name, pv.stock_quantity as variant_stock
+      FROM cart_items ci
+      JOIN products p ON ci.product_id = p.id
+      LEFT JOIN product_variants pv ON ci.variant_id = pv.id
+      WHERE ci.id = ? AND ci.user_id = ?
+    `).get(cart_item_id, req.user.id);
+
+    if (!item) {
+      return res.status(404).json({ error: 'Cart item not found.' });
+    }
+
+    if (item.product_stock < quantity) {
+      return res.status(400).json({
+        error: `Selected quantity exceeds available stock for "${item.name}". Only ${item.product_stock} available.`
+      });
+    }
+
+    if (item.variant_id && item.variant_stock !== null && item.variant_stock !== undefined && item.variant_stock < quantity) {
+      return res.status(400).json({
+        error: `Selected quantity exceeds available stock for "${item.name} (${item.variant_name})". Only ${item.variant_stock} available.`
+      });
     }
 
     db.prepare('UPDATE cart_items SET quantity = ? WHERE id = ? AND user_id = ?')
@@ -151,21 +200,34 @@ router.post('/sync', authenticateToken, requireDurableStorage, (req, res) => {
     const { items = [] } = req.body;
 
     for (const item of items) {
-      if (item.product_id) {
-        const existing = db.prepare(`
-          SELECT id, quantity FROM cart_items
-          WHERE user_id = ? AND product_id = ? AND (variant_id = ? OR (variant_id IS NULL AND ? IS NULL))
-        `).get(req.user.id, item.product_id, item.variant_id || null, item.variant_id || null);
+      if (!item || !item.product_id) continue;
+      const qty = Number.isInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1;
+      
+      const prod = db.prepare('SELECT id, stock_quantity FROM products WHERE id = ?').get(item.product_id);
+      if (!prod || prod.stock_quantity <= 0) continue;
 
-        if (existing) {
-          db.prepare('UPDATE cart_items SET quantity = quantity + ? WHERE id = ?')
-            .run(item.quantity || 1, existing.id);
-        } else {
-          db.prepare(`
-            INSERT INTO cart_items (user_id, product_id, variant_id, quantity)
-            VALUES (?, ?, ?, ?)
-          `).run(req.user.id, item.product_id, item.variant_id || null, item.quantity || 1);
-        }
+      let variant = null;
+      if (item.variant_id) {
+        variant = db.prepare('SELECT id, product_id, stock_quantity FROM product_variants WHERE id = ?').get(item.variant_id);
+        if (!variant || variant.product_id !== prod.id || variant.stock_quantity <= 0) continue;
+      }
+
+      const maxAvailable = Math.min(prod.stock_quantity, variant ? variant.stock_quantity : Infinity);
+
+      const existing = db.prepare(`
+        SELECT id, quantity FROM cart_items
+        WHERE user_id = ? AND product_id = ? AND (variant_id = ? OR (variant_id IS NULL AND ? IS NULL))
+      `).get(req.user.id, item.product_id, item.variant_id || null, item.variant_id || null);
+
+      if (existing) {
+        const newQty = Math.min(maxAvailable, existing.quantity + qty);
+        db.prepare('UPDATE cart_items SET quantity = ? WHERE id = ?').run(newQty, existing.id);
+      } else {
+        const newQty = Math.min(maxAvailable, qty);
+        db.prepare(`
+          INSERT INTO cart_items (user_id, product_id, variant_id, quantity)
+          VALUES (?, ?, ?, ?)
+        `).run(req.user.id, item.product_id, item.variant_id || null, newQty);
       }
     }
 

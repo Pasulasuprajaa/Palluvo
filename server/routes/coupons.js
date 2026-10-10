@@ -37,7 +37,12 @@ router.post('/validate', optionalAuth, (req, res) => {
     const coupon = db.prepare('SELECT * FROM coupons WHERE code = ? AND is_active = 1').get(cleanCode);
 
     if (!coupon) {
-      return res.status(404).json({ error: `Coupon "${cleanCode}" is invalid or has expired.` });
+      return res.status(404).json({ error: `Coupon "${cleanCode}" is invalid or inactive.` });
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (coupon.expiry_date && coupon.expiry_date < todayStr) {
+      return res.status(400).json({ error: `Coupon "${cleanCode}" has expired.` });
     }
 
     if (coupon.min_order_amount && subtotal < coupon.min_order_amount) {

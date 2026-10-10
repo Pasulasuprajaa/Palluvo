@@ -23,34 +23,61 @@ router.post('/create-order', authenticateToken, requireDurableStorage, async (re
       return res.status(400).json({ error: 'Please select or provide a valid shipping address.' });
     }
 
-    // 2. Resolve Items (either from user's DB cart or direct Buy Now payload)
+    // 2. Resolve Items (either from direct Buy Now payload or user's DB cart)
     let cartItems = [];
     if (directItems && Array.isArray(directItems) && directItems.length > 0) {
       for (const item of directItems) {
-        const prod = db.prepare('SELECT id, name, price, mrp, stock_quantity FROM products WHERE id = ?').get(item.product_id);
-        const img = db.prepare('SELECT image_url FROM product_images WHERE product_id = ? ORDER BY is_primary DESC LIMIT 1').get(item.product_id);
-        let variant = null;
-        if (item.variant_id) {
-          variant = db.prepare('SELECT id, color_name, color_hex FROM product_variants WHERE id = ?').get(item.variant_id);
+        if (!item || !item.product_id) {
+          return res.status(400).json({ error: 'Invalid product item in checkout request.' });
         }
-        if (prod) {
-          cartItems.push({
-            product_id: prod.id,
-            name: prod.name,
-            price: prod.price,
-            mrp: prod.mrp,
-            quantity: item.quantity || 1,
-            variant_name: variant ? variant.color_name : null,
-            color_hex: variant ? variant.color_hex : null,
-            image_url: img ? img.image_url : null
+        if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+          return res.status(400).json({ error: 'Item quantity must be a positive integer.' });
+        }
+
+        const prod = db.prepare('SELECT id, name, price, mrp, stock_quantity FROM products WHERE id = ?').get(item.product_id);
+        if (!prod) {
+          return res.status(404).json({ error: 'Product not found.' });
+        }
+
+        if (prod.stock_quantity < item.quantity) {
+          return res.status(400).json({
+            error: `Insufficient stock for "${prod.name}". Only ${prod.stock_quantity} available.`
           });
         }
+
+        let variant = null;
+        if (item.variant_id) {
+          variant = db.prepare('SELECT id, product_id, color_name, color_hex, stock_quantity FROM product_variants WHERE id = ?').get(item.variant_id);
+          if (!variant || variant.product_id !== prod.id) {
+            return res.status(400).json({ error: `Invalid product variant for "${prod.name}".` });
+          }
+          if (variant.stock_quantity < item.quantity) {
+            return res.status(400).json({
+              error: `Insufficient stock for "${prod.name} (${variant.color_name})". Only ${variant.stock_quantity} available.`
+            });
+          }
+        }
+
+        const img = db.prepare('SELECT image_url FROM product_images WHERE product_id = ? ORDER BY is_primary DESC LIMIT 1').get(item.product_id);
+
+        cartItems.push({
+          product_id: prod.id,
+          variant_id: variant ? variant.id : null,
+          name: prod.name,
+          price: prod.price,
+          mrp: prod.mrp,
+          quantity: item.quantity,
+          variant_name: variant ? variant.color_name : null,
+          color_hex: variant ? variant.color_hex : null,
+          image_url: img ? img.image_url : null
+        });
       }
     } else {
       // From cart_items table
       const dbItems = db.prepare(`
         SELECT 
           ci.product_id,
+          ci.variant_id,
           ci.quantity,
           p.name,
           p.price,
@@ -58,6 +85,7 @@ router.post('/create-order', authenticateToken, requireDurableStorage, async (re
           p.stock_quantity,
           pv.color_name as variant_name,
           pv.color_hex,
+          pv.stock_quantity as variant_stock,
           (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC LIMIT 1) as image_url
         FROM cart_items ci
         JOIN products p ON ci.product_id = p.id
@@ -67,6 +95,22 @@ router.post('/create-order', authenticateToken, requireDurableStorage, async (re
 
       if (!dbItems || dbItems.length === 0) {
         return res.status(400).json({ error: 'Your shopping bag is empty.' });
+      }
+
+      for (const item of dbItems) {
+        if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+          return res.status(400).json({ error: `Invalid quantity in bag for "${item.name}".` });
+        }
+        if (item.stock_quantity < item.quantity) {
+          return res.status(400).json({
+            error: `Insufficient stock for "${item.name}". Only ${item.stock_quantity} available.`
+          });
+        }
+        if (item.variant_id && item.variant_stock !== null && item.variant_stock !== undefined && item.variant_stock < item.quantity) {
+          return res.status(400).json({
+            error: `Insufficient stock for "${item.name} (${item.variant_name})". Only ${item.variant_stock} available.`
+          });
+        }
       }
 
       cartItems = dbItems;
@@ -81,24 +125,41 @@ router.post('/create-order', authenticateToken, requireDurableStorage, async (re
     const freeDeliveryThreshold = 1999;
     const deliveryFee = subtotal >= freeDeliveryThreshold ? 0 : 150;
     
-    // Validate Coupon
+    // Authoritative Coupon Validation at Checkout Boundary
     let discountAmount = 0;
     let validCouponCode = null;
     if (coupon_code) {
       const cleanCode = coupon_code.trim().toUpperCase();
+      const todayStr = new Date().toISOString().slice(0, 10);
       const coupon = db.prepare('SELECT * FROM coupons WHERE code = ? AND is_active = 1').get(cleanCode);
-      if (coupon && (!coupon.min_order_amount || subtotal >= coupon.min_order_amount)) {
-        let disc = Math.round((subtotal * coupon.discount_percent) / 100);
-        if (coupon.max_discount_amount && disc > coupon.max_discount_amount) {
-          disc = coupon.max_discount_amount;
-        }
-        discountAmount = disc;
-        validCouponCode = coupon.code;
+
+      if (!coupon) {
+        return res.status(400).json({ error: `Coupon "${cleanCode}" is invalid or inactive.` });
       }
+
+      if (coupon.expiry_date && coupon.expiry_date < todayStr) {
+        return res.status(400).json({ error: `Coupon "${cleanCode}" has expired.` });
+      }
+
+      if (coupon.usage_limit && coupon.times_used >= coupon.usage_limit) {
+        return res.status(400).json({ error: `Coupon "${cleanCode}" has reached its maximum usage limit.` });
+      }
+
+      if (coupon.min_order_amount && subtotal < coupon.min_order_amount) {
+        return res.status(400).json({
+          error: `Code "${cleanCode}" requires a minimum purchase of ₹${coupon.min_order_amount.toLocaleString('en-IN')}.`
+        });
+      }
+
+      let disc = Math.round((subtotal * coupon.discount_percent) / 100);
+      if (coupon.max_discount_amount && disc > coupon.max_discount_amount) {
+        disc = coupon.max_discount_amount;
+      }
+      discountAmount = disc;
+      validCouponCode = coupon.code;
     }
 
     const totalAmount = Math.max(0, subtotal - discountAmount + deliveryFee);
-    // Generate cryptographically secure, unguessable high-entropy tokens (CSPRNG, 96 bits of entropy)
     const orderNumber = `PAL-${new Date().getFullYear()}-${crypto.randomBytes(12).toString('hex').toUpperCase()}`;
     const trackingNumber = `BLR-BD-${crypto.randomBytes(12).toString('hex').toUpperCase()}`;
 
@@ -114,53 +175,118 @@ router.post('/create-order', authenticateToken, requireDurableStorage, async (re
       }
     });
 
-    // 5. Insert Pending Order in DB
-    const insertOrder = db.prepare(`
-      INSERT INTO orders (
-        order_number, user_id, address_data, subtotal, discount_amount, coupon_code,
-        delivery_fee, tax_amount, total_amount, status, payment_status, payment_method,
-        razorpay_order_id, tracking_number, courier_partner, estimated_delivery
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    // 5. Atomically reserve product/variant stock, coupon usage, and insert pending order
+    const createOrderTx = db.transaction(() => {
+      // Atomically decrement stock with conditional boundary checks (fails if quantity > available stock)
+      for (const item of cartItems) {
+        const prodRes = db.prepare(`
+          UPDATE products
+          SET stock_quantity = stock_quantity - ?
+          WHERE id = ? AND stock_quantity >= ?
+        `).run(item.quantity, item.product_id, item.quantity);
 
-    const orderRes = insertOrder.run(
-      orderNumber,
-      req.user.id,
-      JSON.stringify(address),
-      subtotal,
-      discountAmount,
-      validCouponCode,
-      deliveryFee,
-      0, // GST included in MRP
-      totalAmount,
-      'Placed',
-      'Pending',
-      'Razorpay',
-      rzpOrder.id,
-      trackingNumber,
-      'BlueDart Luxury Express',
-      '3-4 Business Days'
-    );
+        if (prodRes.changes === 0) {
+          const current = db.prepare('SELECT name, stock_quantity FROM products WHERE id = ?').get(item.product_id);
+          const err = new Error(`Insufficient stock for "${item.name}". Only ${current?.stock_quantity ?? 0} available.`);
+          err.status = 400;
+          throw err;
+        }
 
-    const orderId = orderRes.lastInsertRowid;
+        if (item.variant_id) {
+          const varRes = db.prepare(`
+            UPDATE product_variants
+            SET stock_quantity = stock_quantity - ?
+            WHERE id = ? AND stock_quantity >= ?
+          `).run(item.quantity, item.variant_id, item.quantity);
 
-    // Insert Order Items
-    const insertItem = db.prepare(`
-      INSERT INTO order_items (order_id, product_id, product_name, variant_name, color_hex, price, quantity, image_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+          if (varRes.changes === 0) {
+            const currentVar = db.prepare('SELECT color_name, stock_quantity FROM product_variants WHERE id = ?').get(item.variant_id);
+            const err = new Error(`Insufficient stock for "${item.name} (${item.variant_name || currentVar?.color_name})". Only ${currentVar?.stock_quantity ?? 0} available.`);
+            err.status = 400;
+            throw err;
+          }
+        }
+      }
 
-    for (const item of cartItems) {
-      insertItem.run(
-        orderId,
-        item.product_id,
-        item.name,
-        item.variant_name || null,
-        item.color_hex || null,
-        item.price,
-        item.quantity,
-        item.image_url || null
+      // Atomically reserve coupon usage
+      if (validCouponCode) {
+        const couponRes = db.prepare(`
+          UPDATE coupons
+          SET times_used = times_used + 1
+          WHERE code = ?
+            AND is_active = 1
+            AND (expiry_date IS NULL OR expiry_date >= DATE('now'))
+            AND (usage_limit IS NULL OR times_used < usage_limit)
+        `).run(validCouponCode);
+
+        if (couponRes.changes === 0) {
+          const err = new Error(`Coupon "${validCouponCode}" is no longer available or has reached its usage limit.`);
+          err.status = 400;
+          throw err;
+        }
+      }
+
+      // Insert Pending Order
+      const insertOrder = db.prepare(`
+        INSERT INTO orders (
+          order_number, user_id, address_data, subtotal, discount_amount, coupon_code,
+          delivery_fee, tax_amount, total_amount, status, payment_status, payment_method,
+          razorpay_order_id, tracking_number, courier_partner, estimated_delivery
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const orderRes = insertOrder.run(
+        orderNumber,
+        req.user.id,
+        JSON.stringify(address),
+        subtotal,
+        discountAmount,
+        validCouponCode,
+        deliveryFee,
+        0, // GST included in MRP
+        totalAmount,
+        'Placed',
+        'Pending',
+        'Razorpay',
+        rzpOrder.id,
+        trackingNumber,
+        'BlueDart Luxury Express',
+        '3-4 Business Days'
       );
+
+      const orderId = orderRes.lastInsertRowid;
+
+      // Insert Order Items with variant_id
+      const insertItem = db.prepare(`
+        INSERT INTO order_items (order_id, product_id, variant_id, product_name, variant_name, color_hex, price, quantity, image_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const item of cartItems) {
+        insertItem.run(
+          orderId,
+          item.product_id,
+          item.variant_id || null,
+          item.name,
+          item.variant_name || null,
+          item.color_hex || null,
+          item.price,
+          item.quantity,
+          item.image_url || null
+        );
+      }
+
+      return orderId;
+    });
+
+    let orderId;
+    try {
+      orderId = createOrderTx();
+    } catch (txErr) {
+      if (txErr.status) {
+        return res.status(txErr.status).json({ error: txErr.message });
+      }
+      throw txErr;
     }
 
     res.json({
@@ -229,8 +355,27 @@ router.post('/verify', authenticateToken, requireDurableStorage, (req, res) => {
     });
 
     if (!isValid) {
-      db.prepare('UPDATE orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
-        .run('Failed', order.id, req.user.id);
+      // Signature verification failed: release reserved stock and coupon
+      const releaseTx = db.transaction(() => {
+        db.prepare('UPDATE orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
+          .run('Failed', order.id, req.user.id);
+
+        const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+        for (const item of items) {
+          db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')
+            .run(item.quantity, item.product_id);
+          if (item.variant_id) {
+            db.prepare('UPDATE product_variants SET stock_quantity = stock_quantity + ? WHERE id = ?')
+              .run(item.quantity, item.variant_id);
+          }
+        }
+        if (order.coupon_code) {
+          db.prepare('UPDATE coupons SET times_used = MAX(0, times_used - 1) WHERE code = ?')
+            .run(order.coupon_code);
+        }
+      });
+      releaseTx();
+
       return res.status(400).json({ error: 'Payment signature verification failed. Please try again or contact support.' });
     }
 
@@ -254,18 +399,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, (req, res) => {
       VALUES (?, ?, ?, ?, ?, 'INR', 'Captured', 'Razorpay')
     `).run(order.id, razorpay_order_id, razorpay_payment_id, razorpay_signature, order.total_amount * 100);
 
-    // 7. Decrement Inventory & Update Coupon Usage
-    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
-    for (const item of items) {
-      db.prepare('UPDATE products SET stock_quantity = MAX(0, stock_quantity - ?) WHERE id = ?')
-        .run(item.quantity, item.product_id);
-    }
-
-    if (order.coupon_code) {
-      db.prepare('UPDATE coupons SET times_used = times_used + 1 WHERE code = ?').run(order.coupon_code);
-    }
-
-    // 8. Clear User Cart
+    // 7. Clear User Cart (stock and coupon usage were atomically reserved at order creation)
     db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(req.user.id);
 
     let parsedAddress = {};
@@ -276,6 +410,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, (req, res) => {
     }
 
     const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
 
     res.json({
       success: true,
