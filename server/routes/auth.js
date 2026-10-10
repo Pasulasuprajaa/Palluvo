@@ -46,7 +46,16 @@ router.post('/register', authLimiter, requireDurableStorage, (req, res) => {
     });
   } catch (err) {
     console.error('Register error:', err);
-    res.status(500).json({ error: 'Internal server error while registering.' });
+    if (err.status === 503) {
+      return res.status(503).json({
+        error: 'Registration service is temporarily unavailable. Please try again later.',
+        code: 'AUTH_SERVICE_UNAVAILABLE'
+      });
+    }
+    res.status(500).json({
+      error: 'Internal server error while registering.',
+      code: 'REGISTRATION_FAILED'
+    });
   }
 });
 
@@ -107,9 +116,15 @@ router.post('/login', authLimiter, targetedAuthLimiter, async (req, res) => {
     });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(err.status || 500).json({
-      error: err.message || 'Internal server error while logging in.',
-      code: err.code || 'LOGIN_ERROR'
+    if (err.status === 503) {
+      return res.status(503).json({
+        error: 'Authentication service is temporarily unavailable. Please try again later.',
+        code: 'AUTH_SERVICE_UNAVAILABLE'
+      });
+    }
+    res.status(500).json({
+      error: 'Internal server error while logging in.',
+      code: 'LOGIN_FAILED'
     });
   }
 });

@@ -16,10 +16,11 @@ const isServerless = Boolean(
  * In local development and non-serverless single-instance servers, falls back to process-local MemoryStore.
  */
 class SharedRateLimitStore {
-  constructor(prefix = 'rl') {
+  constructor(prefix = 'rl', windowMs = 15 * 60 * 1000) {
     this.prefix = prefix;
+    this.windowMs = windowMs;
     this.localStore = new MemoryStore();
-    this.windowMs = 15 * 60 * 1000;
+    this.localStore.init({ windowMs: this.windowMs });
 
     const restUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || process.env.REDIS_REST_URL;
     const restToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || process.env.REDIS_REST_TOKEN;
@@ -33,9 +34,9 @@ class SharedRateLimitStore {
     }
   }
 
-  init(options) {
+  init(options = {}) {
     this.windowMs = options.windowMs || this.windowMs;
-    this.localStore.init(options);
+    this.localStore.init({ windowMs: this.windowMs, ...options });
   }
 
   createStoreUnavailableError(details) {
@@ -54,7 +55,12 @@ class SharedRateLimitStore {
       throw this.createStoreUnavailableError('Missing shared KV/Redis credentials');
     }
     if (!this.isShared) {
-      return this.localStore.get(key);
+      const info = await this.localStore.get(key);
+      if (info && info.resetTime && new Date(info.resetTime).getTime() <= Date.now()) {
+        await this.localStore.resetKey(key);
+        return { totalHits: 0, resetTime: new Date(Date.now() + this.windowMs) };
+      }
+      return info || { totalHits: 0, resetTime: new Date(Date.now() + this.windowMs) };
     }
     const fullKey = `palluvo:${this.prefix}:${key}`;
     try {
@@ -86,7 +92,12 @@ class SharedRateLimitStore {
       if (isServerless) {
         throw this.createStoreUnavailableError(err.message);
       }
-      return this.localStore.get(key);
+      const info = await this.localStore.get(key);
+      if (info && info.resetTime && new Date(info.resetTime).getTime() <= Date.now()) {
+        await this.localStore.resetKey(key);
+        return { totalHits: 0, resetTime: new Date(Date.now() + this.windowMs) };
+      }
+      return info || { totalHits: 0, resetTime: new Date(Date.now() + this.windowMs) };
     }
   }
 
@@ -230,8 +241,10 @@ function getNormalizedIp(req) {
   return ipKeyGenerator(rawIp);
 }
 
-function createSharedRateLimitStore(prefix) {
-  return new SharedRateLimitStore(prefix);
+function createSharedRateLimitStore(prefix, windowMs = 15 * 60 * 1000) {
+  const store = new SharedRateLimitStore(prefix, windowMs);
+  store.init({ windowMs });
+  return store;
 }
 
 // Rate limiter for authentication attempts (login, register) to protect against credential-stuffing and brute-force attacks
@@ -299,38 +312,55 @@ const apiLimiter = rateLimit({
   }
 });
 
-/**
- * Tracks aggregate failed login attempts per account across all IPs.
- * Applies progressive non-locking computational friction against distributed botnets / multi-prefix credential stuffing.
- */
 class AccountRiskTracker {
-  constructor() {
-    this.store = createSharedRateLimitStore('acct_risk');
+  constructor(windowMs = 15 * 60 * 1000) {
+    this.windowMs = windowMs;
+    this.store = createSharedRateLimitStore('acct_risk', windowMs);
+    this.store.init({ windowMs: this.windowMs });
     this.localCounts = new Map();
+  }
+
+  pruneLocalFallback() {
+    const now = Date.now();
+    for (const [key, entry] of this.localCounts.entries()) {
+      if (!entry || entry.expiresAt <= now) {
+        this.localCounts.delete(key);
+      }
+    }
   }
 
   async getFailedCount(email) {
     if (!email || typeof email !== 'string') return 0;
     const cleanEmail = email.trim().toLowerCase();
+    this.pruneLocalFallback();
     try {
       const info = await this.store.get(cleanEmail);
       return info?.totalHits || 0;
     } catch (err) {
       if (isServerless) throw err;
-      return this.localCounts.get(cleanEmail) || 0;
+      const entry = this.localCounts.get(cleanEmail);
+      if (entry && entry.expiresAt > Date.now()) {
+        return entry.count;
+      }
+      return 0;
     }
   }
 
   async recordFailedAttempt(email) {
     if (!email || typeof email !== 'string') return 0;
     const cleanEmail = email.trim().toLowerCase();
+    this.pruneLocalFallback();
     try {
       const info = await this.store.increment(cleanEmail);
       return info?.totalHits || 1;
     } catch (err) {
       if (isServerless) throw err;
-      const count = (this.localCounts.get(cleanEmail) || 0) + 1;
-      this.localCounts.set(cleanEmail, count);
+      const current = this.localCounts.get(cleanEmail);
+      const count = (current && current.expiresAt > Date.now() ? current.count : 0) + 1;
+      this.localCounts.set(cleanEmail, {
+        count,
+        expiresAt: Date.now() + this.windowMs
+      });
       return count;
     }
   }
@@ -359,3 +389,4 @@ module.exports = {
   AccountRiskTracker,
   accountRiskTracker
 };
+
