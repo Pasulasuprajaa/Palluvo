@@ -10,7 +10,6 @@ import { useWishlist } from '../context/WishlistContext';
 import { useCompare } from '../context/CompareContext';
 
 export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams = {} }) {
-  const [bannerVisible, setBannerVisible] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [collectionsDropdown, setCollectionsDropdown] = useState(false);
   const [userDropdown, setUserDropdown] = useState(false);
@@ -35,48 +34,6 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
 
   return (
     <>
-      {/* Top Luxury Announcement Bar */}
-      {bannerVisible && (
-        <div className="relative bg-[#3F0D19] text-[#FAF7F2] text-[10.5px] sm:text-xs font-medium tracking-wide py-1.5 sm:py-2 px-2.5 sm:px-4 border-b border-[#C5A059]/30 transition-all duration-300">
-          <div className="max-w-7xl mx-auto flex items-center justify-between pr-11 sm:pr-10">
-            <div className="flex items-center gap-1 sm:gap-2 mx-auto sm:mx-0 text-center sm:text-left flex-wrap justify-center sm:justify-start">
-              <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#C5A059] shrink-0 animate-pulse" />
-              <span>Free Express Delivery &gt; ₹1,999</span>
-              <span className="text-[#C5A059] font-semibold">| Code <strong className="text-white bg-[#5B1425] px-1 py-0.5 rounded border border-[#C5A059]/40 tracking-wider">WELCOME10</strong> (10% OFF up to ₹1,500 on orders &gt; ₹1,999)</span>
-            </div>
-            <div className="hidden sm:flex items-center gap-4 text-[11px] text-[#FAF7F2]/80 shrink-0">
-              <a href="tel:18001234567" className="hover:text-[#C5A059] transition flex items-center gap-1 cursor-pointer" aria-label="Customer Helpline 1800-123-4567">
-                <Phone className="w-3 h-3 text-[#C5A059]" />
-                <span>Care: 1800-123-4567</span>
-              </a>
-              <button onClick={() => handleNav('track-order')} className="hover:text-[#C5A059] transition cursor-pointer">
-                Track Order
-              </button>
-              {isAdmin && (
-                <button
-                  onClick={() => handleNav('admin')}
-                  className="text-[#C5A059] font-bold uppercase tracking-wider bg-[#5B1425] px-2 py-0.5 rounded border border-[#C5A059]/40 hover:bg-[#C5A059] hover:text-[#3F0D19] transition cursor-pointer"
-                >
-                  Admin Panel
-                </button>
-              )}
-            </div>
-          </div>
-          {/* Dismiss Announcement Bar (44x44px minimum touch target) */}
-          <button
-            type="button"
-            onClick={() => setBannerVisible(false)}
-            aria-label="Close announcement bar"
-            title="Close"
-            className="absolute right-0 sm:right-1 top-1/2 -translate-y-1/2 w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center text-[#FAF7F2]/75 hover:text-[#FAF7F2] transition cursor-pointer focus-visible:ring-1 focus-visible:ring-[#C5A059] focus-visible:outline-none group/close"
-          >
-            <span className="p-1 rounded-full group-hover/close:bg-white/10 flex items-center justify-center transition">
-              <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </span>
-          </button>
-        </div>
-      )}
-
       {/* Main Sticky Navbar */}
       <header className="sticky top-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#EAE2D7] shadow-xs">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-5 xl:px-8">
