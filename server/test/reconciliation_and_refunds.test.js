@@ -163,6 +163,26 @@ async function runTests() {
     assert.strictEqual(createdOrder.amount, 125000, 'createRazorpayOrder must calculate amount in paise');
     console.log('✅ PASS: createRazorpayOrder strictly honors network isolation guard without network activity');
 
+    // 4. Verify createRazorpayOrder strictly fails closed in production when gateway is disabled
+    const savedEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'production';
+      let threwInProd = false;
+      try {
+        await createRazorpayOrder({ amount: 1250, receipt: 'rcpt_prod_fail_test' });
+      } catch (err) {
+        threwInProd = true;
+        assert.ok(
+          err.message.includes('forbidden in production') || err.message.includes('strictly rejected'),
+          'Error message must indicate production restriction'
+        );
+      }
+      assert.strictEqual(threwInProd, true, 'createRazorpayOrder must throw in production mode rather than returning mock orders');
+      console.log('✅ PASS: createRazorpayOrder strictly fails closed in production when gateway is disabled');
+    } finally {
+      process.env.NODE_ENV = savedEnv;
+    }
+
     // --- TEST SUITE P1: Scoped Reconciler & In-Flight Retention ---
     console.log('\n--- Testing [P1] Scoped Reconciler & Refund In-Flight Safety ---');
 
@@ -275,7 +295,28 @@ async function runTests() {
     const refreshedOrder4 = db.prepare("SELECT * FROM orders WHERE id = ?").get(order4.id);
     assert.strictEqual(refreshedOrder4.payment_status, 'Refund_Failed', 'Failing retry transitions to Refund_Failed');
     assert.ok(refreshedOrder4.refund_error, 'Refund error is recorded');
+    const firstRetryKey = refreshedOrder4.refund_idempotency_key;
+    assert.ok(firstRetryKey && firstRetryKey.includes('_att_'), 'Fresh key was generated and persisted for the retry');
     console.log('✅ PASS: Gateway retry failure recorded as Refund_Failed with error');
+
+    // Run reconciliation again on the failed order to simulate subsequent ambiguous retry:
+    // It MUST reuse firstRetryKey and NOT generate a new Date.now() key!
+    await reconcilePendingRefunds({ orderIds: [order4.id] });
+    const refreshedOrder4SecondRun = db.prepare("SELECT * FROM orders WHERE id = ?").get(order4.id);
+    assert.strictEqual(
+      refreshedOrder4SecondRun.refund_idempotency_key,
+      firstRetryKey,
+      'Ambiguous subsequent retry must reuse the current attempt key and NOT generate a new key'
+    );
+    console.log('✅ PASS: Subsequent ambiguous retry reuses current attempt key without generating new key');
+
+    // Concurrency test:
+    // If order has an active refund_claimed_at within lease window, a concurrent worker must skip it.
+    db.prepare("UPDATE orders SET refund_claimed_at = ? WHERE id = ?").run(Date.now(), order4.id);
+    const concurrentResolved = await reconcilePendingRefunds({ orderIds: [order4.id] });
+    assert.strictEqual(concurrentResolved, 0, 'Concurrent worker must skip claimed order');
+    db.prepare("UPDATE orders SET refund_claimed_at = NULL WHERE id = ?").run(order4.id);
+    console.log('✅ PASS: Concurrency guard prevents racing workers from processing claimed order');
 
     // Scenario 5: Ambiguous retry retains exact same key and identical body
     const orderNum5 = `ORD-TEST-AMBIGUOUS-${nonce}`;

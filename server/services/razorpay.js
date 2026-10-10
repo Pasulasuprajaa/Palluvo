@@ -47,9 +47,16 @@ async function createRazorpayOrder({ amount, currency = 'INR', receipt, notes = 
   // Amount in paise (1 INR = 100 paise)
   const amountInPaise = Math.round(amount * 100);
 
+  // In production: Fail closed if real gateway is disabled or mock order is attempted.
+  // Mock order fallback is strictly restricted to non-production environments.
+  const currentIsProduction = process.env.NODE_ENV === 'production' || isProduction;
+
   // Network isolation guard for tests and offline development:
-  // Return simulated mock order without making outbound gateway calls
+  // Return simulated mock order without making outbound gateway calls (non-production only)
   if (process.env.DISABLE_REAL_GATEWAY === 'true') {
+    if (currentIsProduction) {
+      throw new Error('Real gateway calls are disabled via DISABLE_REAL_GATEWAY, but mock order fallback is strictly forbidden in production. Failing closed.');
+    }
     const mockOrderId = 'order_mock_' + crypto.randomBytes(12).toString('hex');
     return {
       id: mockOrderId,
@@ -62,7 +69,7 @@ async function createRazorpayOrder({ amount, currency = 'INR', receipt, notes = 
   }
 
   // In production: Fail closed unless genuine Live Mode credentials (rzp_live_...) are configured
-  if (isProduction) {
+  if (currentIsProduction) {
     if (!isLiveKeyMode || !razorpayInstance || key_id.startsWith('rzp_test_')) {
       throw new Error('Live Razorpay credentials (RAZORPAY_KEY_ID starting with rzp_live_ & RAZORPAY_KEY_SECRET) must be set in production. Test-mode keys (rzp_test_...) are strictly rejected.');
     }

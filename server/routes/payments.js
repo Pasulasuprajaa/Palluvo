@@ -42,7 +42,7 @@ function buildRefundPayload(order, idempotencyKey) {
  */
 async function reconcilePendingRefunds(options = {}) {
   let query = `
-    SELECT id, order_number, user_id, razorpay_order_id, razorpay_payment_id, total_amount, refund_id, payment_status, refund_error, refund_idempotency_key
+    SELECT id, order_number, user_id, razorpay_order_id, razorpay_payment_id, total_amount, refund_id, payment_status, refund_error, refund_idempotency_key, failed_refund_id, refund_claimed_at
     FROM orders
     WHERE payment_status IN ('Refund_Pending', 'Refund_Failed')
       AND razorpay_payment_id IS NOT NULL
@@ -67,6 +67,21 @@ async function reconcilePendingRefunds(options = {}) {
   let resolvedRefunds = 0;
 
   for (const pOrder of pendingOrders) {
+    // Concurrency guard: Atomically claim order to prevent concurrent workers from issuing separate attempts
+    const claimTime = Date.now();
+    const lockTimeout = 60 * 1000; // 60-second lease
+    const claimResult = db.prepare(`
+      UPDATE orders
+      SET refund_claimed_at = ?
+      WHERE id = ?
+        AND (refund_claimed_at IS NULL OR refund_claimed_at < ?)
+    `).run(claimTime, pOrder.id, claimTime - lockTimeout);
+
+    if (claimResult.changes === 0) {
+      // Another concurrent worker is actively processing this order; skip to prevent duplicate attempts
+      continue;
+    }
+
     try {
       const isMockPayment = typeof pOrder.razorpay_payment_id === 'string' &&
         (pOrder.razorpay_payment_id.startsWith('pay_mock_') || pOrder.razorpay_payment_id.startsWith('mock_'));
@@ -81,6 +96,7 @@ async function reconcilePendingRefunds(options = {}) {
       let pendingRefundId = null;
       let hasLookupError = false;
       let confirmedFailedOrCancelled = false;
+      let confirmedFailedRefundId = null;
 
       // 1. Inspect existing refund status if a refund ID exists
       if (pOrder.refund_id) {
@@ -95,6 +111,7 @@ async function reconcilePendingRefunds(options = {}) {
               pendingRefundId = refund.id;
             } else if (refund.status === 'failed' || refund.status === 'cancelled') {
               confirmedFailedOrCancelled = true;
+              confirmedFailedRefundId = refund.id;
             }
           }
         } catch (e) {
@@ -118,6 +135,11 @@ async function reconcilePendingRefunds(options = {}) {
               isPending = true;
               if (!pendingRefundId) {
                 pendingRefundId = pending.id;
+              }
+            } else if (refunds.length > 0 && refunds.every(r => r.status === 'failed' || r.status === 'cancelled')) {
+              confirmedFailedOrCancelled = true;
+              if (!confirmedFailedRefundId) {
+                confirmedFailedRefundId = refunds[0].id;
               }
             }
           }
@@ -181,16 +203,20 @@ async function reconcilePendingRefunds(options = {}) {
       }
 
       // Step C: Gateway lookup uncertainty
-      // If gateway lookup failed, do not assume state or retry; retain pending state
+      // If gateway lookup failed, do not assume state or retry; retain pending status
       if (hasLookupError) {
         console.warn(`Refund status lookup uncertain for order ${pOrder.id}; preserving pending status and skipping retry.`);
         continue;
       }
 
-      // Step D: Only retry after Razorpay confirms previous attempt failed/cancelled
-      // Or if no prior refund was ever created at Razorpay
+      // Step D: Only retry after Razorpay confirms previous attempt failed/cancelled,
+      // or if retrying an ambiguous in-flight attempt under an existing key,
+      // or if no prior refund was ever created at Razorpay.
       const hasPriorRefundAttempt = Boolean(pOrder.refund_id || (refunds && refunds.length > 0));
-      const canRetry = !hasPriorRefundAttempt || confirmedFailedOrCancelled || (refunds.length > 0 && refunds.every(r => r.status === 'failed' || r.status === 'cancelled'));
+      const canRetry = !hasPriorRefundAttempt ||
+        confirmedFailedOrCancelled ||
+        (refunds.length > 0 && refunds.every(r => r.status === 'failed' || r.status === 'cancelled')) ||
+        Boolean(pOrder.refund_idempotency_key);
 
       if (!canRetry) {
         console.warn(`Previous refund attempt for order ${pOrder.id} not confirmed failed/cancelled by gateway; skipping retry.`);
@@ -198,14 +224,31 @@ async function reconcilePendingRefunds(options = {}) {
       }
 
       // 4. Retry initiating refund:
-      // - Confirmed failed/cancelled attempt: Razorpay requires a fresh key for a distinct attempt. Persist the new key.
-      // - Ambiguous retry: keep the exact same key and 100% identical payload body.
+      // - Persist/claim a fresh key ONCE when a previous attempt is confirmed failed/cancelled.
+      // - For subsequent ambiguous retries, REUSE that attempt's key until its status is confirmed by the gateway.
       try {
         let idempotencyKey;
-        if (confirmedFailedOrCancelled) {
+
+        // Determine if this is a newly confirmed failure that hasn't claimed a fresh retry key yet.
+        // A fresh key is only generated when a specific previous refund ID has been confirmed failed,
+        // and that failure has not already been recorded in failed_refund_id.
+        const failedIdToRecord = (pOrder.refund_id && confirmedFailedOrCancelled) ? pOrder.refund_id : null;
+        const isNewlyConfirmedFailure = Boolean(failedIdToRecord) && pOrder.failed_refund_id !== failedIdToRecord;
+
+        if (isNewlyConfirmedFailure) {
+          // Confirmed failed attempt: Razorpay requires a fresh key for a distinct attempt.
+          // Persist the new key and record the failed refund ID immediately so subsequent retries reuse this key.
           idempotencyKey = `rfnd_${pOrder.id}_${pOrder.order_number}_att_${Date.now()}`;
-          db.prepare('UPDATE orders SET refund_idempotency_key = ? WHERE id = ?').run(idempotencyKey, pOrder.id);
+          db.prepare(`
+            UPDATE orders
+            SET refund_idempotency_key = ?,
+                failed_refund_id = ?,
+                refund_id = NULL
+            WHERE id = ?
+          `).run(idempotencyKey, failedIdToRecord, pOrder.id);
         } else {
+          // Ambiguous retry or continuation of existing attempt:
+          // Reuse the stored idempotency key to satisfy Razorpay's idempotency guarantee.
           idempotencyKey = pOrder.refund_idempotency_key || `rfnd_${pOrder.id}_${pOrder.order_number}`;
           if (!pOrder.refund_idempotency_key) {
             db.prepare('UPDATE orders SET refund_idempotency_key = ? WHERE id = ?').run(idempotencyKey, pOrder.id);
@@ -243,6 +286,15 @@ async function reconcilePendingRefunds(options = {}) {
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
           `).run(refundResult.id, pOrder.id);
+        } else if (refundResult && (refundResult.status === 'failed' || refundResult.status === 'cancelled')) {
+          db.prepare(`
+            UPDATE orders
+            SET payment_status = 'Refund_Failed',
+                refund_id = ?,
+                refund_error = 'Gateway reported refund failure',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).run(refundResult.id, pOrder.id);
         }
       } catch (retryErr) {
         console.warn(`Refund retry failed for order ${pOrder.id}:`, retryErr.message);
@@ -256,6 +308,12 @@ async function reconcilePendingRefunds(options = {}) {
       }
     } catch (err) {
       console.error(`Refund reconciliation error for order ${pOrder.id}:`, err);
+    } finally {
+      try {
+        db.prepare('UPDATE orders SET refund_claimed_at = NULL WHERE id = ?').run(pOrder.id);
+      } catch (claimErr) {
+        console.warn(`Failed to release claim on order ${pOrder.id}:`, claimErr.message);
+      }
     }
   }
 
