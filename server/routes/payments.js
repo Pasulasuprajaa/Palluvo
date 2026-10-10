@@ -6,9 +6,149 @@ const { authenticateToken } = require('../middleware/auth');
 const { createRazorpayOrder, verifyPaymentSignature, key_id } = require('../services/razorpay');
 const { requireDurableStorage } = require('../middleware/storageGuard');
 
+const ORDER_RESERVATION_TTL_MS = 15 * 60 * 1000; // 15-minute pending reservation TTL
+
+/**
+ * Reconciles abandoned pending orders whose checkout reservation has expired,
+ * releasing reserved product/variant inventory and coupon quota exactly once.
+ */
+function reconcileExpiredReservations(options = {}) {
+  const now = options.now || Date.now();
+  const cutoffSql = new Date(now - ORDER_RESERVATION_TTL_MS).toISOString().replace('T', ' ').slice(0, 19);
+
+  // Find pending orders that have exceeded their reservation lifetime
+  const expiredOrders = db.prepare(`
+    SELECT id, coupon_code 
+    FROM orders 
+    WHERE payment_status = 'Pending'
+      AND status != 'Cancelled'
+      AND (
+        (expires_at IS NOT NULL AND expires_at <= ?)
+        OR (expires_at IS NULL AND created_at <= ?)
+      )
+  `).all(now, cutoffSql);
+
+  if (!expiredOrders || expiredOrders.length === 0) {
+    return 0;
+  }
+
+  let reconciledCount = 0;
+
+  for (const expOrder of expiredOrders) {
+    const releaseTx = db.transaction(() => {
+      // Transition atomically from Pending -> Expired and Cancelled
+      const updateRes = db.prepare(`
+        UPDATE orders
+        SET payment_status = 'Expired',
+            status = 'Cancelled',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
+      `).run(expOrder.id);
+
+      // CRITICAL: Only restore stock and coupon if this transition changed the row
+      if (updateRes.changes > 0) {
+        const items = db.prepare('SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?').all(expOrder.id);
+        for (const item of items) {
+          db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')
+            .run(item.quantity, item.product_id);
+          if (item.variant_id) {
+            db.prepare('UPDATE product_variants SET stock_quantity = stock_quantity + ? WHERE id = ?')
+              .run(item.quantity, item.variant_id);
+          }
+        }
+
+        if (expOrder.coupon_code) {
+          db.prepare('UPDATE coupons SET times_used = MAX(0, times_used - 1) WHERE code = ?')
+            .run(expOrder.coupon_code);
+        }
+
+        return true;
+      }
+      return false;
+    });
+
+    try {
+      if (releaseTx()) {
+        reconciledCount++;
+      }
+    } catch (err) {
+      console.error(`Error reconciling expired order ${expOrder.id}:`, err);
+    }
+  }
+
+  return reconciledCount;
+}
+
+/**
+ * Reconciles a single order if it has expired
+ */
+function reconcileSingleExpiredOrder(orderId, now = Date.now()) {
+  const cutoffSql = new Date(now - ORDER_RESERVATION_TTL_MS).toISOString().replace('T', ' ').slice(0, 19);
+  const order = db.prepare(`
+    SELECT id, coupon_code, expires_at, created_at, payment_status, status
+    FROM orders
+    WHERE id = ?
+  `).get(orderId);
+
+  if (!order || order.payment_status !== 'Pending' || order.status === 'Cancelled') {
+    return false;
+  }
+
+  const isExpired = (order.expires_at && order.expires_at <= now) ||
+    (!order.expires_at && order.created_at <= cutoffSql);
+
+  if (!isExpired) return false;
+
+  const releaseTx = db.transaction(() => {
+    const updateRes = db.prepare(`
+      UPDATE orders
+      SET payment_status = 'Expired',
+          status = 'Cancelled',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
+    `).run(order.id);
+
+    if (updateRes.changes > 0) {
+      const items = db.prepare('SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?').all(order.id);
+      for (const item of items) {
+        db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')
+          .run(item.quantity, item.product_id);
+        if (item.variant_id) {
+          db.prepare('UPDATE product_variants SET stock_quantity = stock_quantity + ? WHERE id = ?')
+            .run(item.quantity, item.variant_id);
+        }
+      }
+
+      if (order.coupon_code) {
+        db.prepare('UPDATE coupons SET times_used = MAX(0, times_used - 1) WHERE code = ?')
+          .run(order.coupon_code);
+      }
+      return true;
+    }
+    return false;
+  });
+
+  return releaseTx();
+}
+
+// Periodic reconciliation interval for long-running server instances
+if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  const reconciliationInterval = setInterval(() => {
+    try {
+      reconcileExpiredReservations();
+    } catch (err) {
+      console.error('Periodic order reservation reconciliation error:', err);
+    }
+  }, 60 * 1000);
+  if (reconciliationInterval.unref) reconciliationInterval.unref();
+}
+
 // POST /api/payments/create-order
 router.post('/create-order', authenticateToken, requireDurableStorage, async (req, res) => {
   try {
+    // Reconcile any abandoned reservations before validating stock and coupons
+    reconcileExpiredReservations();
+
     const { address_id, address_data, coupon_code, items: directItems } = req.body;
 
     // 1. Resolve Shipping Address
@@ -226,13 +366,16 @@ router.post('/create-order', authenticateToken, requireDurableStorage, async (re
         }
       }
 
+      const expiresAt = Date.now() + ORDER_RESERVATION_TTL_MS;
+
       // Insert Pending Order
       const insertOrder = db.prepare(`
         INSERT INTO orders (
           order_number, user_id, address_data, subtotal, discount_amount, coupon_code,
           delivery_fee, tax_amount, total_amount, status, payment_status, payment_method,
-          razorpay_order_id, tracking_number, courier_partner, estimated_delivery
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          razorpay_order_id, tracking_number, courier_partner, estimated_delivery,
+          expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const orderRes = insertOrder.run(
@@ -251,7 +394,8 @@ router.post('/create-order', authenticateToken, requireDurableStorage, async (re
         rzpOrder.id,
         trackingNumber,
         'BlueDart Luxury Express',
-        '3-4 Business Days'
+        '3-4 Business Days',
+        expiresAt
       );
 
       const orderId = orderRes.lastInsertRowid;
@@ -276,18 +420,20 @@ router.post('/create-order', authenticateToken, requireDurableStorage, async (re
         );
       }
 
-      return orderId;
+      return { orderId, expiresAt };
     });
 
-    let orderId;
+    let orderInfo;
     try {
-      orderId = createOrderTx();
+      orderInfo = createOrderTx();
     } catch (txErr) {
       if (txErr.status) {
         return res.status(txErr.status).json({ error: txErr.message });
       }
       throw txErr;
     }
+
+    const { orderId, expiresAt } = orderInfo;
 
     res.json({
       orderId,
@@ -297,6 +443,8 @@ router.post('/create-order', authenticateToken, requireDurableStorage, async (re
       currency: rzpOrder.currency,
       keyId: key_id,
       isMock: rzpOrder.is_mock,
+      expiresAt,
+      reservationExpiresInMs: ORDER_RESERVATION_TTL_MS,
       summary: {
         subtotal,
         discountAmount,
@@ -332,12 +480,29 @@ router.post('/verify', authenticateToken, requireDurableStorage, (req, res) => {
       return res.status(404).json({ error: 'Order not found or unauthorized access.' });
     }
 
-    // 2. Validate current order state
+    // 2. Validate current order state: reject terminal and non-pending orders
     if (order.payment_status === 'Paid') {
       return res.status(400).json({ error: 'Order has already been paid and processed.' });
     }
     if (order.status === 'Cancelled') {
       return res.status(400).json({ error: 'Cannot complete payment for a cancelled order.' });
+    }
+    if (order.payment_status === 'Failed') {
+      return res.status(400).json({ error: 'Payment for this order has already failed and reservation was released.' });
+    }
+    if (order.payment_status === 'Expired') {
+      return res.status(400).json({ error: 'Order reservation has expired.' });
+    }
+    if (order.payment_status !== 'Pending') {
+      return res.status(400).json({ error: `Order cannot be verified: invalid payment status "${order.payment_status}".` });
+    }
+
+    // Check if order reservation has expired by TTL
+    const isExpired = (order.expires_at && order.expires_at <= Date.now()) ||
+      (!order.expires_at && new Date((order.created_at || '').replace(' ', 'T') + 'Z').getTime() <= Date.now() - ORDER_RESERVATION_TTL_MS);
+    if (isExpired) {
+      reconcileSingleExpiredOrder(order.id);
+      return res.status(400).json({ error: 'Order reservation has expired. Please initiate checkout again.' });
     }
 
     // 3. Match persisted gateway order identifier
@@ -355,24 +520,34 @@ router.post('/verify', authenticateToken, requireDurableStorage, (req, res) => {
     });
 
     if (!isValid) {
-      // Signature verification failed: release reserved stock and coupon
+      // Signature verification failed: release reserved stock and coupon ONLY IF
+      // the conditional transition from Pending -> Failed succeeds
       const releaseTx = db.transaction(() => {
-        db.prepare('UPDATE orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
-          .run('Failed', order.id, req.user.id);
+        const updateRes = db.prepare(`
+          UPDATE orders 
+          SET payment_status = 'Failed', 
+              status = 'Cancelled', 
+              updated_at = CURRENT_TIMESTAMP 
+          WHERE id = ? AND user_id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
+        `).run(order.id, req.user.id);
 
-        const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
-        for (const item of items) {
-          db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')
-            .run(item.quantity, item.product_id);
-          if (item.variant_id) {
-            db.prepare('UPDATE product_variants SET stock_quantity = stock_quantity + ? WHERE id = ?')
-              .run(item.quantity, item.variant_id);
+        if (updateRes.changes > 0) {
+          const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+          for (const item of items) {
+            db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')
+              .run(item.quantity, item.product_id);
+            if (item.variant_id) {
+              db.prepare('UPDATE product_variants SET stock_quantity = stock_quantity + ? WHERE id = ?')
+                .run(item.quantity, item.variant_id);
+            }
           }
+          if (order.coupon_code) {
+            db.prepare('UPDATE coupons SET times_used = MAX(0, times_used - 1) WHERE code = ?')
+              .run(order.coupon_code);
+          }
+          return true;
         }
-        if (order.coupon_code) {
-          db.prepare('UPDATE coupons SET times_used = MAX(0, times_used - 1) WHERE code = ?')
-            .run(order.coupon_code);
-        }
+        return false;
       });
       releaseTx();
 
@@ -386,7 +561,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, (req, res) => {
         status = 'Placed',
         razorpay_payment_id = ?,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND user_id = ? AND payment_status = 'Pending'
+      WHERE id = ? AND user_id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
     `).run(razorpay_payment_id, order.id, req.user.id);
 
     if (updateResult.changes === 0) {
@@ -428,3 +603,6 @@ router.post('/verify', authenticateToken, requireDurableStorage, (req, res) => {
 });
 
 module.exports = router;
+module.exports.reconcileExpiredReservations = reconcileExpiredReservations;
+module.exports.reconcileSingleExpiredOrder = reconcileSingleExpiredOrder;
+module.exports.ORDER_RESERVATION_TTL_MS = ORDER_RESERVATION_TTL_MS;

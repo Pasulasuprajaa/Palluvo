@@ -344,6 +344,7 @@ function initSchema() {
       tracking_number TEXT,
       courier_partner TEXT DEFAULT 'BlueDart Luxury Express',
       estimated_delivery TEXT,
+      expires_at INTEGER, -- Unix timestamp in milliseconds when pending checkout reservation expires
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT
@@ -433,6 +434,12 @@ function initSchema() {
   } catch (e) {}
   try {
     db.exec(`ALTER TABLE orders ADD COLUMN gift_message TEXT DEFAULT NULL;`);
+  } catch (e) {}
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN expires_at INTEGER DEFAULT NULL;`);
+  } catch (e) {}
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_orders_pending_expiry ON orders(payment_status, expires_at);`);
   } catch (e) {}
 
   try {
