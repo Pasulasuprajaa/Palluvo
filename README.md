@@ -119,16 +119,16 @@ ADMIN_EMAIL="admin@palluvo.com" ADMIN_PASSWORD="<strong_password>" npm run creat
 For reliable e-commerce transactions across auto-scaling servers and serverless environments:
 
 ### Supported Storage Environment Variables:
-- **`DATABASE_URL`**: Database connection URL or path (e.g., `sqlite:///var/data/palluvo.db`, `file:/var/data/palluvo.db`, or `/var/data/palluvo.db`).
+- **`DATABASE_URL`**: SQLite database connection URL or path (e.g., `sqlite:///var/data/palluvo.db`, `file:/var/data/palluvo.db`, or `/var/data/palluvo.db`). Note: Network database protocols (such as `postgres://` or `mysql://`) require dedicated network driver adapters and are rejected with a descriptive error rather than parsed as filesystem paths.
 - **`DATABASE_PATH`** / **`SQLITE_DB_PATH`**: Explicit file path to the SQLite database on a persistent mounted volume.
 - **`DATABASE_DIR`** / **`DATA_DIR`**: Directory path where `palluvo.db` will be located.
 
 ### Environment Behaviors:
 - **Local Development**: Stores data locally at `server/data/palluvo.db` with full read/write support and WAL journaling mode enabled.
-- **Persistent Containers / VMs** *(Fly.io volumes, Railway persistent storage, Render disks, AWS ECS / EC2)*: Point `DATABASE_URL` or `DATABASE_PATH` to the mounted persistent volume.
-- **Serverless Deployments** *(Vercel, AWS Lambda)*: Serverless function filesystems and `/tmp` scratch spaces are ephemeral and isolated per instance. To prevent signups, carts, inventory, orders, and payment states from disappearing or diverging across function instances:
+- **Persistent Containers / VMs** *(Fly.io volumes, Railway persistent storage, Render disks, AWS ECS / EC2)*: Point `DATABASE_URL` or `DATABASE_PATH` to the mounted persistent volume. Local SQLite files on persistent disk volumes provide durable read/write storage.
+- **Serverless Deployments** *(Vercel, AWS Lambda)*: Serverless function execution containers and filesystems (including `/tmp` and local scratch disks) are ephemeral and isolated per instance. To prevent signups, carts, inventory, orders, and payment states from disappearing or diverging across function instances:
   - Public catalog browsing, product search, filters, offers, and health checks operate smoothly in read-only mode.
-  - Mutating commerce operations (user registration, bag/cart mutations, wishlist, order creation, payment capture, customer reviews, admin catalog edits) are automatically guarded by `requireDurableStorage` and restricted (HTTP 503 `EPHEMERAL_STORAGE_RESTRICTED`) unless a durable persistent database location is configured via `DATABASE_URL` or `DATABASE_PATH`.
+  - Mutating commerce operations (user registration, bag/cart mutations, wishlist, order creation, payment capture, customer reviews, admin catalog edits) are automatically guarded by `requireDurableStorage` and default-denied (HTTP 503 `EPHEMERAL_STORAGE_RESTRICTED`) in serverless environments.
 
 ---
 

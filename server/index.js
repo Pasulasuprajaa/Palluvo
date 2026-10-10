@@ -55,7 +55,9 @@ app.get('/api/health', (req, res) => {
     tagline: 'Every drape, a little magic.',
     database: {
       durable: db.isDurable,
-      storageType: db.storageType
+      ephemeral: db.isEphemeral,
+      storageType: db.storageType,
+      isServerless: Boolean(db.isServerless)
     },
     time: new Date().toISOString()
   });

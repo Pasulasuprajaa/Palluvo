@@ -7,8 +7,9 @@ const db = require('../db/database');
 function requireDurableStorage(req, res, next) {
   if (!db.isDurable) {
     return res.status(503).json({
-      error: 'Durable database storage is not configured. Production commerce writes are restricted until a durable shared database or persistent volume is attached (via DATABASE_URL or DATABASE_PATH).',
-      code: 'EPHEMERAL_STORAGE_RESTRICTED'
+      error: 'Durable shared database storage is not available in this environment. Mutating commerce operations (user registration, bag/cart updates, order placement, payments, reviews) are restricted on ephemeral or serverless instances to prevent data divergence and state loss.',
+      code: 'EPHEMERAL_STORAGE_RESTRICTED',
+      storageType: db.storageType
     });
   }
   next();
