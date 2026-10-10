@@ -288,6 +288,13 @@ async function fetchRazorpayRefund(refundId) {
       is_mock: true
     };
   }
+  if (refundId.startsWith('rfnd_mock_failed_')) {
+    return {
+      id: refundId,
+      status: 'failed',
+      is_mock: true
+    };
+  }
   if (refundId.startsWith('rfnd_mock_')) {
     return {
       id: refundId,
@@ -306,6 +313,9 @@ async function fetchRazorpayRefund(refundId) {
 
 async function fetchRazorpayPaymentRefunds(paymentId) {
   if (!paymentId) return [];
+  if (paymentId.startsWith('pay_mock_refund_failed_lookup_')) {
+    throw new Error('Simulated gateway refund lookup failure (network timeout)');
+  }
   if (paymentId.startsWith('pay_mock_refund_pending_')) {
     return [{
       id: 'rfnd_mock_pending_1',
@@ -319,6 +329,14 @@ async function fetchRazorpayPaymentRefunds(paymentId) {
       id: 'rfnd_mock_processed_1',
       payment_id: paymentId,
       status: 'processed',
+      is_mock: true
+    }];
+  }
+  if (paymentId.startsWith('pay_mock_refund_failed_')) {
+    return [{
+      id: 'rfnd_mock_failed_1',
+      payment_id: paymentId,
+      status: 'failed',
       is_mock: true
     }];
   }
@@ -347,6 +365,7 @@ async function refundRazorpayPayment(paymentId, options = {}) {
       payment_id: paymentId,
       amount: options.amount,
       status: 'pending',
+      receipt: options.receipt || null,
       is_mock: true
     };
   }
@@ -357,16 +376,21 @@ async function refundRazorpayPayment(paymentId, options = {}) {
       payment_id: paymentId,
       amount: options.amount,
       status: 'processed',
+      receipt: options.receipt || null,
       is_mock: true
     };
   }
 
   if (razorpayInstance) {
-    const refund = await razorpayInstance.payments.refund(paymentId, {
+    const refundPayload = {
       amount: options.amount,
       notes: options.notes || {},
       speed: options.speed || 'normal'
-    });
+    };
+    if (options.receipt) {
+      refundPayload.receipt = options.receipt;
+    }
+    const refund = await razorpayInstance.payments.refund(paymentId, refundPayload);
     return refund;
   }
 

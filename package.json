@@ -11,7 +11,8 @@
     "seed:reset": "node server/db/seed.js --reset",
     "create-admin": "node server/scripts/createAdmin.js",
     "build": "npm run --prefix client build",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "test": "npm run --prefix server test"
   },
   "workspaces": [
     "client",

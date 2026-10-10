@@ -68,9 +68,50 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function timingSafeEqualStr(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const hashA = crypto.createHash('sha256').update(a).digest();
+  const hashB = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
+}
+
+function verifyCronSecret(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Unauthorized: Missing Authorization header.' });
+  }
+
+  const parts = authHeader.trim().split(/\s+/);
+  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
+    return res.status(401).json({ error: 'Unauthorized: Bearer token format required.' });
+  }
+
+  const token = parts[1];
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (cronSecret && timingSafeEqualStr(token, cronSecret)) {
+    return next();
+  }
+
+  // Also permit authenticated admin users via JWT
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(decoded.id);
+    if (user && user.role === 'admin') {
+      req.user = user;
+      return next();
+    }
+  } catch (jwtErr) {
+    // Not a valid admin JWT
+  }
+
+  return res.status(401).json({ error: 'Unauthorized: Invalid cron secret or authorization token.' });
+}
+
 module.exports = {
   authenticateToken,
   optionalAuth,
   requireAdmin,
+  verifyCronSecret,
   JWT_SECRET
 };

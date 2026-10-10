@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const db = require('../db/database');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, verifyCronSecret } = require('../middleware/auth');
 const {
   createRazorpayOrder,
   verifyPaymentSignature,
@@ -24,7 +24,7 @@ const ORDER_RESERVATION_TTL_MS = 15 * 60 * 1000; // 15-minute pending reservatio
  */
 async function reconcilePendingRefunds() {
   const pendingOrders = db.prepare(`
-    SELECT id, order_number, user_id, razorpay_order_id, razorpay_payment_id, total_amount, refund_id, payment_status
+    SELECT id, order_number, user_id, razorpay_order_id, razorpay_payment_id, total_amount, refund_id, payment_status, refund_error
     FROM orders
     WHERE payment_status IN ('Refund_Pending', 'Refund_Failed')
       AND razorpay_payment_id IS NOT NULL
@@ -46,31 +46,54 @@ async function reconcilePendingRefunds() {
       }
 
       let isCompleted = false;
+      let isPending = false;
       let finalRefundId = pOrder.refund_id;
+      let pendingRefundId = null;
+      let hasLookupError = false;
+      let confirmedFailedOrCancelled = false;
 
       // 1. Inspect existing refund status if a refund ID exists
       if (pOrder.refund_id) {
         try {
           const refund = await fetchRazorpayRefund(pOrder.refund_id);
-          if (refund && refund.status === 'processed') {
-            isCompleted = true;
+          if (refund) {
+            if (refund.status === 'processed') {
+              isCompleted = true;
+              finalRefundId = refund.id;
+            } else if (refund.status === 'pending') {
+              isPending = true;
+              pendingRefundId = refund.id;
+            } else if (refund.status === 'failed' || refund.status === 'cancelled') {
+              confirmedFailedOrCancelled = true;
+            }
           }
         } catch (e) {
-          // ignore lookup failure
+          hasLookupError = true;
+          console.warn(`Lookup for refund ${pOrder.refund_id} failed:`, e.message);
         }
       }
 
-      // 2. Inspect payment refund list
+      // 2. Inspect payment refund list from gateway
+      let refunds = [];
       if (!isCompleted) {
         try {
-          const refunds = await fetchRazorpayPaymentRefunds(pOrder.razorpay_payment_id);
+          refunds = await fetchRazorpayPaymentRefunds(pOrder.razorpay_payment_id);
           const processed = refunds.find(r => r.status === 'processed');
           if (processed) {
             isCompleted = true;
             finalRefundId = processed.id;
+          } else {
+            const pending = refunds.find(r => r.status === 'pending');
+            if (pending) {
+              isPending = true;
+              if (!pendingRefundId) {
+                pendingRefundId = pending.id;
+              }
+            }
           }
         } catch (e) {
-          // ignore lookup failure
+          hasLookupError = true;
+          console.warn(`Lookup for payment refunds ${pOrder.razorpay_payment_id} failed:`, e.message);
         }
       }
 
@@ -82,10 +105,12 @@ async function reconcilePendingRefunds() {
             isCompleted = true;
           }
         } catch (e) {
-          // ignore lookup failure
+          hasLookupError = true;
+          console.warn(`Lookup for payment ${pOrder.razorpay_payment_id} failed:`, e.message);
         }
       }
 
+      // Step A: Completed / Processed Refund confirmed
       if (isCompleted) {
         db.transaction(() => {
           db.prepare(`
@@ -108,13 +133,51 @@ async function reconcilePendingRefunds() {
         continue;
       }
 
-      // 4. Retry initiating refund if not yet completed at gateway
+      // Step B: In-flight / Pending Refund detected
+      // Retain existing pending refund; NEVER resubmit or overwrite while refund is pending
+      if (isPending) {
+        const retainedRefundId = pendingRefundId || pOrder.refund_id;
+        db.prepare(`
+          UPDATE orders
+          SET payment_status = 'Refund_Pending',
+              refund_id = ?,
+              refund_error = NULL,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(retainedRefundId, pOrder.id);
+
+        console.info(`Refund ${retainedRefundId} for order ${pOrder.id} is pending; retaining in-flight refund without resubmission.`);
+        continue;
+      }
+
+      // Step C: Gateway lookup uncertainty
+      // If gateway lookup failed, do not assume state or retry; retain pending state
+      if (hasLookupError) {
+        console.warn(`Refund status lookup uncertain for order ${pOrder.id}; preserving pending status and skipping retry.`);
+        continue;
+      }
+
+      // Step D: Only retry after Razorpay confirms previous attempt failed/cancelled
+      // Or if no prior refund was ever created at Razorpay
+      const hasPriorRefundAttempt = Boolean(pOrder.refund_id || (refunds && refunds.length > 0));
+      const canRetry = !hasPriorRefundAttempt || confirmedFailedOrCancelled || (refunds.length > 0 && refunds.every(r => r.status === 'failed' || r.status === 'cancelled'));
+
+      if (!canRetry) {
+        console.warn(`Previous refund attempt for order ${pOrder.id} not confirmed failed/cancelled by gateway; skipping retry.`);
+        continue;
+      }
+
+      // 4. Retry initiating refund with idempotency key
       try {
+        const idempotencyKey = `rfnd_retry_${pOrder.id}_${pOrder.order_number}`;
         const refundResult = await refundRazorpayPayment(pOrder.razorpay_payment_id, {
           amount: pOrder.total_amount * 100,
+          receipt: `rfnd_${pOrder.order_number}`.slice(0, 40),
+          idempotencyKey,
           notes: {
             order_id: pOrder.id,
             order_number: pOrder.order_number,
+            idempotency_key: idempotencyKey,
             reason: 'Reconciled retry for delayed payment on expired order'
           }
         });
@@ -127,7 +190,7 @@ async function reconcilePendingRefunds() {
                   refund_id = ?,
                   refund_error = NULL,
                   updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+              WHERE id = ?
             `).run(refundResult.id, pOrder.id);
 
             db.prepare(`
@@ -141,7 +204,8 @@ async function reconcilePendingRefunds() {
         } else if (refundResult && refundResult.status === 'pending') {
           db.prepare(`
             UPDATE orders
-            SET refund_id = ?,
+            SET payment_status = 'Refund_Pending',
+                refund_id = ?,
                 refund_error = NULL,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
@@ -151,7 +215,8 @@ async function reconcilePendingRefunds() {
         console.warn(`Refund retry failed for order ${pOrder.id}:`, retryErr.message);
         db.prepare(`
           UPDATE orders
-          SET refund_error = ?,
+          SET payment_status = 'Refund_Failed',
+              refund_error = ?,
               updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
         `).run(retryErr.message, pOrder.id);
@@ -518,8 +583,8 @@ if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
   if (reconciliationInterval.unref) reconciliationInterval.unref();
 }
 
-// ALL /api/payments/reconcile (Guaranteed serverless Vercel Cron and monitoring endpoint)
-router.all('/reconcile', async (req, res) => {
+// GET /api/payments/reconcile (Scheduled Vercel Cron and monitoring endpoint)
+router.get('/reconcile', verifyCronSecret, async (req, res) => {
   try {
     const reconciledCount = await reconcileExpiredReservations();
     res.json({
@@ -531,6 +596,12 @@ router.all('/reconcile', async (req, res) => {
     console.error('Reconciliation endpoint error:', err);
     res.status(500).json({ error: 'Reconciliation failed' });
   }
+});
+
+// Reject non-GET requests to the reconciliation endpoint
+router.all('/reconcile', (req, res) => {
+  res.setHeader('Allow', 'GET');
+  res.status(405).json({ error: 'Method not allowed. Scheduled reconciliation endpoint only accepts GET requests.' });
 });
 
 // POST /api/payments/create-order
@@ -1062,11 +1133,15 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
     let refundResult = null;
     let refundError = null;
     try {
+      const idempotencyKey = `rfnd_${order.id}_${order.order_number}`;
       refundResult = await refundRazorpayPayment(razorpay_payment_id, {
         amount: order.total_amount * 100,
+        receipt: `rfnd_${order.order_number}`.slice(0, 40),
+        idempotencyKey,
         notes: {
           order_id: order.id,
           order_number: order.order_number,
+          idempotency_key: idempotencyKey,
           reason: 'Delayed payment on expired order with exhausted inventory'
         }
       });
@@ -1125,4 +1200,5 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
 module.exports = router;
 module.exports.reconcileExpiredReservations = reconcileExpiredReservations;
 module.exports.reconcileSingleExpiredOrder = reconcileSingleExpiredOrder;
+module.exports.reconcilePendingRefunds = reconcilePendingRefunds;
 module.exports.ORDER_RESERVATION_TTL_MS = ORDER_RESERVATION_TTL_MS;
