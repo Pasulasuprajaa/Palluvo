@@ -2,10 +2,15 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 const { requireDurableStorage } = require('../middleware/storageGuard');
+const { reconcileExpiredReservations } = require('./payments');
 
 // GET /api/products (List with comprehensive filtering, search, and sorting)
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
+    if (typeof reconcileExpiredReservations === 'function') {
+      await reconcileExpiredReservations();
+    }
+
     const {
       category,
       fabric,
@@ -195,8 +200,12 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/products/search/suggestions (Live instant search)
-router.get('/search/suggestions', (req, res) => {
+router.get('/search/suggestions', async (req, res) => {
   try {
+    if (typeof reconcileExpiredReservations === 'function') {
+      await reconcileExpiredReservations();
+    }
+
     const { q } = req.query;
     if (!q || !q.trim()) {
       return res.json({ suggestions: [], products: [] });
@@ -229,8 +238,12 @@ router.get('/search/suggestions', (req, res) => {
 });
 
 // GET /api/products/:slugOrId (Single product details with gallery, variants, reviews, and related items)
-router.get('/:slugOrId', (req, res) => {
+router.get('/:slugOrId', async (req, res) => {
   try {
+    if (typeof reconcileExpiredReservations === 'function') {
+      await reconcileExpiredReservations();
+    }
+
     const { slugOrId } = req.params;
     let product;
 

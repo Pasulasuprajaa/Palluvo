@@ -2,10 +2,15 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 const { optionalAuth } = require('../middleware/auth');
+const { reconcileExpiredReservations } = require('./payments');
 
 // GET /api/coupons (List active public promotional offers & coupons)
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
+    if (typeof reconcileExpiredReservations === 'function') {
+      await reconcileExpiredReservations();
+    }
+
     const coupons = db.prepare(`
       SELECT id, code, title, description, discount_percent, max_discount_amount, min_order_amount, expiry_date
       FROM coupons
@@ -21,8 +26,12 @@ router.get('/', (req, res) => {
 });
 
 // POST /api/coupons/validate
-router.post('/validate', optionalAuth, (req, res) => {
+router.post('/validate', optionalAuth, async (req, res) => {
   try {
+    if (typeof reconcileExpiredReservations === 'function') {
+      await reconcileExpiredReservations();
+    }
+
     const { code, subtotal } = req.body;
 
     if (!code || !code.trim()) {

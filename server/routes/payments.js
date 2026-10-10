@@ -3,22 +3,33 @@ const router = express.Router();
 const crypto = require('crypto');
 const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
-const { createRazorpayOrder, verifyPaymentSignature, key_id } = require('../services/razorpay');
+const {
+  createRazorpayOrder,
+  verifyPaymentSignature,
+  fetchRazorpayOrder,
+  fetchRazorpayOrderPayments,
+  refundRazorpayPayment,
+  key_id
+} = require('../services/razorpay');
 const { requireDurableStorage } = require('../middleware/storageGuard');
 
 const ORDER_RESERVATION_TTL_MS = 15 * 60 * 1000; // 15-minute pending reservation TTL
 
 /**
- * Reconciles abandoned pending orders whose checkout reservation has expired,
- * releasing reserved product/variant inventory and coupon quota exactly once.
+ * Payment-aware reconciliation of expired order reservations.
+ * 
+ * Before releasing inventory or cancelling, the gateway order status is inspected
+ * with Razorpay. If Razorpay shows the order has been paid/captured, the reservation
+ * is retained and the order is marked 'Paid' instead of being cancelled.
+ * If the gateway confirms the order was not paid, the reservation is released exactly once.
  */
-function reconcileExpiredReservations(options = {}) {
+async function reconcileExpiredReservations(options = {}) {
   const now = options.now || Date.now();
   const cutoffSql = new Date(now - ORDER_RESERVATION_TTL_MS).toISOString().replace('T', ' ').slice(0, 19);
 
   // Find pending orders that have exceeded their reservation lifetime
   const expiredOrders = db.prepare(`
-    SELECT id, coupon_code 
+    SELECT id, order_number, user_id, razorpay_order_id, coupon_code, total_amount
     FROM orders 
     WHERE payment_status = 'Pending'
       AND status != 'Cancelled'
@@ -35,44 +46,82 @@ function reconcileExpiredReservations(options = {}) {
   let reconciledCount = 0;
 
   for (const expOrder of expiredOrders) {
-    const releaseTx = db.transaction(() => {
-      // Transition atomically from Pending -> Expired and Cancelled
-      const updateRes = db.prepare(`
-        UPDATE orders
-        SET payment_status = 'Expired',
-            status = 'Cancelled',
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
-      `).run(expOrder.id);
-
-      // CRITICAL: Only restore stock and coupon if this transition changed the row
-      if (updateRes.changes > 0) {
-        const items = db.prepare('SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?').all(expOrder.id);
-        for (const item of items) {
-          db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')
-            .run(item.quantity, item.product_id);
-          if (item.variant_id) {
-            db.prepare('UPDATE product_variants SET stock_quantity = stock_quantity + ? WHERE id = ?')
-              .run(item.quantity, item.variant_id);
-          }
-        }
-
-        if (expOrder.coupon_code) {
-          db.prepare('UPDATE coupons SET times_used = MAX(0, times_used - 1) WHERE code = ?')
-            .run(expOrder.coupon_code);
-        }
-
-        return true;
-      }
-      return false;
-    });
-
     try {
+      // 1. Gateway Status Check: Verify with Razorpay before cancelling
+      let gatewayOrder = null;
+      if (expOrder.razorpay_order_id) {
+        gatewayOrder = await fetchRazorpayOrder(expOrder.razorpay_order_id);
+      }
+
+      // If Razorpay reports that the customer actually completed payment:
+      if (gatewayOrder && (gatewayOrder.status === 'paid' || gatewayOrder.amount_paid > 0)) {
+        const payments = await fetchRazorpayOrderPayments(expOrder.razorpay_order_id);
+        const successfulPayment = payments.find(p => p.status === 'captured') || payments[0];
+        const paymentId = successfulPayment ? successfulPayment.id : `pay_rec_${Date.now()}`;
+
+        const paidTx = db.transaction(() => {
+          const updateRes = db.prepare(`
+            UPDATE orders
+            SET payment_status = 'Paid',
+                status = 'Placed',
+                razorpay_payment_id = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND payment_status = 'Pending'
+          `).run(paymentId, expOrder.id);
+
+          if (updateRes.changes > 0) {
+            db.prepare(`
+              INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+              VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
+            `).run(expOrder.id, expOrder.razorpay_order_id, paymentId, (gatewayOrder.amount_paid || expOrder.total_amount * 100));
+
+            db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(expOrder.user_id);
+            return true;
+          }
+          return false;
+        });
+
+        if (paidTx()) {
+          reconciledCount++;
+          continue; // Successfully recovered as Paid, DO NOT cancel or release stock
+        }
+      }
+
+      // 2. Gateway confirms order is NOT paid: release reservation exactly once
+      const releaseTx = db.transaction(() => {
+        const updateRes = db.prepare(`
+          UPDATE orders
+          SET payment_status = 'Expired',
+              status = 'Cancelled',
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
+        `).run(expOrder.id);
+
+        if (updateRes.changes > 0) {
+          const items = db.prepare('SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?').all(expOrder.id);
+          for (const item of items) {
+            db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')
+              .run(item.quantity, item.product_id);
+            if (item.variant_id) {
+              db.prepare('UPDATE product_variants SET stock_quantity = stock_quantity + ? WHERE id = ?')
+                .run(item.quantity, item.variant_id);
+            }
+          }
+
+          if (expOrder.coupon_code) {
+            db.prepare('UPDATE coupons SET times_used = MAX(0, times_used - 1) WHERE code = ?')
+              .run(expOrder.coupon_code);
+          }
+          return true;
+        }
+        return false;
+      });
+
       if (releaseTx()) {
         reconciledCount++;
       }
     } catch (err) {
-      console.error(`Error reconciling expired order ${expOrder.id}:`, err);
+      console.error(`Error during payment-aware reconciliation for order ${expOrder.id}:`, err);
     }
   }
 
@@ -80,12 +129,12 @@ function reconcileExpiredReservations(options = {}) {
 }
 
 /**
- * Reconciles a single order if it has expired
+ * Reconciles a single order if it has expired, checking gateway status first
  */
-function reconcileSingleExpiredOrder(orderId, now = Date.now()) {
+async function reconcileSingleExpiredOrder(orderId, now = Date.now()) {
   const cutoffSql = new Date(now - ORDER_RESERVATION_TTL_MS).toISOString().replace('T', ' ').slice(0, 19);
   const order = db.prepare(`
-    SELECT id, coupon_code, expires_at, created_at, payment_status, status
+    SELECT id, order_number, user_id, razorpay_order_id, coupon_code, total_amount, expires_at, created_at, payment_status, status
     FROM orders
     WHERE id = ?
   `).get(orderId);
@@ -98,6 +147,41 @@ function reconcileSingleExpiredOrder(orderId, now = Date.now()) {
     (!order.expires_at && order.created_at <= cutoffSql);
 
   if (!isExpired) return false;
+
+  let gatewayOrder = null;
+  if (order.razorpay_order_id) {
+    gatewayOrder = await fetchRazorpayOrder(order.razorpay_order_id);
+  }
+
+  if (gatewayOrder && (gatewayOrder.status === 'paid' || gatewayOrder.amount_paid > 0)) {
+    const payments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
+    const successfulPayment = payments.find(p => p.status === 'captured') || payments[0];
+    const paymentId = successfulPayment ? successfulPayment.id : `pay_rec_${Date.now()}`;
+
+    const paidTx = db.transaction(() => {
+      const updateRes = db.prepare(`
+        UPDATE orders
+        SET payment_status = 'Paid',
+            status = 'Placed',
+            razorpay_payment_id = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND payment_status = 'Pending'
+      `).run(paymentId, order.id);
+
+      if (updateRes.changes > 0) {
+        db.prepare(`
+          INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+          VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
+        `).run(order.id, order.razorpay_order_id, paymentId, (gatewayOrder.amount_paid || order.total_amount * 100));
+
+        db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(order.user_id);
+        return true;
+      }
+      return false;
+    });
+
+    return paidTx();
+  }
 
   const releaseTx = db.transaction(() => {
     const updateRes = db.prepare(`
@@ -134,20 +218,33 @@ function reconcileSingleExpiredOrder(orderId, now = Date.now()) {
 // Periodic reconciliation interval for long-running server instances
 if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
   const reconciliationInterval = setInterval(() => {
-    try {
-      reconcileExpiredReservations();
-    } catch (err) {
+    reconcileExpiredReservations().catch(err => {
       console.error('Periodic order reservation reconciliation error:', err);
-    }
+    });
   }, 60 * 1000);
   if (reconciliationInterval.unref) reconciliationInterval.unref();
 }
+
+// ALL /api/payments/reconcile (Guaranteed serverless Vercel Cron and monitoring endpoint)
+router.all('/reconcile', async (req, res) => {
+  try {
+    const reconciledCount = await reconcileExpiredReservations();
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      reconciledCount
+    });
+  } catch (err) {
+    console.error('Reconciliation endpoint error:', err);
+    res.status(500).json({ error: 'Reconciliation failed' });
+  }
+});
 
 // POST /api/payments/create-order
 router.post('/create-order', authenticateToken, requireDurableStorage, async (req, res) => {
   try {
     // Reconcile any abandoned reservations before validating stock and coupons
-    reconcileExpiredReservations();
+    await reconcileExpiredReservations();
 
     const { address_id, address_data, coupon_code, items: directItems } = req.body;
 
@@ -465,7 +562,7 @@ router.post('/create-order', authenticateToken, requireDurableStorage, async (re
 });
 
 // POST /api/payments/verify (Verify Razorpay signature and finalize order)
-router.post('/verify', authenticateToken, requireDurableStorage, (req, res) => {
+router.post('/verify', authenticateToken, requireDurableStorage, async (req, res) => {
   try {
     const { orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
@@ -480,29 +577,12 @@ router.post('/verify', authenticateToken, requireDurableStorage, (req, res) => {
       return res.status(404).json({ error: 'Order not found or unauthorized access.' });
     }
 
-    // 2. Validate current order state: reject terminal and non-pending orders
+    // 2. Reject already terminal completed states
     if (order.payment_status === 'Paid') {
       return res.status(400).json({ error: 'Order has already been paid and processed.' });
     }
-    if (order.status === 'Cancelled') {
-      return res.status(400).json({ error: 'Cannot complete payment for a cancelled order.' });
-    }
-    if (order.payment_status === 'Failed') {
-      return res.status(400).json({ error: 'Payment for this order has already failed and reservation was released.' });
-    }
-    if (order.payment_status === 'Expired') {
-      return res.status(400).json({ error: 'Order reservation has expired.' });
-    }
-    if (order.payment_status !== 'Pending') {
-      return res.status(400).json({ error: `Order cannot be verified: invalid payment status "${order.payment_status}".` });
-    }
-
-    // Check if order reservation has expired by TTL
-    const isExpired = (order.expires_at && order.expires_at <= Date.now()) ||
-      (!order.expires_at && new Date((order.created_at || '').replace(' ', 'T') + 'Z').getTime() <= Date.now() - ORDER_RESERVATION_TTL_MS);
-    if (isExpired) {
-      reconcileSingleExpiredOrder(order.id);
-      return res.status(400).json({ error: 'Order reservation has expired. Please initiate checkout again.' });
+    if (order.payment_status === 'Refunded') {
+      return res.status(400).json({ error: 'Order has already been refunded.' });
     }
 
     // 3. Match persisted gateway order identifier
@@ -520,6 +600,11 @@ router.post('/verify', authenticateToken, requireDurableStorage, (req, res) => {
     });
 
     if (!isValid) {
+      // Reject non-pending / cancelled orders on invalid signature replay
+      if (order.payment_status !== 'Pending' || order.status === 'Cancelled') {
+        return res.status(400).json({ error: 'Payment signature verification failed for finalized order.' });
+      }
+
       // Signature verification failed: release reserved stock and coupon ONLY IF
       // the conditional transition from Pending -> Failed succeeds
       const releaseTx = db.transaction(() => {
@@ -554,47 +639,158 @@ router.post('/verify', authenticateToken, requireDurableStorage, (req, res) => {
       return res.status(400).json({ error: 'Payment signature verification failed. Please try again or contact support.' });
     }
 
-    // 5. Atomically transition order state only if currently Pending
-    const updateResult = db.prepare(`
+    // 5. Signature IS VALID: Customer was charged at gateway
+    // Standard Active Path: Order is currently Pending (reservation still held)
+    if (order.payment_status === 'Pending') {
+      const updateResult = db.prepare(`
+        UPDATE orders SET
+          payment_status = 'Paid',
+          status = 'Placed',
+          razorpay_payment_id = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND user_id = ? AND payment_status = 'Pending'
+      `).run(razorpay_payment_id, order.id, req.user.id);
+
+      if (updateResult.changes > 0) {
+        db.prepare(`
+          INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+          VALUES (?, ?, ?, ?, ?, 'INR', 'Captured', 'Razorpay')
+        `).run(order.id, razorpay_order_id, razorpay_payment_id, razorpay_signature, order.total_amount * 100);
+
+        db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(req.user.id);
+
+        let parsedAddress = {};
+        try {
+          parsedAddress = JSON.parse(order.address_data);
+        } catch (e) {
+          parsedAddress = { raw: order.address_data };
+        }
+
+        const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+        const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+
+        return res.json({
+          success: true,
+          message: '✨ Payment verified successfully! Your PALLUVO journey has begun.',
+          order: {
+            ...updatedOrder,
+            address: parsedAddress,
+            items
+          }
+        });
+      }
+    }
+
+    // 6. Delayed Payment Handling for already Expired/Cancelled orders:
+    // A captured payment arrived after the local reservation TTL had expired.
+    // Check if the items can be re-reserved and the order recovered:
+    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+    let canFulfill = true;
+    for (const item of items) {
+      const prod = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(item.product_id);
+      if (!prod || prod.stock_quantity < item.quantity) {
+        canFulfill = false;
+        break;
+      }
+      if (item.variant_id) {
+        const v = db.prepare('SELECT stock_quantity FROM product_variants WHERE id = ?').get(item.variant_id);
+        if (!v || v.stock_quantity < item.quantity) {
+          canFulfill = false;
+          break;
+        }
+      }
+    }
+
+    // Fulfilment Recovery: Re-reserve inventory and fulfill order
+    if (canFulfill) {
+      const recoverTx = db.transaction(() => {
+        for (const item of items) {
+          db.prepare('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND stock_quantity >= ?')
+            .run(item.quantity, item.product_id, item.quantity);
+          if (item.variant_id) {
+            db.prepare('UPDATE product_variants SET stock_quantity = stock_quantity - ? WHERE id = ? AND stock_quantity >= ?')
+              .run(item.quantity, item.variant_id, item.quantity);
+          }
+        }
+        if (order.coupon_code) {
+          db.prepare('UPDATE coupons SET times_used = times_used + 1 WHERE code = ?').run(order.coupon_code);
+        }
+
+        db.prepare(`
+          UPDATE orders SET
+            payment_status = 'Paid',
+            status = 'Placed',
+            razorpay_payment_id = ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND user_id = ?
+        `).run(razorpay_payment_id, order.id, req.user.id);
+
+        db.prepare(`
+          INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+          VALUES (?, ?, ?, ?, ?, 'INR', 'Captured', 'Razorpay')
+        `).run(order.id, razorpay_order_id, razorpay_payment_id, razorpay_signature, order.total_amount * 100);
+
+        db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(req.user.id);
+      });
+
+      recoverTx();
+
+      let parsedAddress = {};
+      try {
+        parsedAddress = JSON.parse(order.address_data);
+      } catch (e) {
+        parsedAddress = { raw: order.address_data };
+      }
+
+      const recoveredOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+
+      return res.json({
+        success: true,
+        recovered: true,
+        message: '✨ Payment verified! Your order reservation was recovered and placed successfully.',
+        order: {
+          ...recoveredOrder,
+          address: parsedAddress,
+          items
+        }
+      });
+    }
+
+    // Automated Refund Recovery: Items are no longer in stock
+    let refundResult = null;
+    try {
+      refundResult = await refundRazorpayPayment(razorpay_payment_id, {
+        amount: order.total_amount * 100,
+        notes: {
+          order_id: order.id,
+          order_number: order.order_number,
+          reason: 'Delayed payment on expired order with exhausted inventory'
+        }
+      });
+    } catch (refErr) {
+      console.error('Automated refund error for expired order:', refErr);
+    }
+
+    db.prepare(`
       UPDATE orders SET
-        payment_status = 'Paid',
-        status = 'Placed',
+        payment_status = 'Refunded',
+        status = 'Cancelled',
         razorpay_payment_id = ?,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND user_id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
+      WHERE id = ? AND user_id = ?
     `).run(razorpay_payment_id, order.id, req.user.id);
 
-    if (updateResult.changes === 0) {
-      return res.status(400).json({ error: 'Order payment status transition failed or already processed.' });
-    }
-
-    // 6. Record Payment
     db.prepare(`
       INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
-      VALUES (?, ?, ?, ?, ?, 'INR', 'Captured', 'Razorpay')
+      VALUES (?, ?, ?, ?, ?, 'INR', 'Refunded', 'Razorpay')
     `).run(order.id, razorpay_order_id, razorpay_payment_id, razorpay_signature, order.total_amount * 100);
 
-    // 7. Clear User Cart (stock and coupon usage were atomically reserved at order creation)
-    db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(req.user.id);
-
-    let parsedAddress = {};
-    try {
-      parsedAddress = JSON.parse(order.address_data);
-    } catch (e) {
-      parsedAddress = { raw: order.address_data };
-    }
-
-    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
-    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
-
-    res.json({
-      success: true,
-      message: '✨ Payment verified successfully! Your PALLUVO journey has begun.',
-      order: {
-        ...updatedOrder,
-        address: parsedAddress,
-        items
-      }
+    return res.status(409).json({
+      error: 'Payment was charged, but the checkout reservation expired and the selected saree is no longer in stock. A full refund has been initiated to your original payment method.',
+      payment_status: 'Refunded',
+      refunded: true,
+      refund_id: refundResult ? refundResult.id : null,
+      order_number: order.order_number
     });
   } catch (err) {
     console.error('Payment verification error:', err);

@@ -6,8 +6,12 @@ const { requireDurableStorage } = require('../middleware/storageGuard');
 const { reconcileExpiredReservations } = require('./payments');
 
 // GET /api/cart (Fetch user cart items with detailed product info)
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
+    if (typeof reconcileExpiredReservations === 'function') {
+      await reconcileExpiredReservations();
+    }
+
     const items = db.prepare(`
       SELECT 
         ci.id as cart_item_id,
@@ -61,10 +65,10 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // POST /api/cart/add (Add product to cart or increment)
-router.post('/add', authenticateToken, requireDurableStorage, (req, res) => {
+router.post('/add', authenticateToken, requireDurableStorage, async (req, res) => {
   try {
     if (typeof reconcileExpiredReservations === 'function') {
-      reconcileExpiredReservations();
+      await reconcileExpiredReservations();
     }
 
     const { product_id, variant_id, quantity = 1 } = req.body;
@@ -126,10 +130,10 @@ router.post('/add', authenticateToken, requireDurableStorage, (req, res) => {
 });
 
 // PUT /api/cart/update (Update quantity)
-router.put('/update', authenticateToken, requireDurableStorage, (req, res) => {
+router.put('/update', authenticateToken, requireDurableStorage, async (req, res) => {
   try {
     if (typeof reconcileExpiredReservations === 'function') {
-      reconcileExpiredReservations();
+      await reconcileExpiredReservations();
     }
 
     const { cart_item_id, quantity } = req.body;

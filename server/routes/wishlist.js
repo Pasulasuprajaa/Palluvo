@@ -3,10 +3,15 @@ const router = express.Router();
 const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
+const { reconcileExpiredReservations } = require('./payments');
 
 // GET /api/wishlist
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
+    if (typeof reconcileExpiredReservations === 'function') {
+      await reconcileExpiredReservations();
+    }
+
     const items = db.prepare(`
       SELECT 
         wi.id as wishlist_item_id,

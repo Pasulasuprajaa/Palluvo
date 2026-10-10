@@ -172,9 +172,112 @@ function verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorp
   return false;
 }
 
+async function fetchRazorpayOrder(orderId) {
+  if (!orderId) return null;
+  if (orderId.startsWith('order_mock_paid_')) {
+    return {
+      id: orderId,
+      status: 'paid',
+      amount_paid: 100000,
+      is_mock: true
+    };
+  }
+  if (orderId.startsWith('order_mock_')) {
+    return {
+      id: orderId,
+      status: 'created',
+      amount_paid: 0,
+      is_mock: true
+    };
+  }
+
+  if (razorpayInstance) {
+    try {
+      const order = await razorpayInstance.orders.fetch(orderId);
+      return order;
+    } catch (err) {
+      console.warn('Razorpay fetch order warning:', err.message);
+      return null;
+    }
+  }
+
+  return {
+    id: orderId,
+    status: 'created',
+    amount_paid: 0,
+    is_mock: true
+  };
+}
+
+async function fetchRazorpayOrderPayments(orderId) {
+  if (!orderId) return [];
+  if (orderId.startsWith('order_mock_paid_')) {
+    return [{
+      id: `pay_mock_${orderId.slice(16) || 'test'}`,
+      status: 'captured',
+      amount: 100000,
+      order_id: orderId
+    }];
+  }
+  if (orderId.startsWith('order_mock_')) {
+    return [];
+  }
+
+  if (razorpayInstance) {
+    try {
+      const payments = await razorpayInstance.orders.fetchPayments(orderId);
+      return payments.items || [];
+    } catch (err) {
+      console.warn('Razorpay fetch payments warning:', err.message);
+      return [];
+    }
+  }
+
+  return [];
+}
+
+async function refundRazorpayPayment(paymentId, options = {}) {
+  if (!paymentId) throw new Error('Payment ID is required to process a refund.');
+
+  if (paymentId.startsWith('pay_mock_') || paymentId.startsWith('mock_')) {
+    return {
+      id: 'rfnd_mock_' + crypto.randomBytes(8).toString('hex'),
+      payment_id: paymentId,
+      amount: options.amount,
+      status: 'processed',
+      is_mock: true
+    };
+  }
+
+  if (razorpayInstance) {
+    try {
+      const refund = await razorpayInstance.payments.refund(paymentId, {
+        amount: options.amount,
+        notes: options.notes || {},
+        speed: options.speed || 'normal'
+      });
+      return refund;
+    } catch (err) {
+      console.error('Razorpay refund error:', err.message);
+      throw err;
+    }
+  }
+
+  return {
+    id: 'rfnd_mock_' + crypto.randomBytes(8).toString('hex'),
+    payment_id: paymentId,
+    amount: options.amount,
+    status: 'processed',
+    is_mock: true
+  };
+}
+
 module.exports = {
   createRazorpayOrder,
   verifyPaymentSignature,
+  fetchRazorpayOrder,
+  fetchRazorpayOrderPayments,
+  refundRazorpayPayment,
   isLiveCredentials,
   isLiveKeyMode,
   isTestKeyMode,
