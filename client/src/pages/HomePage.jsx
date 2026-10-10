@@ -307,16 +307,16 @@ export default function HomePage({ onNavigate }) {
                   e.preventDefault();
                   onNavigate('shop', col.filter);
                 }}
-                className="w-[72vw] min-w-[218px] max-w-[268px] sm:w-full sm:min-w-0 sm:max-w-none shrink-0 sm:shrink snap-item group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
+                className="w-56 sm:w-full shrink-0 sm:shrink snap-item group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
                 aria-label={`Explore ${col.title} Collection`}
               >
-                <div className="aspect-[4/3] w-full overflow-hidden bg-[#FAF7F2]">
+                <div className="aspect-[3/4] w-full overflow-hidden bg-[#FAF7F2]">
                   <img
                     src={col.image}
                     alt=""
                     loading="lazy"
                     decoding="async"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
                   />
                 </div>
 
