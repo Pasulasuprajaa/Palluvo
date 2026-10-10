@@ -11,7 +11,8 @@ const isServerless = Boolean(
 /**
  * Shared distributed rate limit store supporting Vercel KV / Upstash Redis REST API.
  * In serverless environments (Vercel, AWS Lambda), a shared distributed store is required
- * and fails closed (HTTP 503) if unconfigured or unreachable to prevent distributed brute-force bypass.
+ * and fails closed (HTTP 503) if unconfigured, unreachable, or reporting pipeline command errors
+ * to prevent distributed brute-force bypass.
  * In local development and non-serverless single-instance servers, falls back to process-local MemoryStore.
  */
 class SharedRateLimitStore {
@@ -70,7 +71,14 @@ class SharedRateLimitStore {
       });
       if (!res.ok) throw new Error(`KV response status ${res.status}`);
       const data = await res.json();
-      const count = parseInt(data[0]?.result, 10) || 0;
+      if (!Array.isArray(data) || data.length < 2) {
+        throw new Error('Invalid KV pipeline response format');
+      }
+      if (data[0]?.error) throw new Error(`KV GET command error: ${data[0].error}`);
+      if (data[1]?.error) throw new Error(`KV TTL command error: ${data[1].error}`);
+
+      const rawCount = data[0]?.result;
+      const count = rawCount !== undefined && rawCount !== null ? (parseInt(rawCount, 10) || 0) : 0;
       const ttl = parseInt(data[1]?.result, 10) || -1;
       const resetTime = new Date(Date.now() + (ttl > 0 ? ttl * 1000 : this.windowMs));
       return { totalHits: count, resetTime };
@@ -105,7 +113,20 @@ class SharedRateLimitStore {
       });
       if (!res.ok) throw new Error(`KV response status ${res.status}`);
       const data = await res.json();
-      const count = parseInt(data[0]?.result, 10) || 1;
+      if (!Array.isArray(data) || data.length < 2) {
+        throw new Error('Invalid KV pipeline response format');
+      }
+      if (data[0]?.error) throw new Error(`KV INCR command error: ${data[0].error}`);
+      if (data[1]?.error) throw new Error(`KV TTL command error: ${data[1].error}`);
+
+      const rawCount = data[0]?.result;
+      if (rawCount === undefined || rawCount === null) {
+        throw new Error('KV pipeline returned missing INCR result');
+      }
+      const count = parseInt(rawCount, 10);
+      if (isNaN(count)) {
+        throw new Error('KV pipeline returned non-numeric INCR result');
+      }
       let ttl = parseInt(data[1]?.result, 10) || -1;
 
       // If the key was newly created and has no TTL, set expiration
@@ -136,9 +157,12 @@ class SharedRateLimitStore {
     }
     const fullKey = `palluvo:${this.prefix}:${key}`;
     try {
-      await fetch(`${this.restUrl}/DECR/${encodeURIComponent(fullKey)}`, {
+      const res = await fetch(`${this.restUrl}/DECR/${encodeURIComponent(fullKey)}`, {
         headers: { Authorization: `Bearer ${this.restToken}` }
       });
+      if (!res.ok) throw new Error(`KV response status ${res.status}`);
+      const data = await res.json();
+      if (data && data.error) throw new Error(`KV DECR command error: ${data.error}`);
     } catch (err) {
       if (isServerless) {
         throw this.createStoreUnavailableError(err.message);
@@ -156,9 +180,12 @@ class SharedRateLimitStore {
     }
     const fullKey = `palluvo:${this.prefix}:${key}`;
     try {
-      await fetch(`${this.restUrl}/DEL/${encodeURIComponent(fullKey)}`, {
+      const res = await fetch(`${this.restUrl}/DEL/${encodeURIComponent(fullKey)}`, {
         headers: { Authorization: `Bearer ${this.restToken}` }
       });
+      if (!res.ok) throw new Error(`KV response status ${res.status}`);
+      const data = await res.json();
+      if (data && data.error) throw new Error(`KV DEL command error: ${data.error}`);
     } catch (err) {
       if (isServerless) {
         throw this.createStoreUnavailableError(err.message);
@@ -187,6 +214,15 @@ function getClientIp(req) {
   return req.socket?.remoteAddress || 'unknown';
 }
 
+/**
+ * Normalizes client IP addresses (including IPv6 subnets via ipKeyGenerator)
+ * to prevent IPv6 rotation attacks against per-IP rate limits.
+ */
+function getNormalizedIp(req) {
+  const rawIp = getClientIp(req);
+  return ipKeyGenerator(rawIp);
+}
+
 function createSharedRateLimitStore(prefix) {
   return new SharedRateLimitStore(prefix);
 }
@@ -199,7 +235,7 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   validate: false,
   store: createSharedRateLimitStore('auth_ip'),
-  keyGenerator: (req) => getClientIp(req),
+  keyGenerator: (req) => getNormalizedIp(req),
   message: {
     error: 'Too many authentication attempts from this IP. Please try again after 15 minutes.',
     code: 'AUTH_RATE_LIMITED'
@@ -207,7 +243,7 @@ const authLimiter = rateLimit({
 });
 
 // Targeted brute-force protection: throttles attempts from a specific IP against a specific account
-// Keys by composite (IP, Account) tuple so that an attacker cannot lock out legitimate users from other IPs
+// Keys by composite (Normalized IP, Account) tuple so that an attacker cannot lock out legitimate users from other IPs
 const targetedAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // Limit to 5 attempts per (IP, targeted account) in a 15-minute window
@@ -216,7 +252,7 @@ const targetedAuthLimiter = rateLimit({
   validate: false,
   store: createSharedRateLimitStore('auth_target'),
   keyGenerator: (req) => {
-    const ip = getClientIp(req);
+    const ip = getNormalizedIp(req);
     const email = (req.body && typeof req.body.email === 'string') ? req.body.email.trim().toLowerCase() : '';
     return email ? `${ip}_${email}` : ip;
   },
@@ -234,7 +270,7 @@ const trackOrderLimiter = rateLimit({
   legacyHeaders: false,
   validate: false,
   store: createSharedRateLimitStore('track_order'),
-  keyGenerator: (req) => getClientIp(req),
+  keyGenerator: (req) => getNormalizedIp(req),
   message: {
     error: 'Too many order tracking requests from this IP. Please try again after 15 minutes.',
     code: 'TRACKING_RATE_LIMITED'
@@ -249,7 +285,7 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
   validate: false,
   store: createSharedRateLimitStore('api_general'),
-  keyGenerator: (req) => getClientIp(req),
+  keyGenerator: (req) => getNormalizedIp(req),
   message: {
     error: 'Too many requests from this IP. Please try again later.',
     code: 'API_RATE_LIMITED'
@@ -261,5 +297,6 @@ module.exports = {
   targetedAuthLimiter,
   trackOrderLimiter,
   apiLimiter,
-  SharedRateLimitStore
+  SharedRateLimitStore,
+  getNormalizedIp
 };
