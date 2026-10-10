@@ -5,10 +5,10 @@ const jwt = require('jsonwebtoken');
 const db = require('../db/database');
 const { authenticateToken, JWT_SECRET } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
-const { authLimiter, accountAuthLimiter } = require('../middleware/rateLimit');
+const { authLimiter, targetedAuthLimiter } = require('../middleware/rateLimit');
 
 // Register User
-router.post('/register', authLimiter, accountAuthLimiter, requireDurableStorage, (req, res) => {
+router.post('/register', authLimiter, requireDurableStorage, (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
 
@@ -51,7 +51,7 @@ router.post('/register', authLimiter, accountAuthLimiter, requireDurableStorage,
 });
 
 // Login User
-router.post('/login', authLimiter, accountAuthLimiter, (req, res) => {
+router.post('/login', authLimiter, targetedAuthLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -63,11 +63,15 @@ router.post('/login', authLimiter, accountAuthLimiter, (req, res) => {
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(cleanEmail);
 
     if (!user) {
+      // Risk-based artificial delay to mitigate timing analysis and automated brute-force attacks
+      await new Promise(resolve => setTimeout(resolve, 200));
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
     const isMatch = bcrypt.compareSync(password, user.password_hash);
     if (!isMatch) {
+      // Risk-based delay on failed password verification
+      await new Promise(resolve => setTimeout(resolve, 200));
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 

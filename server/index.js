@@ -23,6 +23,9 @@ const { apiLimiter } = require('./middleware/rateLimit');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Enable trust proxy for accurate client IP resolution behind Vercel / reverse proxies
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors({
   origin: true,

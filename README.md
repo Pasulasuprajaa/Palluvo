@@ -129,6 +129,7 @@ For reliable e-commerce transactions across auto-scaling servers and serverless 
 - **Serverless Deployments** *(Vercel, AWS Lambda)*: Serverless function execution containers and filesystems (including `/tmp` and local scratch disks) are ephemeral and isolated per instance. To prevent signups, carts, inventory, orders, and payment states from disappearing or diverging across function instances:
   - Public catalog browsing, product search, filters, offers, and health checks operate smoothly in read-only mode.
   - Mutating commerce operations (user registration, bag/cart mutations, wishlist, order creation, payment capture, customer reviews, admin catalog edits) are automatically guarded by `requireDurableStorage` and default-denied (HTTP 503 `EPHEMERAL_STORAGE_RESTRICTED`) in serverless environments.
+  - Distributed rate limiting across serverless function instances and cold starts is enabled by configuring `KV_REST_API_URL` & `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` & `UPSTASH_REDIS_REST_TOKEN`). When unconfigured, an in-process fallback store is used.
 
 ---
 
