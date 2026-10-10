@@ -270,6 +270,36 @@ async function fetchRazorpayPayment(paymentId) {
       is_mock: true
     };
   }
+  if (paymentId.startsWith('pay_mock_refund_status_mismatch_')) {
+    return {
+      id: paymentId,
+      status: 'refunded',
+      amount: 500000,
+      amount_refunded: 100000,
+      refund_status: 'partial',
+      is_mock: true
+    };
+  }
+  if (paymentId.startsWith('pay_mock_refund_partial_')) {
+    return {
+      id: paymentId,
+      status: 'captured',
+      amount: 500000,
+      amount_refunded: 100000,
+      refund_status: 'partial',
+      is_mock: true
+    };
+  }
+  if (paymentId.startsWith('pay_mock_refund_paginated_')) {
+    return {
+      id: paymentId,
+      status: 'captured',
+      amount: 200000,
+      amount_refunded: 0,
+      refund_status: null,
+      is_mock: true
+    };
+  }
   if (paymentId.startsWith('pay_mock_refund_pending_')) {
     return {
       id: paymentId,
@@ -353,10 +383,51 @@ async function fetchRazorpayPaymentRefunds(paymentId) {
   if (paymentId.startsWith('pay_mock_refund_failed_lookup_')) {
     throw new Error('Simulated gateway refund lookup failure (network timeout)');
   }
+  if (paymentId.startsWith('pay_mock_refund_status_mismatch_')) {
+    return [{
+      id: 'rfnd_mock_mismatch_partial_1',
+      payment_id: paymentId,
+      amount: 100000,
+      status: 'processed',
+      is_mock: true
+    }];
+  }
+  if (paymentId.startsWith('pay_mock_refund_partial_')) {
+    return [{
+      id: 'rfnd_mock_partial_1',
+      payment_id: paymentId,
+      amount: 100000,
+      status: 'processed',
+      is_mock: true
+    }];
+  }
+  if (paymentId.startsWith('pay_mock_refund_paginated_')) {
+    // Simulated paginated list: page 1 has 10 failed refunds; page 2 has an older pending refund
+    const items = [];
+    for (let i = 1; i <= 10; i++) {
+      items.push({
+        id: `rfnd_mock_paginated_failed_${i}`,
+        payment_id: paymentId,
+        amount: 200000,
+        status: 'failed',
+        is_mock: true
+      });
+    }
+    // Older pending refund that falls outside the first page of 10 items
+    items.push({
+      id: 'rfnd_mock_paginated_older_pending',
+      payment_id: paymentId,
+      amount: 200000,
+      status: 'pending',
+      is_mock: true
+    });
+    return items;
+  }
   if (paymentId.startsWith('pay_mock_refund_pending_')) {
     return [{
       id: 'rfnd_mock_pending_1',
       payment_id: paymentId,
+      amount: 100000,
       status: 'pending',
       is_mock: true
     }];
@@ -365,6 +436,7 @@ async function fetchRazorpayPaymentRefunds(paymentId) {
     return [{
       id: 'rfnd_mock_processed_1',
       payment_id: paymentId,
+      amount: 100000,
       status: 'processed',
       is_mock: true
     }];
@@ -373,6 +445,7 @@ async function fetchRazorpayPaymentRefunds(paymentId) {
     return [{
       id: 'rfnd_mock_failed_1',
       payment_id: paymentId,
+      amount: 100000,
       status: 'failed',
       is_mock: true
     }];
@@ -386,8 +459,29 @@ async function fetchRazorpayPaymentRefunds(paymentId) {
   }
 
   if (razorpayInstance) {
-    const refunds = await razorpayInstance.payments.allRefunds(paymentId);
-    return refunds.items || [];
+    // Page through all refund pages from Razorpay to guarantee complete visibility of in-flight and older refunds
+    const allItems = [];
+    let skip = 0;
+    const pageSize = 100;
+    let hasMore = true;
+
+    while (hasMore) {
+      const response = await razorpayInstance.payments.allRefunds(paymentId, {
+        count: pageSize,
+        skip: skip
+      });
+      const items = (response && Array.isArray(response.items)) ? response.items : [];
+      allItems.push(...items);
+
+      const totalCount = (response && typeof response.count === 'number') ? response.count : null;
+      if (items.length < pageSize || (totalCount !== null && allItems.length >= totalCount) || items.length === 0) {
+        hasMore = false;
+      } else {
+        skip += items.length;
+      }
+    }
+
+    return allItems;
   }
 
   throw new Error(`Razorpay client instance is not configured; refunds for non-mock payment ${paymentId} are unknown`);

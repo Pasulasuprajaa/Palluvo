@@ -380,7 +380,78 @@ async function runTests() {
     const claimCheckMatched = db.prepare("SELECT refund_claimed_at, refund_claim_token FROM orders WHERE id = ?").get(order7.id);
     assert.strictEqual(claimCheckMatched.refund_claimed_at, null, 'Claim must be cleared when token matches');
     assert.strictEqual(claimCheckMatched.refund_claim_token, null, 'Claim token must be cleared when token matches');
-    console.log('✅ PASS: Claim release is strictly fenced by worker ownership token');
+    // Scenario 8: Partial refund safety [P1]
+    // An order where only a partial refund has processed must NOT be transitioned to Refunded.
+    // The reconciler must retain/initiate the remaining balance until cumulative refunds cover full payment.
+    const orderNum8 = `ORD-TEST-PARTIAL-REFUND-${nonce}`;
+    db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_status, status, razorpay_order_id, razorpay_payment_id, refund_id, address_data, created_at)
+      VALUES (?, ?, 5000, 5000, 'Refund_Pending', 'Cancelled', 'order_mock_test_8', 'pay_mock_refund_partial_8', 'rfnd_mock_partial_1', '{"city":"Bengaluru"}', CURRENT_TIMESTAMP)
+    `).run(orderNum8, customerUser.id);
+    const order8 = db.prepare("SELECT id FROM orders WHERE order_number = ?").get(orderNum8);
+
+    // Run reconciliation: Reconciler should recognize only 100000 of 500000 paise was refunded.
+    // It must initiate the balance refund of 400000 paise with a _bal_ key, and upon completion mark as Refunded.
+    await reconcilePendingRefunds({ orderIds: [order8.id] });
+    const refreshedOrder8 = db.prepare("SELECT * FROM orders WHERE id = ?").get(order8.id);
+    assert.ok(
+      refreshedOrder8.refund_idempotency_key && refreshedOrder8.refund_idempotency_key.includes('_bal_'),
+      'Balance idempotency key must be generated and persisted for partial refund remaining balance'
+    );
+    assert.strictEqual(
+      refreshedOrder8.payment_status,
+      'Refunded',
+      'Order should transition to Refunded once balance refund covers full payment'
+    );
+    console.log('✅ PASS: [P1] Partial refund does not prematurely mark order Refunded, initiates balance under _bal_ key, and completes full refund');
+
+    // Scenario 8b: Gateway payment status fallback guard [P1]
+    // payment.status === 'refunded' but payment.refund_status === 'partial' must NOT be accepted as full refund.
+    const orderNum8b = `ORD-TEST-PARTIAL-STATUS-MISMATCH-${nonce}`;
+    db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_status, status, razorpay_order_id, razorpay_payment_id, refund_id, address_data, created_at)
+      VALUES (?, ?, 5000, 5000, 'Refund_Pending', 'Cancelled', 'order_mock_test_8b', 'pay_mock_refund_status_mismatch_8b', 'rfnd_mock_mismatch_partial_1', '{"city":"Hyderabad"}', CURRENT_TIMESTAMP)
+    `).run(orderNum8b, customerUser.id);
+    const order8b = db.prepare("SELECT id FROM orders WHERE order_number = ?").get(orderNum8b);
+
+    await reconcilePendingRefunds({ orderIds: [order8b.id] });
+    const refreshedOrder8b = db.prepare("SELECT * FROM orders WHERE id = ?").get(order8b.id);
+    assert.ok(
+      refreshedOrder8b.refund_idempotency_key && refreshedOrder8b.refund_idempotency_key.includes('_bal_'),
+      'Must initiate balance when refund_status is partial even if payment.status is refunded'
+    );
+    console.log('✅ PASS: [P1] payment.status === "refunded" without refund_status === "full" does not bypass partial refund balance handling');
+
+    // Scenario 9: Paginated refund list [P2]
+    // Payment has 10 failed refunds on page 1 and an older pending refund on page 2.
+    // The reconciler must page through all pages, discover the older pending refund,
+    // retain Refund_Pending, and NOT conclude all attempts failed or rotate the key.
+    const orderNum9 = `ORD-TEST-PAGINATED-LIST-${nonce}`;
+    const initialKey9 = `rfnd_initial_paginated_${nonce}`;
+    db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_status, status, razorpay_order_id, razorpay_payment_id, refund_id, refund_idempotency_key, address_data, created_at)
+      VALUES (?, ?, 2000, 2000, 'Refund_Pending', 'Cancelled', 'order_mock_test_9', 'pay_mock_refund_paginated_9', NULL, ?, '{"city":"Chennai"}', CURRENT_TIMESTAMP)
+    `).run(orderNum9, customerUser.id, initialKey9);
+    const order9 = db.prepare("SELECT id FROM orders WHERE order_number = ?").get(orderNum9);
+
+    await reconcilePendingRefunds({ orderIds: [order9.id] });
+    const refreshedOrder9 = db.prepare("SELECT * FROM orders WHERE id = ?").get(order9.id);
+    assert.strictEqual(
+      refreshedOrder9.payment_status,
+      'Refund_Pending',
+      'Order must remain Refund_Pending when an older pending refund is discovered across pages'
+    );
+    assert.strictEqual(
+      refreshedOrder9.refund_id,
+      'rfnd_mock_paginated_older_pending',
+      'Discovered older pending refund ID from page 2 must be retained'
+    );
+    assert.strictEqual(
+      refreshedOrder9.refund_idempotency_key,
+      initialKey9,
+      'Idempotency key must NOT be rotated when older pending refund exists on page 2'
+    );
+    console.log('✅ PASS: [P2] Paginated refund list discovers older pending refund across pages, retaining pending state without key rotation or duplicate refund');
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {

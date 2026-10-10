@@ -23,9 +23,12 @@ const ORDER_RESERVATION_TTL_MS = 15 * 60 * 1000; // 15-minute pending reservatio
  * Helper to build identical refund payloads across initial verification and reconciliation retries.
  * Razorpay idempotency requires the request body to be identical when reusing a key.
  */
-function buildRefundPayload(order, idempotencyKey) {
+function buildRefundPayload(order, idempotencyKey, amountPaise) {
+  const refundAmount = (typeof amountPaise === 'number' && amountPaise > 0)
+    ? amountPaise
+    : Math.round(order.total_amount * 100);
   return {
-    amount: order.total_amount * 100,
+    amount: refundAmount,
     receipt: `rfnd_${order.order_number}`.slice(0, 40),
     idempotencyKey,
     notes: {
@@ -116,75 +119,108 @@ async function reconcilePendingRefunds(options = {}) {
       let confirmedFailedOrCancelled = false;
       const currentConfirmedFailedIds = [];
 
-      // 1. Inspect existing refund status if a refund ID exists
+      let payment = null;
+      try {
+        payment = await fetchRazorpayPayment(pOrder.razorpay_payment_id);
+      } catch (e) {
+        hasLookupError = true;
+        console.warn(`Lookup for payment ${pOrder.razorpay_payment_id} failed:`, e.message);
+      }
+
+      let refunds = [];
+      try {
+        refunds = await fetchRazorpayPaymentRefunds(pOrder.razorpay_payment_id);
+      } catch (e) {
+        hasLookupError = true;
+        console.warn(`Lookup for payment refunds ${pOrder.razorpay_payment_id} failed:`, e.message);
+      }
+
+      let singleRefund = null;
       if (pOrder.refund_id) {
         try {
-          const refund = await fetchRazorpayRefund(pOrder.refund_id);
-          if (refund) {
-            if (refund.status === 'processed') {
-              isCompleted = true;
-              finalRefundId = refund.id;
-            } else if (refund.status === 'pending') {
-              isPending = true;
-              pendingRefundId = refund.id;
-            } else if (refund.status === 'failed' || refund.status === 'cancelled') {
-              confirmedFailedOrCancelled = true;
-              if (refund.id && !currentConfirmedFailedIds.includes(refund.id)) {
-                currentConfirmedFailedIds.push(refund.id);
-              }
-            }
-          }
+          singleRefund = await fetchRazorpayRefund(pOrder.refund_id);
         } catch (e) {
           hasLookupError = true;
           console.warn(`Lookup for refund ${pOrder.refund_id} failed:`, e.message);
         }
       }
 
-      // 2. Inspect payment refund list from gateway
-      let refunds = [];
-      if (!isCompleted) {
-        try {
-          refunds = await fetchRazorpayPaymentRefunds(pOrder.razorpay_payment_id);
-          const processed = refunds.find(r => r.status === 'processed');
-          if (processed) {
-            isCompleted = true;
-            finalRefundId = processed.id;
-          } else {
-            const pending = refunds.find(r => r.status === 'pending');
-            if (pending) {
-              isPending = true;
-              if (!pendingRefundId) {
-                pendingRefundId = pending.id;
-              }
-            } else if (refunds.length > 0 && refunds.every(r => r.status === 'failed' || r.status === 'cancelled')) {
-              confirmedFailedOrCancelled = true;
-              for (const r of refunds) {
-                if (r && r.id && !currentConfirmedFailedIds.includes(r.id)) {
-                  currentConfirmedFailedIds.push(r.id);
-                }
-              }
+      const targetAmountPaise = (payment && typeof payment.amount === 'number' && payment.amount > 0)
+        ? payment.amount
+        : Math.round(pOrder.total_amount * 100);
+
+      let processedRefundsPaise = 0;
+      let latestProcessedRefundId = null;
+
+      if (Array.isArray(refunds)) {
+        for (const r of refunds) {
+          if (!r) continue;
+          if (r.status === 'processed') {
+            const rAmount = (typeof r.amount === 'number')
+              ? r.amount
+              : targetAmountPaise;
+            processedRefundsPaise += rAmount;
+            latestProcessedRefundId = r.id;
+          } else if (r.status === 'pending') {
+            isPending = true;
+            if (!pendingRefundId) {
+              pendingRefundId = r.id;
+            }
+          } else if (r.status === 'failed' || r.status === 'cancelled') {
+            if (r.id && !currentConfirmedFailedIds.includes(r.id)) {
+              currentConfirmedFailedIds.push(r.id);
             }
           }
-        } catch (e) {
-          hasLookupError = true;
-          console.warn(`Lookup for payment refunds ${pOrder.razorpay_payment_id} failed:`, e.message);
         }
       }
 
-      // 3. Inspect payment object amount_refunded
-      if (!isCompleted) {
-        try {
-          const payment = await fetchRazorpayPayment(pOrder.razorpay_payment_id);
-          if (payment && (payment.amount_refunded >= payment.amount || payment.refund_status === 'full' || payment.status === 'refunded')) {
-            isCompleted = true;
+      if (singleRefund) {
+        if (singleRefund.status === 'processed') {
+          const singleAmount = (typeof singleRefund.amount === 'number')
+            ? singleRefund.amount
+            : targetAmountPaise;
+          if (!refunds.some(r => r.id === singleRefund.id)) {
+            processedRefundsPaise += singleAmount;
           }
-        } catch (e) {
-          hasLookupError = true;
-          console.warn(`Lookup for payment ${pOrder.razorpay_payment_id} failed:`, e.message);
+          if (!latestProcessedRefundId) {
+            latestProcessedRefundId = singleRefund.id;
+          }
+        } else if (singleRefund.status === 'pending') {
+          isPending = true;
+          if (!pendingRefundId) {
+            pendingRefundId = singleRefund.id;
+          }
+        } else if (singleRefund.status === 'failed' || singleRefund.status === 'cancelled') {
+          if (singleRefund.id && !currentConfirmedFailedIds.includes(singleRefund.id)) {
+            currentConfirmedFailedIds.push(singleRefund.id);
+          }
         }
       }
 
-      // Step A: Completed / Processed Refund confirmed
+      const paymentAmountRefunded = (payment && typeof payment.amount_refunded === 'number')
+        ? payment.amount_refunded
+        : 0;
+      const totalRefundedPaise = Math.max(paymentAmountRefunded, processedRefundsPaise);
+
+      // Confirm cumulative refunded amount covers full payment before transitioning to Refunded.
+      // Do not accept status === 'refunded' unless refund_status === 'full' or totalRefundedPaise covers full amount.
+      const isFullRefundConfirmed = Boolean(
+        (payment && payment.refund_status === 'full') ||
+        (targetAmountPaise > 0 && totalRefundedPaise >= targetAmountPaise)
+      );
+
+      if (isFullRefundConfirmed) {
+        isCompleted = true;
+        finalRefundId = latestProcessedRefundId || pOrder.refund_id;
+      }
+
+      if (refunds.length > 0 && refunds.every(r => r.status === 'failed' || r.status === 'cancelled')) {
+        confirmedFailedOrCancelled = true;
+      } else if (singleRefund && (singleRefund.status === 'failed' || singleRefund.status === 'cancelled') && (!refunds || refunds.length === 0)) {
+        confirmedFailedOrCancelled = true;
+      }
+
+      // Step A: Completed / Full Processed Refund confirmed
       if (isCompleted) {
         db.transaction(() => {
           db.prepare(`
@@ -210,7 +246,7 @@ async function reconcilePendingRefunds(options = {}) {
       // Step B: In-flight / Pending Refund detected
       // Retain existing pending refund; NEVER resubmit or overwrite while refund is pending
       if (isPending) {
-        const retainedRefundId = pendingRefundId || pOrder.refund_id;
+        const retainedRefundId = pOrder.refund_id || pendingRefundId;
         db.prepare(`
           UPDATE orders
           SET payment_status = 'Refund_Pending',
@@ -231,11 +267,12 @@ async function reconcilePendingRefunds(options = {}) {
         continue;
       }
 
-      // Step D: Only retry after Razorpay confirms previous attempt failed/cancelled,
-      // or if retrying an ambiguous in-flight attempt under an existing key,
-      // or if no prior refund was ever created at Razorpay.
+      // Step D: Balance initiation or retry eligibility:
+      const remainingPaise = Math.max(0, targetAmountPaise - totalRefundedPaise);
+      const isBalanceRefund = totalRefundedPaise > 0 && remainingPaise > 0;
       const hasPriorRefundAttempt = Boolean(pOrder.refund_id || (refunds && refunds.length > 0));
-      const canRetry = !hasPriorRefundAttempt ||
+      const canRetry = isBalanceRefund ||
+        !hasPriorRefundAttempt ||
         confirmedFailedOrCancelled ||
         (refunds.length > 0 && refunds.every(r => r.status === 'failed' || r.status === 'cancelled')) ||
         Boolean(pOrder.refund_idempotency_key);
@@ -245,67 +282,94 @@ async function reconcilePendingRefunds(options = {}) {
         continue;
       }
 
-      // 4. Retry initiating refund:
-      // - Persist/claim a fresh key ONCE when a previous attempt is confirmed failed/cancelled.
-      // - For subsequent ambiguous retries, REUSE that attempt's key until its status is confirmed by the gateway.
+      // 4. Retry / initiate refund:
       try {
         let idempotencyKey;
+        const targetRefundAmountPaise = isBalanceRefund ? remainingPaise : targetAmountPaise;
 
-        // Parse already recorded failed refund IDs:
-        const recordedFailedIds = (pOrder.failed_refund_id || '')
-          .split(',')
-          .map(s => s.trim())
-          .filter(Boolean);
-
-        // Check if there are any confirmed failed refund IDs from either lookup source
-        // that have not yet been recorded in failed_refund_id:
-        const hasUnrecordedFailure = confirmedFailedOrCancelled &&
-          currentConfirmedFailedIds.length > 0 &&
-          currentConfirmedFailedIds.some(id => !recordedFailedIds.includes(id));
-
-        if (hasUnrecordedFailure) {
-          // Confirmed failed attempt: Razorpay requires a fresh key for a distinct attempt.
-          // Persist the new key and record all confirmed failed refund IDs immediately so subsequent retries reuse this key.
-          idempotencyKey = `rfnd_${pOrder.id}_${pOrder.order_number}_att_${Date.now()}`;
-          const allFailedIds = Array.from(new Set([...recordedFailedIds, ...currentConfirmedFailedIds])).join(',');
-          db.prepare(`
-            UPDATE orders
-            SET refund_idempotency_key = ?,
-                failed_refund_id = ?,
-                refund_id = NULL
-            WHERE id = ?
-          `).run(idempotencyKey, allFailedIds, pOrder.id);
-        } else {
-          // Ambiguous retry or continuation of existing attempt:
-          // Reuse the stored idempotency key to satisfy Razorpay's idempotency guarantee.
-          idempotencyKey = pOrder.refund_idempotency_key || `rfnd_${pOrder.id}_${pOrder.order_number}`;
-          if (!pOrder.refund_idempotency_key) {
+        if (isBalanceRefund) {
+          // A partial refund was processed; customer is still owed remaining balance.
+          // Initiate refund for remainingPaise using a distinct balance idempotency key
+          // (reusing existing key if already created for balance retry).
+          if (pOrder.refund_idempotency_key && pOrder.refund_idempotency_key.includes('_bal_')) {
+            idempotencyKey = pOrder.refund_idempotency_key;
+          } else {
+            idempotencyKey = `rfnd_${pOrder.id}_${pOrder.order_number}_bal_${Date.now()}`;
             db.prepare('UPDATE orders SET refund_idempotency_key = ? WHERE id = ?').run(idempotencyKey, pOrder.id);
+          }
+        } else {
+          // Standard full refund attempt or retry of failed attempt:
+          // Parse already recorded failed refund IDs:
+          const recordedFailedIds = (pOrder.failed_refund_id || '')
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+
+          // Check if there are any confirmed failed refund IDs from either lookup source
+          // that have not yet been recorded in failed_refund_id:
+          const hasUnrecordedFailure = confirmedFailedOrCancelled &&
+            currentConfirmedFailedIds.length > 0 &&
+            currentConfirmedFailedIds.some(id => !recordedFailedIds.includes(id));
+
+          if (hasUnrecordedFailure) {
+            // Confirmed failed attempt: Razorpay requires a fresh key for a distinct attempt.
+            // Persist the new key and record all confirmed failed refund IDs immediately so subsequent retries reuse this key.
+            idempotencyKey = `rfnd_${pOrder.id}_${pOrder.order_number}_att_${Date.now()}`;
+            const allFailedIds = Array.from(new Set([...recordedFailedIds, ...currentConfirmedFailedIds])).join(',');
+            db.prepare(`
+              UPDATE orders
+              SET refund_idempotency_key = ?,
+                  failed_refund_id = ?,
+                  refund_id = NULL
+              WHERE id = ?
+            `).run(idempotencyKey, allFailedIds, pOrder.id);
+          } else {
+            // Ambiguous retry or continuation of existing attempt:
+            // Reuse the stored idempotency key to satisfy Razorpay's idempotency guarantee.
+            idempotencyKey = pOrder.refund_idempotency_key || `rfnd_${pOrder.id}_${pOrder.order_number}`;
+            if (!pOrder.refund_idempotency_key) {
+              db.prepare('UPDATE orders SET refund_idempotency_key = ? WHERE id = ?').run(idempotencyKey, pOrder.id);
+            }
           }
         }
 
-        const refundPayload = buildRefundPayload(pOrder, idempotencyKey);
+        const refundPayload = buildRefundPayload(pOrder, idempotencyKey, targetRefundAmountPaise);
         const refundResult = await refundRazorpayPayment(pOrder.razorpay_payment_id, refundPayload);
 
         if (refundResult && refundResult.status === 'processed') {
-          db.transaction(() => {
+          const newCumulativePaise = totalRefundedPaise + (refundResult.amount || targetRefundAmountPaise);
+          const isNowFullyRefunded = (newCumulativePaise >= targetAmountPaise);
+
+          if (isNowFullyRefunded) {
+            db.transaction(() => {
+              db.prepare(`
+                UPDATE orders
+                SET payment_status = 'Refunded',
+                    refund_id = ?,
+                    refund_error = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+              `).run(refundResult.id, pOrder.id);
+
+              db.prepare(`
+                UPDATE payments
+                SET status = 'Refunded'
+                WHERE order_id = ?
+              `).run(pOrder.id);
+            })();
+
+            resolvedRefunds++;
+          } else {
+            // Processed partial refund; keep Refund_Pending and retain latest refund ID
             db.prepare(`
               UPDATE orders
-              SET payment_status = 'Refunded',
+              SET payment_status = 'Refund_Pending',
                   refund_id = ?,
                   refund_error = NULL,
                   updated_at = CURRENT_TIMESTAMP
               WHERE id = ?
             `).run(refundResult.id, pOrder.id);
-
-            db.prepare(`
-              UPDATE payments
-              SET status = 'Refunded'
-              WHERE order_id = ?
-            `).run(pOrder.id);
-          })();
-
-          resolvedRefunds++;
+          }
         } else if (refundResult && refundResult.status === 'pending') {
           db.prepare(`
             UPDATE orders
@@ -1272,9 +1336,10 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
 
     const isRefundProcessed = Boolean(refundResult && refundResult.status === 'processed');
     const isRefundPending = Boolean(refundResult && refundResult.status === 'pending');
+    const isRefundFull = isRefundProcessed && (!refundResult.amount || refundResult.amount >= Math.round(order.total_amount * 100));
     const refundId = refundResult ? refundResult.id : null;
-    const finalPaymentStatus = isRefundProcessed ? 'Refunded' : 'Refund_Pending';
-    const paymentRecordStatus = isRefundProcessed ? 'Refunded' : (isRefundPending ? 'Refund_Pending' : 'Captured');
+    const finalPaymentStatus = isRefundFull ? 'Refunded' : 'Refund_Pending';
+    const paymentRecordStatus = isRefundFull ? 'Refunded' : (isRefundPending ? 'Refund_Pending' : 'Captured');
 
     db.transaction(() => {
       db.prepare(`
@@ -1295,7 +1360,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
       `).run(order.id, razorpay_order_id, razorpay_payment_id, razorpay_signature, order.total_amount * 100, paymentRecordStatus);
     })();
 
-    if (isRefundProcessed) {
+    if (isRefundFull) {
       return res.status(409).json({
         error: 'Payment was charged, but the checkout reservation expired and the selected saree is no longer in stock. A full refund has been completed to your original payment method.',
         payment_status: 'Refunded',
