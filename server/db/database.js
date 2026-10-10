@@ -35,14 +35,14 @@ function parseDatabaseUrl(rawUrl) {
     const scheme = schemeMatch[1].toLowerCase();
     if (['postgres', 'postgresql', 'mysql', 'mariadb', 'mongodb', 'redis', 'http', 'https'].includes(scheme)) {
       throw new Error(
-        `Unsupported database connection protocol "${scheme}:" in DATABASE_URL ("${trimmed}"). ` +
+        `Unsupported database connection protocol "${scheme}:" in DATABASE_URL. ` +
         `The current database layer uses SQLite (better-sqlite3) for local/volume file storage. ` +
         `Connecting to a managed ${scheme.toUpperCase()} database requires a dedicated network database driver.`
       );
     }
     if (scheme !== 'sqlite' && scheme !== 'file') {
       throw new Error(
-        `Unsupported database URL scheme "${scheme}:". Supported schemes for SQLite are sqlite://, file://, or standard file paths.`
+        `Unsupported database URL scheme "${scheme}:" in DATABASE_URL. Supported schemes for SQLite are sqlite://, file://, or standard file paths.`
       );
     }
   }

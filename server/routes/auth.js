@@ -5,9 +5,10 @@ const jwt = require('jsonwebtoken');
 const db = require('../db/database');
 const { authenticateToken, JWT_SECRET } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
+const { authLimiter, accountAuthLimiter } = require('../middleware/rateLimit');
 
 // Register User
-router.post('/register', requireDurableStorage, (req, res) => {
+router.post('/register', authLimiter, accountAuthLimiter, requireDurableStorage, (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
 
@@ -50,7 +51,7 @@ router.post('/register', requireDurableStorage, (req, res) => {
 });
 
 // Login User
-router.post('/login', (req, res) => {
+router.post('/login', authLimiter, accountAuthLimiter, (req, res) => {
   try {
     const { email, password } = req.body;
 
