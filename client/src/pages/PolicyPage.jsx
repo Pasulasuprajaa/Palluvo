@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Truck, RotateCcw, FileText, ChevronRight, ArrowLeft, Mail, Phone, Clock } from 'lucide-react';
+import { ShieldCheck, Truck, RotateCcw, FileText, ChevronRight, ArrowLeft, Mail, Phone, Clock, MapPin } from 'lucide-react';
 
 export default function PolicyPage({ initialTab = 'privacy', onNavigate }) {
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -277,17 +277,32 @@ export default function PolicyPage({ initialTab = 'privacy', onNavigate }) {
               </p>
 
               <div className="space-y-3 pt-2 text-xs border-t border-white/10">
-                <div className="flex items-center gap-2.5">
-                  <Phone className="w-4 h-4 text-[#C5A059]" />
-                  <span>+91 84988 54323 / +91 81067 89789</span>
+                <div className="flex items-start gap-2.5">
+                  <Phone className="w-4 h-4 text-[#C5A059] shrink-0 mt-0.5" />
+                  <div className="flex flex-col gap-0.5">
+                    <a href="tel:+918897776984" className="hover:text-[#C5A059] transition">+91 88977 76984 (Concierge)</a>
+                    <a href="tel:+918498854323" className="hover:text-[#C5A059] transition">+91 84988 54323 (Customer Care)</a>
+                    <a href="tel:+918106789789" className="hover:text-[#C5A059] transition">+91 81067 89789 (Support & Orders)</a>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <Mail className="w-4 h-4 text-[#C5A059]" />
-                  <span>care@palluvo.com</span>
+                  <Mail className="w-4 h-4 text-[#C5A059] shrink-0" />
+                  <a href="mailto:info@palluvo.store" className="hover:text-[#C5A059] transition">info@palluvo.store</a>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <Clock className="w-4 h-4 text-[#C5A059]" />
+                  <Clock className="w-4 h-4 text-[#C5A059] shrink-0" />
                   <span>10:00 AM – 8:00 PM IST (Mon–Sat)</span>
+                </div>
+                <div className="flex items-center gap-2.5 pt-1 border-t border-white/10">
+                  <MapPin className="w-4 h-4 text-[#C5A059] shrink-0" />
+                  <a
+                    href="https://maps.app.goo.gl/wkcLwsNgHp39z4pe7"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#C5A059] hover:text-[#E0C07F] font-semibold underline underline-offset-2 flex items-center gap-1"
+                  >
+                    <span>Visit Flagship on Google Maps ↗</span>
+                  </a>
                 </div>
               </div>
 

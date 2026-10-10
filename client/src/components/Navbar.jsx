@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Search, Heart, ShoppingBag, User, Menu, X, Sparkles,
   ChevronDown, Tag, Scale, Home, Grid, ChevronRight, Phone, Info,
-  Layers, Crown, Flame, Truck, MessageSquare, Settings
+  Layers, Crown, Flame, Truck, MessageSquare, Settings, MapPin, Mail
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -490,6 +490,43 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Quick Contact & Store Location Card */}
+            <div className="pt-3 border-t border-[#EAE2D7] space-y-2">
+              <div className="text-[11px] font-bold text-[#6E6467] uppercase tracking-wider px-1">
+                Concierge & Store Visit
+              </div>
+              <div className="bg-[#FAF7F2] border border-[#EAE2D7] rounded-xl p-3 text-xs space-y-2">
+                <div className="flex flex-col gap-1 text-[#1F1A1C]">
+                  <a href="tel:+918897776984" className="flex items-center gap-2 hover:text-[#5B1425] transition py-0.5 font-medium">
+                    <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                    <span>+91 88977 76984 (Concierge)</span>
+                  </a>
+                  <a href="tel:+918498854323" className="flex items-center gap-2 hover:text-[#5B1425] transition py-0.5 font-medium">
+                    <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                    <span>+91 84988 54323 (Customer Care)</span>
+                  </a>
+                  <a href="tel:+918106789789" className="flex items-center gap-2 hover:text-[#5B1425] transition py-0.5 font-medium">
+                    <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                    <span>+91 81067 89789 (Support)</span>
+                  </a>
+                  <a href="mailto:info@palluvo.store" className="flex items-center gap-2 hover:text-[#5B1425] transition py-0.5 font-medium">
+                    <Mail className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                    <span>info@palluvo.store</span>
+                  </a>
+                </div>
+
+                <a
+                  href="https://maps.app.goo.gl/wkcLwsNgHp39z4pe7"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-2 bg-[#5B1425] text-[#FAF7F2] font-semibold text-[11px] rounded-lg hover:bg-[#7E1E34] transition cursor-pointer"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-[#C5A059]" />
+                  <span>Visit Store on Google Maps ↗</span>
+                </a>
               </div>
             </div>
 

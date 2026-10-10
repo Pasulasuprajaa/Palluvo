@@ -53,7 +53,7 @@ export default function InvoiceModal({ isOpen, onClose, order }) {
                 <div>PALLUVO Luxury Fashion Pvt Ltd</div>
                 <div>Authentic Luxury Handlooms & Fashion | GSTIN: 29AABCU9603R1ZM</div>
                 <div>Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</div>
-                <div>Email: contact@palluvo.com | Support: +91 84988 54323 / +91 81067 89789</div>
+                <div>Email: info@palluvo.store | Helplines: +91 88977 76984 / +91 84988 54323 / +91 81067 89789</div>
               </div>
             </div>
 

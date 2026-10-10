@@ -86,6 +86,55 @@ export default function Footer({ onNavigate }) {
         </div>
       </div>
 
+      {/* Luxury Flagship Store & Concierge Showcase Card */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 border-b border-white/10">
+        <div className="bg-gradient-to-r from-[#2A0812] via-[#3E0D1B] to-[#1F1A1C] border border-[#C5A059]/35 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-1.5 max-w-xl">
+            <div className="flex items-center gap-2 text-[#C5A059] text-[11px] font-semibold uppercase tracking-widest">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Bespoke Saree Concierge & Store Visit</span>
+            </div>
+            <h3 className="font-serif text-lg sm:text-2xl font-bold text-[#FAF7F2]">
+              Visit Our Flagship Store or Connect Privately
+            </h3>
+            <p className="text-xs text-[#FAF7F2]/80 leading-relaxed">
+              Experience handcrafted Banarasi, Kanjivaram, and pure silk drapes in person, or speak directly with our private saree curators for personalized drape consultations.
+            </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#FAF7F2]/90 pt-1">
+              <span className="flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-[#C5A059]" />
+                <a href="tel:+918897776984" className="hover:text-[#C5A059] transition">+91 88977 76984</a>
+                <span className="text-[#C5A059]/60">/</span>
+                <a href="tel:+918498854323" className="hover:text-[#C5A059] transition">+91 84988 54323</a>
+                <span className="text-[#C5A059]/60">/</span>
+                <a href="tel:+918106789789" className="hover:text-[#C5A059] transition">+91 81067 89789</a>
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 shrink-0">
+            <a
+              href="https://maps.app.goo.gl/wkcLwsNgHp39z4pe7"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#C5A059] hover:bg-[#E0C07F] text-[#1F1A1C] font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-md cursor-pointer group"
+              title="Open PALLUVO on Google Maps"
+            >
+              <MapPin className="w-4 h-4 text-[#1F1A1C] group-hover:scale-110 transition-transform" />
+              <span>Visit on Google Maps ↗</span>
+            </a>
+
+            <a
+              href="mailto:info@palluvo.store"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-[#FAF7F2] hover:text-[#C5A059] border border-white/20 hover:border-[#C5A059]/50 text-xs font-semibold rounded-xl transition cursor-pointer"
+            >
+              <Mail className="w-4 h-4 text-[#C5A059]" />
+              <span>info@palluvo.store</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* Main Footer Links: Accordion on Mobile, Multi-col on Desktop */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
         
@@ -182,10 +231,28 @@ export default function Footer({ onNavigate }) {
                 <li><button onClick={() => onNavigate('track-order')} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Track Order Shipment</button></li>
                 <li><button onClick={() => onNavigate('account')} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">My Orders & Account</button></li>
                 <li><button onClick={() => onNavigate('wishlist')} className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] text-left flex items-center w-full cursor-pointer">Saved Wishlist</button></li>
-                <li className="min-h-[44px] flex items-center"><a href="tel:+918498854323" className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] transition flex items-center text-left cursor-pointer">Concierge: +91 84988 54323</a></li>
-                <li className="min-h-[44px] flex items-center"><a href="tel:+918106789789" className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] transition flex items-center text-left cursor-pointer">Support: +91 81067 89789</a></li>
-                <li className="min-h-[44px] flex items-center"><a href="mailto:contact@palluvo.com" className="min-h-[44px] py-2 px-1 hover:text-[#C5A059] transition flex items-center text-left cursor-pointer">Email: contact@palluvo.com</a></li>
-                <li className="min-h-[44px] py-2 px-1 flex items-center"><span className="text-[#FAF7F2]/60">Hours: Mon-Sat, 10 AM - 8 PM IST</span></li>
+                <li className="pt-2 border-t border-white/10 space-y-1.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-[#C5A059]">Direct Phone Helplines</div>
+                  <div className="flex flex-col gap-1">
+                    <a href="tel:+918897776984" className="min-h-[38px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
+                      <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                      <span>Concierge: +91 88977 76984</span>
+                    </a>
+                    <a href="tel:+918498854323" className="min-h-[38px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
+                      <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                      <span>Care: +91 84988 54323</span>
+                    </a>
+                    <a href="tel:+918106789789" className="min-h-[38px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
+                      <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                      <span>Support: +91 81067 89789</span>
+                    </a>
+                    <a href="mailto:info@palluvo.store" className="min-h-[38px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
+                      <Mail className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                      <span>Email: info@palluvo.store</span>
+                    </a>
+                  </div>
+                  <div className="text-[10px] text-[#FAF7F2]/60 pt-0.5">Hours: Mon-Sat, 10 AM - 8 PM IST</div>
+                </li>
               </ul>
             )}
           </div>
@@ -258,10 +325,26 @@ export default function Footer({ onNavigate }) {
               <li><button onClick={() => onNavigate('track-order')} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Track Order Shipment</button></li>
               <li><button onClick={() => onNavigate('account')} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">My Orders & Account</button></li>
               <li><button onClick={() => onNavigate('wishlist')} className="min-h-[44px] py-2 hover:text-[#C5A059] transition text-left flex items-center cursor-pointer">Saved Wishlist</button></li>
-              <li className="min-h-[44px] flex items-center"><a href="tel:+918498854323" className="min-h-[44px] py-2 hover:text-[#C5A059] transition flex items-center text-left cursor-pointer text-[#FAF7F2]/80 font-medium">Concierge: +91 84988 54323</a></li>
-              <li className="min-h-[44px] flex items-center"><a href="tel:+918106789789" className="min-h-[44px] py-2 hover:text-[#C5A059] transition flex items-center text-left cursor-pointer text-[#FAF7F2]/80 font-medium">Support: +91 81067 89789</a></li>
-              <li className="min-h-[44px] flex items-center"><a href="mailto:contact@palluvo.com" className="min-h-[44px] py-2 hover:text-[#C5A059] transition flex items-center text-left cursor-pointer text-[#FAF7F2]/80 font-medium">Email: contact@palluvo.com</a></li>
-              <li className="min-h-[44px] py-2 flex items-center"><span className="text-[#FAF7F2]/60">Hours: Mon-Sat, 10 AM - 8 PM IST</span></li>
+              <li className="pt-2 border-t border-white/10 space-y-1.5">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#C5A059]">Direct Helplines</div>
+                <a href="tel:+918897776984" className="hover:text-[#C5A059] transition flex items-center gap-2 text-left cursor-pointer text-[#FAF7F2]/90 font-medium py-0.5">
+                  <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                  <span>+91 88977 76984 <span className="text-[10px] text-[#C5A059] font-normal">(Concierge)</span></span>
+                </a>
+                <a href="tel:+918498854323" className="hover:text-[#C5A059] transition flex items-center gap-2 text-left cursor-pointer text-[#FAF7F2]/90 font-medium py-0.5">
+                  <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                  <span>+91 84988 54323 <span className="text-[10px] text-[#C5A059] font-normal">(Care)</span></span>
+                </a>
+                <a href="tel:+918106789789" className="hover:text-[#C5A059] transition flex items-center gap-2 text-left cursor-pointer text-[#FAF7F2]/90 font-medium py-0.5">
+                  <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                  <span>+91 81067 89789 <span className="text-[10px] text-[#C5A059] font-normal">(Orders)</span></span>
+                </a>
+                <a href="mailto:info@palluvo.store" className="hover:text-[#C5A059] transition flex items-center gap-2 text-left cursor-pointer text-[#FAF7F2]/90 font-medium py-0.5">
+                  <Mail className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                  <span>info@palluvo.store</span>
+                </a>
+                <div className="text-[10px] text-[#FAF7F2]/60 pt-0.5">Mon–Sat, 10:00 AM – 8:00 PM IST</div>
+              </li>
             </ul>
           </div>
 
@@ -338,10 +421,19 @@ export default function Footer({ onNavigate }) {
             </div>
           </div>
 
-          <div className="text-xs text-[#FAF7F2]/70 flex items-center justify-center sm:justify-end gap-1.5">
-            <MapPin className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-            <span>Indiranagar, Bengaluru, Karnataka 560038</span>
-          </div>
+          <a
+            href="https://maps.app.goo.gl/wkcLwsNgHp39z4pe7"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group inline-flex items-center justify-center sm:justify-end gap-2 text-xs text-[#FAF7F2]/85 hover:text-[#C5A059] bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#C5A059]/40 px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer"
+            title="Open PALLUVO Store on Google Maps"
+          >
+            <MapPin className="w-4 h-4 text-[#C5A059] shrink-0 group-hover:scale-110 transition-transform" />
+            <span className="font-serif">Flagship Store Location</span>
+            <span className="text-[10px] text-[#C5A059] bg-[#C5A059]/20 px-2 py-0.5 rounded-full font-semibold border border-[#C5A059]/30">
+              Google Maps ↗
+            </span>
+          </a>
         </div>
       </div>
 
