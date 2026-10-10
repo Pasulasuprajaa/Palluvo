@@ -346,6 +346,7 @@ function initSchema() {
       refund_idempotency_key TEXT,
       failed_refund_id TEXT,
       refund_claimed_at INTEGER,
+      refund_claim_token TEXT,
       tracking_number TEXT,
       courier_partner TEXT DEFAULT 'BlueDart Luxury Express',
       estimated_delivery TEXT,
@@ -457,6 +458,9 @@ function initSchema() {
   } catch (e) {}
   try {
     db.exec(`ALTER TABLE orders ADD COLUMN refund_claimed_at INTEGER DEFAULT NULL;`);
+  } catch (e) {}
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN refund_claim_token TEXT DEFAULT NULL;`);
   } catch (e) {}
   try {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_orders_pending_expiry ON orders(payment_status, expires_at);`);

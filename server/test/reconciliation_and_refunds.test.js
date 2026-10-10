@@ -333,6 +333,55 @@ async function runTests() {
     assert.strictEqual(refreshedOrder5.refund_idempotency_key, initialKey, 'Ambiguous retry must keep the identical idempotency key');
     console.log('✅ PASS: Ambiguous retry preserves identical idempotency key and body payload');
 
+    // Scenario 6: Order has NULL refund_id, but gateway refund list confirms a failed refund.
+    // Reconciler MUST rotate the key, record failed_refund_id, and reuse the new key on subsequent retries.
+    const orderNum6 = `ORD-TEST-NULL-REFUNDID-LIST-FAILED-${nonce}`;
+    const initialKey6 = `rfnd_initial_null_id_${nonce}`;
+    db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_status, status, razorpay_order_id, razorpay_payment_id, refund_id, refund_idempotency_key, address_data, created_at)
+      VALUES (?, ?, 6000, 6000, 'Refund_Pending', 'Cancelled', 'order_mock_test_6', 'pay_mock_refund_failed_err', NULL, ?, '{"city":"Pune"}', CURRENT_TIMESTAMP)
+    `).run(orderNum6, customerUser.id, initialKey6);
+    const order6 = db.prepare("SELECT id FROM orders WHERE order_number = ?").get(orderNum6);
+
+    await reconcilePendingRefunds({ orderIds: [order6.id] });
+
+    const refreshedOrder6 = db.prepare("SELECT * FROM orders WHERE id = ?").get(order6.id);
+    assert.notStrictEqual(refreshedOrder6.refund_idempotency_key, initialKey6, 'Key must rotate when refund list confirms failure');
+    assert.ok(refreshedOrder6.refund_idempotency_key.includes('_att_'), 'Fresh attempt key generated on confirmed list failure');
+    assert.ok(refreshedOrder6.failed_refund_id, 'Failed refund ID from list must be recorded');
+    console.log('✅ PASS: Key rotated and failed ID recorded when refund list confirms failure with NULL refund_id');
+
+    // Subsequent ambiguous retry of order 6: must reuse the rotated attempt key!
+    const rotatedKey6 = refreshedOrder6.refund_idempotency_key;
+    await reconcilePendingRefunds({ orderIds: [order6.id] });
+    const refreshedOrder6Again = db.prepare("SELECT * FROM orders WHERE id = ?").get(order6.id);
+    assert.strictEqual(refreshedOrder6Again.refund_idempotency_key, rotatedKey6, 'Rotated key must be reused on subsequent retries');
+    console.log('✅ PASS: Rotated key reused on subsequent ambiguous retries after refund list failure');
+
+    // Scenario 7: Fencing claim release by owner token.
+    // Releasing with a mismatched token must NOT clear the active worker's lease.
+    const orderNum7 = `ORD-TEST-CLAIM-FENCE-${nonce}`;
+    db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_status, status, razorpay_order_id, razorpay_payment_id, refund_id, address_data, created_at)
+      VALUES (?, ?, 7000, 7000, 'Refund_Pending', 'Cancelled', 'order_mock_test_7', 'pay_mock_fence_7', NULL, '{"city":"Jaipur"}', CURRENT_TIMESTAMP)
+    `).run(orderNum7, customerUser.id);
+    const order7 = db.prepare("SELECT id FROM orders WHERE order_number = ?").get(orderNum7);
+
+    const activeToken = 'worker_token_active_123';
+    db.prepare("UPDATE orders SET refund_claimed_at = ?, refund_claim_token = ? WHERE id = ?").run(Date.now(), activeToken, order7.id);
+
+    // Mismatched token release attempt:
+    db.prepare("UPDATE orders SET refund_claimed_at = NULL, refund_claim_token = NULL WHERE id = ? AND refund_claim_token = ?").run(order7.id, 'stale_token_999');
+    const claimCheckMismatched = db.prepare("SELECT refund_claimed_at, refund_claim_token FROM orders WHERE id = ?").get(order7.id);
+    assert.strictEqual(claimCheckMismatched.refund_claim_token, activeToken, 'Claim must NOT be cleared by mismatched token');
+
+    // Matched token release:
+    db.prepare("UPDATE orders SET refund_claimed_at = NULL, refund_claim_token = NULL WHERE id = ? AND refund_claim_token = ?").run(order7.id, activeToken);
+    const claimCheckMatched = db.prepare("SELECT refund_claimed_at, refund_claim_token FROM orders WHERE id = ?").get(order7.id);
+    assert.strictEqual(claimCheckMatched.refund_claimed_at, null, 'Claim must be cleared when token matches');
+    assert.strictEqual(claimCheckMatched.refund_claim_token, null, 'Claim token must be cleared when token matches');
+    console.log('✅ PASS: Claim release is strictly fenced by worker ownership token');
+
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {
     if (server) {

@@ -42,7 +42,7 @@ function buildRefundPayload(order, idempotencyKey) {
  */
 async function reconcilePendingRefunds(options = {}) {
   let query = `
-    SELECT id, order_number, user_id, razorpay_order_id, razorpay_payment_id, total_amount, refund_id, payment_status, refund_error, refund_idempotency_key, failed_refund_id, refund_claimed_at
+    SELECT id, order_number, user_id, razorpay_order_id, razorpay_payment_id, total_amount, refund_id, payment_status, refund_error, refund_idempotency_key, failed_refund_id, refund_claimed_at, refund_claim_token
     FROM orders
     WHERE payment_status IN ('Refund_Pending', 'Refund_Failed')
       AND razorpay_payment_id IS NOT NULL
@@ -67,22 +67,40 @@ async function reconcilePendingRefunds(options = {}) {
   let resolvedRefunds = 0;
 
   for (const pOrder of pendingOrders) {
-    // Concurrency guard: Atomically claim order to prevent concurrent workers from issuing separate attempts
+    // Concurrency guard: Atomically claim order with unique owner token to prevent concurrent workers from issuing separate attempts
     const claimTime = Date.now();
     const lockTimeout = 60 * 1000; // 60-second lease
+    const ownerToken = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
     const claimResult = db.prepare(`
       UPDATE orders
-      SET refund_claimed_at = ?
+      SET refund_claimed_at = ?,
+          refund_claim_token = ?
       WHERE id = ?
         AND (refund_claimed_at IS NULL OR refund_claimed_at < ?)
-    `).run(claimTime, pOrder.id, claimTime - lockTimeout);
+    `).run(claimTime, ownerToken, pOrder.id, claimTime - lockTimeout);
 
     if (claimResult.changes === 0) {
-      // Another concurrent worker is actively processing this order; skip to prevent duplicate attempts
+      // Another concurrent worker holds an active lease for this order; skip to prevent duplicate attempts
       continue;
     }
 
+    let renewalInterval = null;
     try {
+      // Lease renewal: keep active worker's lease from expiring during long gateway operations
+      renewalInterval = setInterval(() => {
+        try {
+          db.prepare(`
+            UPDATE orders
+            SET refund_claimed_at = ?
+            WHERE id = ? AND refund_claim_token = ?
+          `).run(Date.now(), pOrder.id, ownerToken);
+        } catch (renewErr) {
+          // ignore renewal errors on closing/busy db
+        }
+      }, 15000);
+      if (renewalInterval && renewalInterval.unref) {
+        renewalInterval.unref();
+      }
       const isMockPayment = typeof pOrder.razorpay_payment_id === 'string' &&
         (pOrder.razorpay_payment_id.startsWith('pay_mock_') || pOrder.razorpay_payment_id.startsWith('mock_'));
       if (!isMockPayment && !isGatewayConfigured) {
@@ -96,7 +114,7 @@ async function reconcilePendingRefunds(options = {}) {
       let pendingRefundId = null;
       let hasLookupError = false;
       let confirmedFailedOrCancelled = false;
-      let confirmedFailedRefundId = null;
+      const currentConfirmedFailedIds = [];
 
       // 1. Inspect existing refund status if a refund ID exists
       if (pOrder.refund_id) {
@@ -111,7 +129,9 @@ async function reconcilePendingRefunds(options = {}) {
               pendingRefundId = refund.id;
             } else if (refund.status === 'failed' || refund.status === 'cancelled') {
               confirmedFailedOrCancelled = true;
-              confirmedFailedRefundId = refund.id;
+              if (refund.id && !currentConfirmedFailedIds.includes(refund.id)) {
+                currentConfirmedFailedIds.push(refund.id);
+              }
             }
           }
         } catch (e) {
@@ -138,8 +158,10 @@ async function reconcilePendingRefunds(options = {}) {
               }
             } else if (refunds.length > 0 && refunds.every(r => r.status === 'failed' || r.status === 'cancelled')) {
               confirmedFailedOrCancelled = true;
-              if (!confirmedFailedRefundId) {
-                confirmedFailedRefundId = refunds[0].id;
+              for (const r of refunds) {
+                if (r && r.id && !currentConfirmedFailedIds.includes(r.id)) {
+                  currentConfirmedFailedIds.push(r.id);
+                }
               }
             }
           }
@@ -229,23 +251,30 @@ async function reconcilePendingRefunds(options = {}) {
       try {
         let idempotencyKey;
 
-        // Determine if this is a newly confirmed failure that hasn't claimed a fresh retry key yet.
-        // A fresh key is only generated when a specific previous refund ID has been confirmed failed,
-        // and that failure has not already been recorded in failed_refund_id.
-        const failedIdToRecord = (pOrder.refund_id && confirmedFailedOrCancelled) ? pOrder.refund_id : null;
-        const isNewlyConfirmedFailure = Boolean(failedIdToRecord) && pOrder.failed_refund_id !== failedIdToRecord;
+        // Parse already recorded failed refund IDs:
+        const recordedFailedIds = (pOrder.failed_refund_id || '')
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
 
-        if (isNewlyConfirmedFailure) {
+        // Check if there are any confirmed failed refund IDs from either lookup source
+        // that have not yet been recorded in failed_refund_id:
+        const hasUnrecordedFailure = confirmedFailedOrCancelled &&
+          currentConfirmedFailedIds.length > 0 &&
+          currentConfirmedFailedIds.some(id => !recordedFailedIds.includes(id));
+
+        if (hasUnrecordedFailure) {
           // Confirmed failed attempt: Razorpay requires a fresh key for a distinct attempt.
-          // Persist the new key and record the failed refund ID immediately so subsequent retries reuse this key.
+          // Persist the new key and record all confirmed failed refund IDs immediately so subsequent retries reuse this key.
           idempotencyKey = `rfnd_${pOrder.id}_${pOrder.order_number}_att_${Date.now()}`;
+          const allFailedIds = Array.from(new Set([...recordedFailedIds, ...currentConfirmedFailedIds])).join(',');
           db.prepare(`
             UPDATE orders
             SET refund_idempotency_key = ?,
                 failed_refund_id = ?,
                 refund_id = NULL
             WHERE id = ?
-          `).run(idempotencyKey, failedIdToRecord, pOrder.id);
+          `).run(idempotencyKey, allFailedIds, pOrder.id);
         } else {
           // Ambiguous retry or continuation of existing attempt:
           // Reuse the stored idempotency key to satisfy Razorpay's idempotency guarantee.
@@ -309,8 +338,17 @@ async function reconcilePendingRefunds(options = {}) {
     } catch (err) {
       console.error(`Refund reconciliation error for order ${pOrder.id}:`, err);
     } finally {
+      if (renewalInterval) {
+        clearInterval(renewalInterval);
+      }
       try {
-        db.prepare('UPDATE orders SET refund_claimed_at = NULL WHERE id = ?').run(pOrder.id);
+        // Conditioned release: release claim only if this worker still owns the claim token
+        db.prepare(`
+          UPDATE orders
+          SET refund_claimed_at = NULL,
+              refund_claim_token = NULL
+          WHERE id = ? AND refund_claim_token = ?
+        `).run(pOrder.id, ownerToken);
       } catch (claimErr) {
         console.warn(`Failed to release claim on order ${pOrder.id}:`, claimErr.message);
       }
