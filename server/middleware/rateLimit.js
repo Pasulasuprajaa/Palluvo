@@ -131,9 +131,16 @@ class SharedRateLimitStore {
 
       // If the key was newly created and has no TTL, set expiration
       if (ttl === -1 || count === 1) {
-        fetch(`${this.restUrl}/EXPIRE/${encodeURIComponent(fullKey)}/${windowSec}`, {
+        const expireRes = await fetch(`${this.restUrl}/EXPIRE/${encodeURIComponent(fullKey)}/${windowSec}`, {
           headers: { Authorization: `Bearer ${this.restToken}` }
-        }).catch(() => {});
+        });
+        if (!expireRes.ok) {
+          throw new Error(`KV EXPIRE command failed with HTTP status ${expireRes.status}`);
+        }
+        const expireData = await expireRes.json();
+        if (expireData && expireData.error) {
+          throw new Error(`KV EXPIRE command error: ${expireData.error}`);
+        }
         ttl = windowSec;
       }
 
@@ -292,11 +299,63 @@ const apiLimiter = rateLimit({
   }
 });
 
+/**
+ * Tracks aggregate failed login attempts per account across all IPs.
+ * Applies progressive non-locking computational friction against distributed botnets / multi-prefix credential stuffing.
+ */
+class AccountRiskTracker {
+  constructor() {
+    this.store = createSharedRateLimitStore('acct_risk');
+    this.localCounts = new Map();
+  }
+
+  async getFailedCount(email) {
+    if (!email || typeof email !== 'string') return 0;
+    const cleanEmail = email.trim().toLowerCase();
+    try {
+      const info = await this.store.get(cleanEmail);
+      return info?.totalHits || 0;
+    } catch (err) {
+      if (isServerless) throw err;
+      return this.localCounts.get(cleanEmail) || 0;
+    }
+  }
+
+  async recordFailedAttempt(email) {
+    if (!email || typeof email !== 'string') return 0;
+    const cleanEmail = email.trim().toLowerCase();
+    try {
+      const info = await this.store.increment(cleanEmail);
+      return info?.totalHits || 1;
+    } catch (err) {
+      if (isServerless) throw err;
+      const count = (this.localCounts.get(cleanEmail) || 0) + 1;
+      this.localCounts.set(cleanEmail, count);
+      return count;
+    }
+  }
+
+  async resetFailedAttempts(email) {
+    if (!email || typeof email !== 'string') return;
+    const cleanEmail = email.trim().toLowerCase();
+    try {
+      await this.store.resetKey(cleanEmail);
+    } catch (err) {
+      if (isServerless) throw err;
+    }
+    this.localCounts.delete(cleanEmail);
+  }
+}
+
+const accountRiskTracker = new AccountRiskTracker();
+
 module.exports = {
   authLimiter,
   targetedAuthLimiter,
   trackOrderLimiter,
   apiLimiter,
   SharedRateLimitStore,
-  getNormalizedIp
+  getNormalizedIp,
+  AccountRiskTracker,
+  accountRiskTracker
 };

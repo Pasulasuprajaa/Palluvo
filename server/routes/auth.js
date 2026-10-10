@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db/database');
 const { authenticateToken, JWT_SECRET } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
-const { authLimiter, targetedAuthLimiter } = require('../middleware/rateLimit');
+const { authLimiter, targetedAuthLimiter, accountRiskTracker } = require('../middleware/rateLimit');
 
 // Register User
 router.post('/register', authLimiter, requireDurableStorage, (req, res) => {
@@ -60,20 +60,35 @@ router.post('/login', authLimiter, targetedAuthLimiter, async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+
+    // Distributed risk detection: calculate progressive non-locking computational friction
+    const recentFailedAttempts = await accountRiskTracker.getFailedCount(cleanEmail);
+    let progressiveDelayMs = 200; // Baseline timing protection
+    if (recentFailedAttempts >= 15) {
+      progressiveDelayMs = 3000;
+    } else if (recentFailedAttempts >= 8) {
+      progressiveDelayMs = 2000;
+    } else if (recentFailedAttempts >= 4) {
+      progressiveDelayMs = 1000;
+    }
+
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(cleanEmail);
 
     if (!user) {
-      // Risk-based artificial delay to mitigate timing analysis and automated brute-force attacks
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await accountRiskTracker.recordFailedAttempt(cleanEmail);
+      await new Promise(resolve => setTimeout(resolve, progressiveDelayMs));
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
     const isMatch = bcrypt.compareSync(password, user.password_hash);
     if (!isMatch) {
-      // Risk-based delay on failed password verification
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await accountRiskTracker.recordFailedAttempt(cleanEmail);
+      await new Promise(resolve => setTimeout(resolve, progressiveDelayMs));
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
+
+    // On successful password verification: immediately clear aggregate risk score
+    await accountRiskTracker.resetFailedAttempts(cleanEmail);
 
     const safeUser = {
       id: user.id,
@@ -92,7 +107,10 @@ router.post('/login', authLimiter, targetedAuthLimiter, async (req, res) => {
     });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ error: 'Internal server error while logging in.' });
+    res.status(err.status || 500).json({
+      error: err.message || 'Internal server error while logging in.',
+      code: err.code || 'LOGIN_ERROR'
+    });
   }
 });
 
