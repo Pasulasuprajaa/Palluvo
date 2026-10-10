@@ -110,14 +110,18 @@ export default function Footer({ onNavigate }) {
                 <a href="tel:+918106789789" className="hover:text-[#C5A059] transition">+91 81067 89789</a>
               </span>
             </div>
+            <div className="text-xs text-[#FAF7F2]/80 flex items-center gap-1.5 pt-0.5">
+              <MapPin className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+              <span>Flagship Store: Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</span>
+            </div>
           </div>
 
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 shrink-0">
             <a
-              href="https://maps.app.goo.gl/wkcLwsNgHp39z4pe7"
+              href="https://www.google.com/maps/search/?api=1&query=Lavelle+Road%2C+Shanthala+Nagar%2C+Bengaluru%2C+Karnataka+560001"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#C5A059] hover:bg-[#E0C07F] text-[#1F1A1C] font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-md cursor-pointer group"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#C5A059] hover:bg-[#E0C07F] text-[#1F1A1C] font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-md cursor-pointer group min-h-[44px]"
               title="Open PALLUVO on Google Maps"
             >
               <MapPin className="w-4 h-4 text-[#1F1A1C] group-hover:scale-110 transition-transform" />
@@ -126,7 +130,7 @@ export default function Footer({ onNavigate }) {
 
             <a
               href="mailto:info@palluvo.store"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-[#FAF7F2] hover:text-[#C5A059] border border-white/20 hover:border-[#C5A059]/50 text-xs font-semibold rounded-xl transition cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-[#FAF7F2] hover:text-[#C5A059] border border-white/20 hover:border-[#C5A059]/50 text-xs font-semibold rounded-xl transition cursor-pointer min-h-[44px]"
             >
               <Mail className="w-4 h-4 text-[#C5A059]" />
               <span>info@palluvo.store</span>
@@ -234,19 +238,19 @@ export default function Footer({ onNavigate }) {
                 <li className="pt-2 border-t border-white/10 space-y-1.5">
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-[#C5A059]">Direct Phone Helplines</div>
                   <div className="flex flex-col gap-1">
-                    <a href="tel:+918897776984" className="min-h-[38px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
+                    <a href="tel:+918897776984" className="min-h-[44px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
                       <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
                       <span>Concierge: +91 88977 76984</span>
                     </a>
-                    <a href="tel:+918498854323" className="min-h-[38px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
+                    <a href="tel:+918498854323" className="min-h-[44px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
                       <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
                       <span>Care: +91 84988 54323</span>
                     </a>
-                    <a href="tel:+918106789789" className="min-h-[38px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
+                    <a href="tel:+918106789789" className="min-h-[44px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
                       <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
                       <span>Support: +91 81067 89789</span>
                     </a>
-                    <a href="mailto:info@palluvo.store" className="min-h-[38px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
+                    <a href="mailto:info@palluvo.store" className="min-h-[44px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
                       <Mail className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
                       <span>Email: info@palluvo.store</span>
                     </a>
@@ -421,19 +425,25 @@ export default function Footer({ onNavigate }) {
             </div>
           </div>
 
-          <a
-            href="https://maps.app.goo.gl/wkcLwsNgHp39z4pe7"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group inline-flex items-center justify-center sm:justify-end gap-2 text-xs text-[#FAF7F2]/85 hover:text-[#C5A059] bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#C5A059]/40 px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer"
-            title="Open PALLUVO Store on Google Maps"
-          >
-            <MapPin className="w-4 h-4 text-[#C5A059] shrink-0 group-hover:scale-110 transition-transform" />
-            <span className="font-serif">Flagship Store Location</span>
-            <span className="text-[10px] text-[#C5A059] bg-[#C5A059]/20 px-2 py-0.5 rounded-full font-semibold border border-[#C5A059]/30">
-              Google Maps ↗
-            </span>
-          </a>
+          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-center sm:justify-end gap-2 text-center sm:text-right">
+            <div className="text-xs text-[#FAF7F2]/75 flex items-center justify-center sm:justify-end gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+              <span>Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</span>
+            </div>
+            <a
+              href="https://www.google.com/maps/search/?api=1&query=Lavelle+Road%2C+Shanthala+Nagar%2C+Bengaluru%2C+Karnataka+560001"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group inline-flex items-center justify-center sm:justify-end gap-2 text-xs text-[#FAF7F2]/85 hover:text-[#C5A059] bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#C5A059]/40 px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer min-h-[44px]"
+              title="Open PALLUVO Flagship Store on Google Maps"
+            >
+              <MapPin className="w-4 h-4 text-[#C5A059] shrink-0 group-hover:scale-110 transition-transform" />
+              <span className="font-serif">Flagship Store Location</span>
+              <span className="text-[10px] text-[#C5A059] bg-[#C5A059]/20 px-2 py-0.5 rounded-full font-semibold border border-[#C5A059]/30">
+                Google Maps ↗
+              </span>
+            </a>
+          </div>
         </div>
       </div>
 

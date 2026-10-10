@@ -496,37 +496,55 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
             {/* Quick Contact & Store Location Card */}
             <div className="pt-3 border-t border-[#EAE2D7] space-y-2">
               <div className="text-[11px] font-bold text-[#6E6467] uppercase tracking-wider px-1">
-                Concierge & Store Visit
+                Concierge & Flagship Store
               </div>
-              <div className="bg-[#FAF7F2] border border-[#EAE2D7] rounded-xl p-3 text-xs space-y-2">
-                <div className="flex flex-col gap-1 text-[#1F1A1C]">
-                  <a href="tel:+918897776984" className="flex items-center gap-2 hover:text-[#5B1425] transition py-0.5 font-medium">
-                    <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-                    <span>+91 88977 76984 (Concierge)</span>
+              <div className="bg-[#FAF7F2] border border-[#EAE2D7] rounded-xl p-3 text-xs space-y-2.5">
+                <div className="flex flex-col gap-1.5 text-[#1F1A1C]">
+                  <a
+                    href="tel:+918897776984"
+                    className="min-h-[44px] flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white border border-[#EAE2D7] hover:border-[#5B1425] hover:text-[#5B1425] active:bg-[#F4EFEB] transition font-medium text-xs cursor-pointer"
+                  >
+                    <Phone className="w-4 h-4 text-[#C5A059] shrink-0" />
+                    <span>+91 88977 76984 <span className="text-[#6E6467] font-normal">(Concierge)</span></span>
                   </a>
-                  <a href="tel:+918498854323" className="flex items-center gap-2 hover:text-[#5B1425] transition py-0.5 font-medium">
-                    <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-                    <span>+91 84988 54323 (Customer Care)</span>
+                  <a
+                    href="tel:+918498854323"
+                    className="min-h-[44px] flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white border border-[#EAE2D7] hover:border-[#5B1425] hover:text-[#5B1425] active:bg-[#F4EFEB] transition font-medium text-xs cursor-pointer"
+                  >
+                    <Phone className="w-4 h-4 text-[#C5A059] shrink-0" />
+                    <span>+91 84988 54323 <span className="text-[#6E6467] font-normal">(Customer Care)</span></span>
                   </a>
-                  <a href="tel:+918106789789" className="flex items-center gap-2 hover:text-[#5B1425] transition py-0.5 font-medium">
-                    <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-                    <span>+91 81067 89789 (Support)</span>
+                  <a
+                    href="tel:+918106789789"
+                    className="min-h-[44px] flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white border border-[#EAE2D7] hover:border-[#5B1425] hover:text-[#5B1425] active:bg-[#F4EFEB] transition font-medium text-xs cursor-pointer"
+                  >
+                    <Phone className="w-4 h-4 text-[#C5A059] shrink-0" />
+                    <span>+91 81067 89789 <span className="text-[#6E6467] font-normal">(Support)</span></span>
                   </a>
-                  <a href="mailto:info@palluvo.store" className="flex items-center gap-2 hover:text-[#5B1425] transition py-0.5 font-medium">
-                    <Mail className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
+                  <a
+                    href="mailto:info@palluvo.store"
+                    className="min-h-[44px] flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white border border-[#EAE2D7] hover:border-[#5B1425] hover:text-[#5B1425] active:bg-[#F4EFEB] transition font-medium text-xs cursor-pointer"
+                  >
+                    <Mail className="w-4 h-4 text-[#C5A059] shrink-0" />
                     <span>info@palluvo.store</span>
                   </a>
                 </div>
 
-                <a
-                  href="https://maps.app.goo.gl/wkcLwsNgHp39z4pe7"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full py-2 bg-[#5B1425] text-[#FAF7F2] font-semibold text-[11px] rounded-lg hover:bg-[#7E1E34] transition cursor-pointer"
-                >
-                  <MapPin className="w-3.5 h-3.5 text-[#C5A059]" />
-                  <span>Visit Store on Google Maps ↗</span>
-                </a>
+                <div className="pt-2 border-t border-[#EAE2D7] space-y-2">
+                  <div className="flex items-start gap-2 text-[11px] text-[#52484B] leading-relaxed px-0.5">
+                    <MapPin className="w-3.5 h-3.5 text-[#C5A059] shrink-0 mt-0.5" />
+                    <span>Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</span>
+                  </div>
+                  <a
+                    href="https://www.google.com/maps/search/?api=1&query=Lavelle+Road%2C+Shanthala+Nagar%2C+Bengaluru%2C+Karnataka+560001"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-h-[44px] flex items-center justify-center gap-2 w-full px-3 py-2.5 bg-[#5B1425] text-[#FAF7F2] font-semibold text-xs rounded-lg hover:bg-[#7E1E34] transition shadow-xs cursor-pointer"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-[#C5A059]" />
+                    <span>Visit Store on Google Maps ↗</span>
+                  </a>
+                </div>
               </div>
             </div>
 

@@ -311,13 +311,16 @@ export default function AboutPage({ initialTab = 'heritage', onNavigate }) {
                   <Clock className="w-4 h-4 text-[#C5A059] shrink-0" />
                   <span>10:00 AM – 8:00 PM IST (Mon–Sat)</span>
                 </div>
-                <div className="flex items-center gap-2.5 pt-1 border-t border-white/10">
-                  <MapPin className="w-4 h-4 text-[#C5A059] shrink-0" />
+                <div className="flex flex-col gap-1.5 pt-2 border-t border-white/10 text-xs text-[#FAF7F2]/85">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-[#C5A059] shrink-0 mt-0.5" />
+                    <span>Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</span>
+                  </div>
                   <a
-                    href="https://maps.app.goo.gl/wkcLwsNgHp39z4pe7"
+                    href="https://www.google.com/maps/search/?api=1&query=Lavelle+Road%2C+Shanthala+Nagar%2C+Bengaluru%2C+Karnataka+560001"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#C5A059] hover:text-[#E0C07F] font-semibold underline underline-offset-2 flex items-center gap-1"
+                    className="text-[#C5A059] hover:text-[#E0C07F] font-semibold underline underline-offset-2 flex items-center gap-1 min-h-[38px]"
                   >
                     <span>Visit Flagship on Google Maps ↗</span>
                   </a>
