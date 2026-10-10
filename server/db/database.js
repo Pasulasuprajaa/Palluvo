@@ -439,6 +439,12 @@ function initSchema() {
     db.exec(`ALTER TABLE orders ADD COLUMN expires_at INTEGER DEFAULT NULL;`);
   } catch (e) {}
   try {
+    db.exec(`ALTER TABLE orders ADD COLUMN refund_id TEXT DEFAULT NULL;`);
+  } catch (e) {}
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN refund_error TEXT DEFAULT NULL;`);
+  } catch (e) {}
+  try {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_orders_pending_expiry ON orders(payment_status, expires_at);`);
   } catch (e) {}
 

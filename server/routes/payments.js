@@ -8,6 +8,9 @@ const {
   verifyPaymentSignature,
   fetchRazorpayOrder,
   fetchRazorpayOrderPayments,
+  fetchRazorpayPayment,
+  fetchRazorpayRefund,
+  fetchRazorpayPaymentRefunds,
   refundRazorpayPayment,
   key_id
 } = require('../services/razorpay');
@@ -16,18 +19,163 @@ const { requireDurableStorage } = require('../middleware/storageGuard');
 const ORDER_RESERVATION_TTL_MS = 15 * 60 * 1000; // 15-minute pending reservation TTL
 
 /**
+ * Reconciles pending or failed refunds until completion is positively confirmed by Razorpay.
+ */
+async function reconcilePendingRefunds() {
+  const pendingOrders = db.prepare(`
+    SELECT id, order_number, user_id, razorpay_order_id, razorpay_payment_id, total_amount, refund_id, payment_status
+    FROM orders
+    WHERE payment_status IN ('Refund_Pending', 'Refund_Failed')
+      AND razorpay_payment_id IS NOT NULL
+  `).all();
+
+  if (!pendingOrders || pendingOrders.length === 0) {
+    return 0;
+  }
+
+  let resolvedRefunds = 0;
+
+  for (const pOrder of pendingOrders) {
+    try {
+      let isCompleted = false;
+      let finalRefundId = pOrder.refund_id;
+
+      // 1. Inspect existing refund status if a refund ID exists
+      if (pOrder.refund_id) {
+        try {
+          const refund = await fetchRazorpayRefund(pOrder.refund_id);
+          if (refund && refund.status === 'processed') {
+            isCompleted = true;
+          }
+        } catch (e) {
+          // ignore lookup failure
+        }
+      }
+
+      // 2. Inspect payment refund list
+      if (!isCompleted) {
+        try {
+          const refunds = await fetchRazorpayPaymentRefunds(pOrder.razorpay_payment_id);
+          const processed = refunds.find(r => r.status === 'processed');
+          if (processed) {
+            isCompleted = true;
+            finalRefundId = processed.id;
+          }
+        } catch (e) {
+          // ignore lookup failure
+        }
+      }
+
+      // 3. Inspect payment object amount_refunded
+      if (!isCompleted) {
+        try {
+          const payment = await fetchRazorpayPayment(pOrder.razorpay_payment_id);
+          if (payment && (payment.amount_refunded >= payment.amount || payment.refund_status === 'full' || payment.status === 'refunded')) {
+            isCompleted = true;
+          }
+        } catch (e) {
+          // ignore lookup failure
+        }
+      }
+
+      if (isCompleted) {
+        db.transaction(() => {
+          db.prepare(`
+            UPDATE orders
+            SET payment_status = 'Refunded',
+                refund_id = ?,
+                refund_error = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).run(finalRefundId, pOrder.id);
+
+          db.prepare(`
+            UPDATE payments
+            SET status = 'Refunded'
+            WHERE order_id = ?
+          `).run(pOrder.id);
+        })();
+
+        resolvedRefunds++;
+        continue;
+      }
+
+      // 4. Retry initiating refund if not yet completed at gateway
+      try {
+        const refundResult = await refundRazorpayPayment(pOrder.razorpay_payment_id, {
+          amount: pOrder.total_amount * 100,
+          notes: {
+            order_id: pOrder.id,
+            order_number: pOrder.order_number,
+            reason: 'Reconciled retry for delayed payment on expired order'
+          }
+        });
+
+        if (refundResult && refundResult.status === 'processed') {
+          db.transaction(() => {
+            db.prepare(`
+              UPDATE orders
+              SET payment_status = 'Refunded',
+                  refund_id = ?,
+                  refund_error = NULL,
+                  updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            `).run(refundResult.id, pOrder.id);
+
+            db.prepare(`
+              UPDATE payments
+              SET status = 'Refunded'
+              WHERE order_id = ?
+            `).run(pOrder.id);
+          })();
+
+          resolvedRefunds++;
+        } else if (refundResult && refundResult.status === 'pending') {
+          db.prepare(`
+            UPDATE orders
+            SET refund_id = ?,
+                refund_error = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).run(refundResult.id, pOrder.id);
+        }
+      } catch (retryErr) {
+        console.warn(`Refund retry failed for order ${pOrder.id}:`, retryErr.message);
+        db.prepare(`
+          UPDATE orders
+          SET refund_error = ?,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(retryErr.message, pOrder.id);
+      }
+    } catch (err) {
+      console.error(`Refund reconciliation error for order ${pOrder.id}:`, err);
+    }
+  }
+
+  return resolvedRefunds;
+}
+
+/**
  * Payment-aware reconciliation of expired order reservations.
  * 
  * Before releasing inventory or cancelling, the gateway order status is inspected
  * with Razorpay. If Razorpay shows the order has been paid/captured, the reservation
  * is retained and the order is marked 'Paid' instead of being cancelled.
- * If the gateway confirms the order was not paid, the reservation is released exactly once.
+ * If the gateway lookup times out or fails, the reservation is KEPT PENDING and retried.
+ * Stock/coupon reservations are ONLY released when the gateway positively confirms unpaid status.
  */
 async function reconcileExpiredReservations(options = {}) {
   const now = options.now || Date.now();
   const cutoffSql = new Date(now - ORDER_RESERVATION_TTL_MS).toISOString().replace('T', ' ').slice(0, 19);
 
-  // Find pending orders that have exceeded their reservation lifetime
+  let reconciledCount = 0;
+
+  // 1. Reconcile any pending or retrying refunds
+  const resolvedRefunds = await reconcilePendingRefunds();
+  reconciledCount += resolvedRefunds;
+
+  // 2. Find pending orders that have exceeded their reservation lifetime
   const expiredOrders = db.prepare(`
     SELECT id, order_number, user_id, razorpay_order_id, coupon_code, total_amount
     FROM orders 
@@ -40,54 +188,123 @@ async function reconcileExpiredReservations(options = {}) {
   `).all(now, cutoffSql);
 
   if (!expiredOrders || expiredOrders.length === 0) {
-    return 0;
+    return reconciledCount;
   }
-
-  let reconciledCount = 0;
 
   for (const expOrder of expiredOrders) {
     try {
-      // 1. Gateway Status Check: Verify with Razorpay before cancelling
       let gatewayOrder = null;
+      let gatewayConfirmedUnpaid = false;
+
+      // 1. Gateway Status Check: Verify with Razorpay before cancelling
       if (expOrder.razorpay_order_id) {
-        gatewayOrder = await fetchRazorpayOrder(expOrder.razorpay_order_id);
-      }
-
-      // If Razorpay reports that the customer actually completed payment:
-      if (gatewayOrder && (gatewayOrder.status === 'paid' || gatewayOrder.amount_paid > 0)) {
-        const payments = await fetchRazorpayOrderPayments(expOrder.razorpay_order_id);
-        const successfulPayment = payments.find(p => p.status === 'captured') || payments[0];
-        const paymentId = successfulPayment ? successfulPayment.id : `pay_rec_${Date.now()}`;
-
-        const paidTx = db.transaction(() => {
-          const updateRes = db.prepare(`
-            UPDATE orders
-            SET payment_status = 'Paid',
-                status = 'Placed',
-                razorpay_payment_id = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND payment_status = 'Pending'
-          `).run(paymentId, expOrder.id);
-
-          if (updateRes.changes > 0) {
-            db.prepare(`
-              INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
-              VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
-            `).run(expOrder.id, expOrder.razorpay_order_id, paymentId, (gatewayOrder.amount_paid || expOrder.total_amount * 100));
-
-            db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(expOrder.user_id);
-            return true;
-          }
-          return false;
-        });
-
-        if (paidTx()) {
-          reconciledCount++;
-          continue; // Successfully recovered as Paid, DO NOT cancel or release stock
+        try {
+          gatewayOrder = await fetchRazorpayOrder(expOrder.razorpay_order_id);
+        } catch (fetchErr) {
+          console.warn(`Gateway status lookup failed for order ${expOrder.id} (${expOrder.razorpay_order_id}); keeping reservation pending:`, fetchErr.message);
+          // State is UNKNOWN (network timeout / temporary failure): DO NOT release stock!
+          continue;
         }
+
+        if (!gatewayOrder) {
+          // Inconclusive status: keep reservation pending and retry on next run
+          continue;
+        }
+
+        // If Razorpay reports that the customer actually completed payment:
+        const isPaid = gatewayOrder.status === 'paid' || (gatewayOrder.amount_paid && gatewayOrder.amount_paid > 0);
+        if (isPaid) {
+          let payments = [];
+          try {
+            payments = await fetchRazorpayOrderPayments(expOrder.razorpay_order_id);
+          } catch (pErr) {
+            console.warn(`Gateway payments fetch failed for order ${expOrder.id}:`, pErr.message);
+          }
+          const successfulPayment = payments.find(p => p.status === 'captured') || payments[0];
+          const paymentId = successfulPayment ? successfulPayment.id : `pay_rec_${Date.now()}`;
+
+          const paidTx = db.transaction(() => {
+            const updateRes = db.prepare(`
+              UPDATE orders
+              SET payment_status = 'Paid',
+                  status = 'Placed',
+                  razorpay_payment_id = ?,
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = ? AND payment_status = 'Pending'
+            `).run(paymentId, expOrder.id);
+
+            if (updateRes.changes > 0) {
+              db.prepare(`
+                INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+                VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
+              `).run(expOrder.id, expOrder.razorpay_order_id, paymentId, (gatewayOrder.amount_paid || expOrder.total_amount * 100));
+
+              db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(expOrder.user_id);
+              return true;
+            }
+            return false;
+          });
+
+          if (paidTx()) {
+            reconciledCount++;
+            continue; // Successfully recovered as Paid, DO NOT cancel or release stock
+          }
+        }
+
+        // Gateway order exists and is not reported paid.
+        // Check payments list to verify no captured payment exists
+        let payments = [];
+        try {
+          payments = await fetchRazorpayOrderPayments(expOrder.razorpay_order_id);
+        } catch (pErr) {
+          console.warn(`Gateway payments check failed for order ${expOrder.id}; preserving reservation:`, pErr.message);
+          // Payment state unknown: keep pending and retry
+          continue;
+        }
+
+        const capturedPayment = payments.find(p => p.status === 'captured');
+        if (capturedPayment) {
+          const paymentId = capturedPayment.id;
+          const paidTx = db.transaction(() => {
+            const updateRes = db.prepare(`
+              UPDATE orders
+              SET payment_status = 'Paid',
+                  status = 'Placed',
+                  razorpay_payment_id = ?,
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id = ? AND payment_status = 'Pending'
+            `).run(paymentId, expOrder.id);
+
+            if (updateRes.changes > 0) {
+              db.prepare(`
+                INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+                VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
+              `).run(expOrder.id, expOrder.razorpay_order_id, paymentId, (capturedPayment.amount || expOrder.total_amount * 100));
+
+              db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(expOrder.user_id);
+              return true;
+            }
+            return false;
+          });
+
+          if (paidTx()) {
+            reconciledCount++;
+            continue;
+          }
+        }
+
+        // Positively confirmed unpaid: gateway order exists, amount_paid == 0, and no captured payments
+        gatewayConfirmedUnpaid = true;
+      } else {
+        // No gateway order ID was ever created for this order
+        gatewayConfirmedUnpaid = true;
       }
 
-      // 2. Gateway confirms order is NOT paid: release reservation exactly once
+      if (!gatewayConfirmedUnpaid) {
+        continue;
+      }
+
+      // 2. Gateway positively confirms order is NOT paid: release reservation exactly once
       const releaseTx = db.transaction(() => {
         const updateRes = db.prepare(`
           UPDATE orders
@@ -149,39 +366,95 @@ async function reconcileSingleExpiredOrder(orderId, now = Date.now()) {
   if (!isExpired) return false;
 
   let gatewayOrder = null;
+  let gatewayConfirmedUnpaid = false;
+
   if (order.razorpay_order_id) {
-    gatewayOrder = await fetchRazorpayOrder(order.razorpay_order_id);
-  }
+    try {
+      gatewayOrder = await fetchRazorpayOrder(order.razorpay_order_id);
+    } catch (err) {
+      console.warn(`Gateway check failed for order ${order.id}; keeping pending:`, err.message);
+      return false; // Unknown status, do not cancel
+    }
 
-  if (gatewayOrder && (gatewayOrder.status === 'paid' || gatewayOrder.amount_paid > 0)) {
-    const payments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
-    const successfulPayment = payments.find(p => p.status === 'captured') || payments[0];
-    const paymentId = successfulPayment ? successfulPayment.id : `pay_rec_${Date.now()}`;
+    if (!gatewayOrder) return false;
 
-    const paidTx = db.transaction(() => {
-      const updateRes = db.prepare(`
-        UPDATE orders
-        SET payment_status = 'Paid',
-            status = 'Placed',
-            razorpay_payment_id = ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND payment_status = 'Pending'
-      `).run(paymentId, order.id);
-
-      if (updateRes.changes > 0) {
-        db.prepare(`
-          INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
-          VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
-        `).run(order.id, order.razorpay_order_id, paymentId, (gatewayOrder.amount_paid || order.total_amount * 100));
-
-        db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(order.user_id);
-        return true;
+    if (gatewayOrder.status === 'paid' || (gatewayOrder.amount_paid && gatewayOrder.amount_paid > 0)) {
+      let payments = [];
+      try {
+        payments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
+      } catch (pErr) {
+        console.warn(`Gateway payments fetch failed for order ${order.id}:`, pErr.message);
       }
-      return false;
-    });
+      const successfulPayment = payments.find(p => p.status === 'captured') || payments[0];
+      const paymentId = successfulPayment ? successfulPayment.id : `pay_rec_${Date.now()}`;
 
-    return paidTx();
+      const paidTx = db.transaction(() => {
+        const updateRes = db.prepare(`
+          UPDATE orders
+          SET payment_status = 'Paid',
+              status = 'Placed',
+              razorpay_payment_id = ?,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND payment_status = 'Pending'
+        `).run(paymentId, order.id);
+
+        if (updateRes.changes > 0) {
+          db.prepare(`
+            INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+            VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
+          `).run(order.id, order.razorpay_order_id, paymentId, (gatewayOrder.amount_paid || order.total_amount * 100));
+
+          db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(order.user_id);
+          return true;
+        }
+        return false;
+      });
+
+      return paidTx();
+    }
+
+    let payments = [];
+    try {
+      payments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
+    } catch (pErr) {
+      console.warn(`Gateway payments check failed for order ${order.id}; keeping pending:`, pErr.message);
+      return false;
+    }
+
+    const capturedPayment = payments.find(p => p.status === 'captured');
+    if (capturedPayment) {
+      const paymentId = capturedPayment.id;
+      const paidTx = db.transaction(() => {
+        const updateRes = db.prepare(`
+          UPDATE orders
+          SET payment_status = 'Paid',
+              status = 'Placed',
+              razorpay_payment_id = ?,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND payment_status = 'Pending'
+        `).run(paymentId, order.id);
+
+        if (updateRes.changes > 0) {
+          db.prepare(`
+            INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+            VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
+          `).run(order.id, order.razorpay_order_id, paymentId, (capturedPayment.amount || order.total_amount * 100));
+
+          db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(order.user_id);
+          return true;
+        }
+        return false;
+      });
+
+      return paidTx();
+    }
+
+    gatewayConfirmedUnpaid = true;
+  } else {
+    gatewayConfirmedUnpaid = true;
   }
+
+  if (!gatewayConfirmedUnpaid) return false;
 
   const releaseTx = db.transaction(() => {
     const updateRes = db.prepare(`
@@ -584,6 +857,15 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
     if (order.payment_status === 'Refunded') {
       return res.status(400).json({ error: 'Order has already been refunded.' });
     }
+    if (order.payment_status === 'Refund_Pending') {
+      return res.status(409).json({
+        error: 'Order refund is currently in progress. Our automated reconciler will confirm completion.',
+        payment_status: 'Refund_Pending',
+        refunded: false,
+        refund_id: order.refund_id,
+        order_number: order.order_number
+      });
+    }
 
     // 3. Match persisted gateway order identifier
     if (!order.razorpay_order_id || order.razorpay_order_id !== razorpay_order_id) {
@@ -758,6 +1040,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
 
     // Automated Refund Recovery: Items are no longer in stock
     let refundResult = null;
+    let refundError = null;
     try {
       refundResult = await refundRazorpayPayment(razorpay_payment_id, {
         amount: order.total_amount * 100,
@@ -769,27 +1052,48 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
       });
     } catch (refErr) {
       console.error('Automated refund error for expired order:', refErr);
+      refundError = refErr.message || 'Refund initiation failed';
     }
 
-    db.prepare(`
-      UPDATE orders SET
-        payment_status = 'Refunded',
-        status = 'Cancelled',
-        razorpay_payment_id = ?,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND user_id = ?
-    `).run(razorpay_payment_id, order.id, req.user.id);
+    const isRefundProcessed = Boolean(refundResult && refundResult.status === 'processed');
+    const isRefundPending = Boolean(refundResult && refundResult.status === 'pending');
+    const refundId = refundResult ? refundResult.id : null;
+    const finalPaymentStatus = isRefundProcessed ? 'Refunded' : 'Refund_Pending';
+    const paymentRecordStatus = isRefundProcessed ? 'Refunded' : (isRefundPending ? 'Refund_Pending' : 'Captured');
 
-    db.prepare(`
-      INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
-      VALUES (?, ?, ?, ?, ?, 'INR', 'Refunded', 'Razorpay')
-    `).run(order.id, razorpay_order_id, razorpay_payment_id, razorpay_signature, order.total_amount * 100);
+    db.transaction(() => {
+      db.prepare(`
+        UPDATE orders SET
+          payment_status = ?,
+          status = 'Cancelled',
+          razorpay_payment_id = ?,
+          refund_id = ?,
+          refund_error = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND user_id = ?
+      `).run(finalPaymentStatus, razorpay_payment_id, refundId, refundError, order.id, req.user.id);
+
+      db.prepare(`
+        INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+        VALUES (?, ?, ?, ?, ?, 'INR', ?, 'Razorpay')
+      `).run(order.id, razorpay_order_id, razorpay_payment_id, razorpay_signature, order.total_amount * 100, paymentRecordStatus);
+    })();
+
+    if (isRefundProcessed) {
+      return res.status(409).json({
+        error: 'Payment was charged, but the checkout reservation expired and the selected saree is no longer in stock. A full refund has been completed to your original payment method.',
+        payment_status: 'Refunded',
+        refunded: true,
+        refund_id: refundId,
+        order_number: order.order_number
+      });
+    }
 
     return res.status(409).json({
-      error: 'Payment was charged, but the checkout reservation expired and the selected saree is no longer in stock. A full refund has been initiated to your original payment method.',
-      payment_status: 'Refunded',
-      refunded: true,
-      refund_id: refundResult ? refundResult.id : null,
+      error: 'Payment was charged, but the checkout reservation expired and the selected saree is no longer in stock. A full refund has been initiated and is currently processing. Our automated reconciler will confirm completion.',
+      payment_status: 'Refund_Pending',
+      refunded: false,
+      refund_id: refundId,
       order_number: order.order_number
     });
   } catch (err) {

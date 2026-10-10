@@ -182,6 +182,9 @@ async function fetchRazorpayOrder(orderId) {
       is_mock: true
     };
   }
+  if (orderId.startsWith('order_mock_failed_lookup_')) {
+    throw new Error('Simulated gateway lookup failure (network timeout)');
+  }
   if (orderId.startsWith('order_mock_')) {
     return {
       id: orderId,
@@ -192,13 +195,9 @@ async function fetchRazorpayOrder(orderId) {
   }
 
   if (razorpayInstance) {
-    try {
-      const order = await razorpayInstance.orders.fetch(orderId);
-      return order;
-    } catch (err) {
-      console.warn('Razorpay fetch order warning:', err.message);
-      return null;
-    }
+    // Fail loudly if Razorpay API call fails; do not return null to avoid false-unpaid assumptions
+    const order = await razorpayInstance.orders.fetch(orderId);
+    return order;
   }
 
   return {
@@ -219,18 +218,131 @@ async function fetchRazorpayOrderPayments(orderId) {
       order_id: orderId
     }];
   }
+  if (orderId.startsWith('order_mock_failed_lookup_')) {
+    throw new Error('Simulated gateway payments lookup failure');
+  }
   if (orderId.startsWith('order_mock_')) {
     return [];
   }
 
   if (razorpayInstance) {
-    try {
-      const payments = await razorpayInstance.orders.fetchPayments(orderId);
-      return payments.items || [];
-    } catch (err) {
-      console.warn('Razorpay fetch payments warning:', err.message);
-      return [];
-    }
+    const payments = await razorpayInstance.orders.fetchPayments(orderId);
+    return payments.items || [];
+  }
+
+  return [];
+}
+
+async function fetchRazorpayPayment(paymentId) {
+  if (!paymentId) return null;
+  if (paymentId.startsWith('pay_mock_refund_failed_')) {
+    return {
+      id: paymentId,
+      status: 'captured',
+      amount: 100000,
+      amount_refunded: 0,
+      refund_status: null,
+      is_mock: true
+    };
+  }
+  if (paymentId.startsWith('pay_mock_refund_pending_')) {
+    return {
+      id: paymentId,
+      status: 'captured',
+      amount: 100000,
+      amount_refunded: 0,
+      refund_status: null,
+      is_mock: true
+    };
+  }
+  if (paymentId.startsWith('pay_mock_refunded_')) {
+    return {
+      id: paymentId,
+      status: 'refunded',
+      amount: 100000,
+      amount_refunded: 100000,
+      refund_status: 'full',
+      is_mock: true
+    };
+  }
+  if (paymentId.startsWith('pay_mock_') || paymentId.startsWith('mock_')) {
+    return {
+      id: paymentId,
+      status: 'captured',
+      amount: 100000,
+      amount_refunded: 0,
+      is_mock: true
+    };
+  }
+
+  if (razorpayInstance) {
+    const payment = await razorpayInstance.payments.fetch(paymentId);
+    return payment;
+  }
+
+  return {
+    id: paymentId,
+    status: 'captured',
+    amount: 100000,
+    amount_refunded: 0,
+    is_mock: true
+  };
+}
+
+async function fetchRazorpayRefund(refundId) {
+  if (!refundId) return null;
+  if (refundId.startsWith('rfnd_mock_pending_')) {
+    return {
+      id: refundId,
+      status: 'pending',
+      is_mock: true
+    };
+  }
+  if (refundId.startsWith('rfnd_mock_')) {
+    return {
+      id: refundId,
+      status: 'processed',
+      is_mock: true
+    };
+  }
+
+  if (razorpayInstance) {
+    const refund = await razorpayInstance.refunds.fetch(refundId);
+    return refund;
+  }
+
+  return {
+    id: refundId,
+    status: 'processed',
+    is_mock: true
+  };
+}
+
+async function fetchRazorpayPaymentRefunds(paymentId) {
+  if (!paymentId) return [];
+  if (paymentId.startsWith('pay_mock_refund_pending_')) {
+    return [{
+      id: 'rfnd_mock_pending_1',
+      payment_id: paymentId,
+      status: 'pending',
+      is_mock: true
+    }];
+  }
+  if (paymentId.startsWith('pay_mock_refunded_')) {
+    return [{
+      id: 'rfnd_mock_processed_1',
+      payment_id: paymentId,
+      status: 'processed',
+      is_mock: true
+    }];
+  }
+  if (paymentId.startsWith('pay_mock_') || paymentId.startsWith('mock_')) {
+    return [];
+  }
+
+  if (razorpayInstance) {
+    const refunds = await razorpayInstance.payments.allRefunds(paymentId);
+    return refunds.items || [];
   }
 
   return [];
@@ -238,6 +350,20 @@ async function fetchRazorpayOrderPayments(orderId) {
 
 async function refundRazorpayPayment(paymentId, options = {}) {
   if (!paymentId) throw new Error('Payment ID is required to process a refund.');
+
+  if (paymentId.startsWith('pay_mock_refund_failed_')) {
+    throw new Error('Simulated gateway refund failure (network error)');
+  }
+
+  if (paymentId.startsWith('pay_mock_refund_pending_')) {
+    return {
+      id: 'rfnd_mock_pending_' + crypto.randomBytes(6).toString('hex'),
+      payment_id: paymentId,
+      amount: options.amount,
+      status: 'pending',
+      is_mock: true
+    };
+  }
 
   if (paymentId.startsWith('pay_mock_') || paymentId.startsWith('mock_')) {
     return {
@@ -250,17 +376,12 @@ async function refundRazorpayPayment(paymentId, options = {}) {
   }
 
   if (razorpayInstance) {
-    try {
-      const refund = await razorpayInstance.payments.refund(paymentId, {
-        amount: options.amount,
-        notes: options.notes || {},
-        speed: options.speed || 'normal'
-      });
-      return refund;
-    } catch (err) {
-      console.error('Razorpay refund error:', err.message);
-      throw err;
-    }
+    const refund = await razorpayInstance.payments.refund(paymentId, {
+      amount: options.amount,
+      notes: options.notes || {},
+      speed: options.speed || 'normal'
+    });
+    return refund;
   }
 
   return {
@@ -277,6 +398,9 @@ module.exports = {
   verifyPaymentSignature,
   fetchRazorpayOrder,
   fetchRazorpayOrderPayments,
+  fetchRazorpayPayment,
+  fetchRazorpayRefund,
+  fetchRazorpayPaymentRefunds,
   refundRazorpayPayment,
   isLiveCredentials,
   isLiveKeyMode,
