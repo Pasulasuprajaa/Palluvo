@@ -25,7 +25,14 @@ const db = require('../db/database');
 const { JWT_SECRET } = require('../middleware/auth');
 const paymentsRouter = require('../routes/payments');
 const { reconcilePendingRefunds, reconcileExpiredReservations } = paymentsRouter;
-const { refundRazorpayPayment, fetchRazorpayOrder, createRazorpayOrder } = require('../services/razorpay');
+const {
+  refundRazorpayPayment,
+  fetchRazorpayOrder,
+  createRazorpayOrder,
+  fetchRazorpayPaymentRefunds,
+  _setRazorpayInstanceForTest,
+  _getRazorpayInstanceForTest
+} = require('../services/razorpay');
 
 async function runTests() {
   console.log('🧪 Starting test suite for P1 (Idempotency Header & Test Isolation) and P2 (Reconciliation Authentication)...');
@@ -422,8 +429,104 @@ async function runTests() {
     );
     console.log('✅ PASS: [P1] payment.status === "refunded" without refund_status === "full" does not bypass partial refund balance handling');
 
+    // Scenario 8c: Rotate balance idempotency key on confirmed failure [P1]
+    // When a balance refund attempt definitively fails on the gateway, the reconciler must:
+    // 1. Record the failed balance refund ID in failed_refund_id.
+    // 2. Persist a fresh balance-attempt key (with _bal_ and new timestamp).
+    // 3. Clear refund_id to NULL.
+    // 4. On subsequent ambiguous retries, reuse the rotated balance key without regenerating.
+    const orderNum8c = `ORD-TEST-BAL-ROTATION-${nonce}`;
+    const initialBalKey8c = `rfnd_initial_bal_key_${nonce}_bal_100`;
+    db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_status, status, razorpay_order_id, razorpay_payment_id, refund_id, refund_idempotency_key, address_data, created_at)
+      VALUES (?, ?, 5000, 5000, 'Refund_Pending', 'Cancelled', 'order_mock_test_8c', 'pay_mock_refund_balance_retry_fail_8c', 'rfnd_mock_failed_bal_retry_1', ?, '{"city":"Pune"}', CURRENT_TIMESTAMP)
+    `).run(orderNum8c, customerUser.id, initialBalKey8c);
+    const order8c = db.prepare("SELECT id FROM orders WHERE order_number = ?").get(orderNum8c);
+
+    // Run reconciliation: Reconciler should recognize confirmed failure of balance refund rfnd_mock_failed_bal_retry_1.
+    // It must rotate the key, record failed_refund_id, and attempt retry (which simulates network error).
+    await reconcilePendingRefunds({ orderIds: [order8c.id] });
+    const refreshedOrder8c = db.prepare("SELECT * FROM orders WHERE id = ?").get(order8c.id);
+
+    assert.notStrictEqual(
+      refreshedOrder8c.refund_idempotency_key,
+      initialBalKey8c,
+      'Balance idempotency key must rotate after gateway-confirmed failure'
+    );
+    assert.ok(
+      refreshedOrder8c.refund_idempotency_key && refreshedOrder8c.refund_idempotency_key.includes('_bal_'),
+      'Fresh balance key must retain _bal_ identifier'
+    );
+    assert.ok(
+      refreshedOrder8c.failed_refund_id && refreshedOrder8c.failed_refund_id.includes('rfnd_mock_failed_bal_retry_1'),
+      'Failed balance refund ID must be recorded in failed_refund_id'
+    );
+    console.log('✅ PASS: [P1] Balance idempotency key rotates and failed refund ID recorded upon confirmed balance refund failure');
+
+    // Subsequent ambiguous retry of order 8c: must reuse the rotated balance key!
+    const rotatedBalKey8c = refreshedOrder8c.refund_idempotency_key;
+    await reconcilePendingRefunds({ orderIds: [order8c.id] });
+    const refreshedOrder8cAgain = db.prepare("SELECT * FROM orders WHERE id = ?").get(order8c.id);
+    assert.strictEqual(
+      refreshedOrder8cAgain.refund_idempotency_key,
+      rotatedBalKey8c,
+      'Rotated balance key must be reused on subsequent ambiguous retries'
+    );
+    console.log('✅ PASS: [P1] Rotated balance key reused on subsequent ambiguous retries after gateway failure');
+
+    // Scenario 8d: Confirmed failed balance refund followed by successful balance retry [P1]
+    const orderNum8d = `ORD-TEST-BAL-SUCCESS-${nonce}`;
+    const initialBalKey8d = `rfnd_initial_bal_success_${nonce}_bal_200`;
+    db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_status, status, razorpay_order_id, razorpay_payment_id, refund_id, refund_idempotency_key, address_data, created_at)
+      VALUES (?, ?, 5000, 5000, 'Refund_Pending', 'Cancelled', 'order_mock_test_8d', 'pay_mock_refund_balance_failed_8d', 'rfnd_mock_failed_bal_1', ?, '{"city":"Mumbai"}', CURRENT_TIMESTAMP)
+    `).run(orderNum8d, customerUser.id, initialBalKey8d);
+    const order8d = db.prepare("SELECT id FROM orders WHERE order_number = ?").get(orderNum8d);
+
+    await reconcilePendingRefunds({ orderIds: [order8d.id] });
+    const refreshedOrder8d = db.prepare("SELECT * FROM orders WHERE id = ?").get(order8d.id);
+    assert.notStrictEqual(
+      refreshedOrder8d.refund_idempotency_key,
+      initialBalKey8d,
+      'Balance key must rotate on confirmed failure before retry'
+    );
+    assert.strictEqual(
+      refreshedOrder8d.payment_status,
+      'Refunded',
+      'Order must transition to Refunded once successful balance retry completes remaining amount'
+    );
+    console.log('✅ PASS: [P1] Confirmed failed balance refund rotates key and successfully completes on subsequent retry');
+
+    // Scenario 8e: In-flight pending balance refund retained without rotation [P1]
+    const orderNum8e = `ORD-TEST-BAL-PENDING-${nonce}`;
+    const initialBalKey8e = `rfnd_initial_bal_pending_${nonce}_bal_300`;
+    db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_status, status, razorpay_order_id, razorpay_payment_id, refund_id, refund_idempotency_key, address_data, created_at)
+      VALUES (?, ?, 5000, 5000, 'Refund_Pending', 'Cancelled', 'order_mock_test_8e', 'pay_mock_refund_balance_pending_8e', NULL, ?, '{"city":"Delhi"}', CURRENT_TIMESTAMP)
+    `).run(orderNum8e, customerUser.id, initialBalKey8e);
+    const order8e = db.prepare("SELECT id FROM orders WHERE order_number = ?").get(orderNum8e);
+
+    await reconcilePendingRefunds({ orderIds: [order8e.id] });
+    const refreshedOrder8e = db.prepare("SELECT * FROM orders WHERE id = ?").get(order8e.id);
+    assert.strictEqual(
+      refreshedOrder8e.payment_status,
+      'Refund_Pending',
+      'In-flight pending balance refund must remain Refund_Pending'
+    );
+    assert.strictEqual(
+      refreshedOrder8e.refund_idempotency_key,
+      initialBalKey8e,
+      'Idempotency key must NOT be rotated when balance refund is still pending'
+    );
+    assert.strictEqual(
+      refreshedOrder8e.refund_id,
+      'rfnd_mock_pending_bal_1',
+      'In-flight pending balance refund ID must be retained'
+    );
+    console.log('✅ PASS: [P1] In-flight pending balance refund retained without key rotation or resubmission');
+
     // Scenario 9: Paginated refund list [P2]
-    // Payment has 10 failed refunds on page 1 and an older pending refund on page 2.
+    // Payment has 100 failed refunds on page 1 and an older pending refund on page 2 (item 101).
     // The reconciler must page through all pages, discover the older pending refund,
     // retain Refund_Pending, and NOT conclude all attempts failed or rotate the key.
     const orderNum9 = `ORD-TEST-PAGINATED-LIST-${nonce}`;
@@ -451,7 +554,65 @@ async function runTests() {
       initialKey9,
       'Idempotency key must NOT be rotated when older pending refund exists on page 2'
     );
-    console.log('✅ PASS: [P2] Paginated refund list discovers older pending refund across pages, retaining pending state without key rotation or duplicate refund');
+    console.log('✅ PASS: [P2] Paginated refund list discovers older pending refund across pages (101 items), retaining pending state without key rotation');
+
+    // Scenario 10: Direct 101+ refund pagination test across 100-item boundary [P2]
+    // Razorpay collections return count: 100 for a full page.
+    // Ensure fetchRazorpayPaymentRefunds requests page 2 with skip: 100 and aggregates all 101 items.
+    const pagedRequests = [];
+    const mockRazorpayClient = {
+      _isMock: true,
+      payments: {
+        allRefunds: async (payId, opts) => {
+          pagedRequests.push({ payId, ...opts });
+          if (opts.skip === 0) {
+            // Page 1: 100 failed refunds; Razorpay collection count indicates 100 items returned
+            const items = [];
+            for (let i = 1; i <= 100; i++) {
+              items.push({
+                id: `rfnd_paged_page1_${i}`,
+                payment_id: payId,
+                amount: 1000,
+                status: 'failed'
+              });
+            }
+            return {
+              entity: 'collection',
+              count: 100, // Collection count is the count of items in this response, NOT total refunds
+              items
+            };
+          } else if (opts.skip === 100) {
+            // Page 2: 1 older pending refund beyond the 100-item boundary
+            return {
+              entity: 'collection',
+              count: 1,
+              items: [{
+                id: 'rfnd_paged_page2_pending_101',
+                payment_id: payId,
+                amount: 1000,
+                status: 'pending'
+              }]
+            };
+          }
+          return { entity: 'collection', count: 0, items: [] };
+        }
+      }
+    };
+
+    const savedInstance = _getRazorpayInstanceForTest();
+    try {
+      _setRazorpayInstanceForTest(mockRazorpayClient);
+      const paginatedRefunds = await fetchRazorpayPaymentRefunds('pay_live_test_pagination_101');
+      assert.strictEqual(paginatedRefunds.length, 101, 'Must retrieve all 101 refunds across both pages');
+      assert.strictEqual(pagedRequests.length, 2, 'Must make exactly 2 requests (page 1 and page 2)');
+      assert.deepStrictEqual(pagedRequests[0], { payId: 'pay_live_test_pagination_101', count: 100, skip: 0 });
+      assert.deepStrictEqual(pagedRequests[1], { payId: 'pay_live_test_pagination_101', count: 100, skip: 100 });
+      assert.strictEqual(paginatedRefunds[100].id, 'rfnd_paged_page2_pending_101');
+      assert.strictEqual(paginatedRefunds[100].status, 'pending');
+      console.log('✅ PASS: [P2] fetchRazorpayPaymentRefunds paginates past full 100-refund page and discovers 101st refund');
+    } finally {
+      _setRazorpayInstanceForTest(savedInstance);
+    }
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {

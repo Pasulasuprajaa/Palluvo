@@ -201,6 +201,8 @@ async function reconcilePendingRefunds(options = {}) {
         ? payment.amount_refunded
         : 0;
       const totalRefundedPaise = Math.max(paymentAmountRefunded, processedRefundsPaise);
+      const remainingPaise = Math.max(0, targetAmountPaise - totalRefundedPaise);
+      const isBalanceRefund = totalRefundedPaise > 0 && remainingPaise > 0;
 
       // Confirm cumulative refunded amount covers full payment before transitioning to Refunded.
       // Do not accept status === 'refunded' unless refund_status === 'full' or totalRefundedPaise covers full amount.
@@ -216,7 +218,9 @@ async function reconcilePendingRefunds(options = {}) {
 
       if (refunds.length > 0 && refunds.every(r => r.status === 'failed' || r.status === 'cancelled')) {
         confirmedFailedOrCancelled = true;
-      } else if (singleRefund && (singleRefund.status === 'failed' || singleRefund.status === 'cancelled') && (!refunds || refunds.length === 0)) {
+      } else if (singleRefund && (singleRefund.status === 'failed' || singleRefund.status === 'cancelled')) {
+        confirmedFailedOrCancelled = true;
+      } else if (isBalanceRefund && currentConfirmedFailedIds.length > 0) {
         confirmedFailedOrCancelled = true;
       }
 
@@ -268,8 +272,6 @@ async function reconcilePendingRefunds(options = {}) {
       }
 
       // Step D: Balance initiation or retry eligibility:
-      const remainingPaise = Math.max(0, targetAmountPaise - totalRefundedPaise);
-      const isBalanceRefund = totalRefundedPaise > 0 && remainingPaise > 0;
       const hasPriorRefundAttempt = Boolean(pOrder.refund_id || (refunds && refunds.length > 0));
       const canRetry = isBalanceRefund ||
         !hasPriorRefundAttempt ||
@@ -287,30 +289,43 @@ async function reconcilePendingRefunds(options = {}) {
         let idempotencyKey;
         const targetRefundAmountPaise = isBalanceRefund ? remainingPaise : targetAmountPaise;
 
+        // Parse already recorded failed refund IDs:
+        const recordedFailedIds = (pOrder.failed_refund_id || '')
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
+
+        // Check if there are any confirmed failed refund IDs from either lookup source
+        // that have not yet been recorded in failed_refund_id:
+        const hasUnrecordedFailure = currentConfirmedFailedIds.length > 0 &&
+          currentConfirmedFailedIds.some(id => !recordedFailedIds.includes(id));
+
         if (isBalanceRefund) {
           // A partial refund was processed; customer is still owed remaining balance.
-          // Initiate refund for remainingPaise using a distinct balance idempotency key
-          // (reusing existing key if already created for balance retry).
-          if (pOrder.refund_idempotency_key && pOrder.refund_idempotency_key.includes('_bal_')) {
+          // Initiate refund for remainingPaise using a distinct balance idempotency key.
+          if (hasUnrecordedFailure) {
+            // Confirmed failed balance attempt: Razorpay requires a fresh key for a distinct attempt.
+            // Persist the new key, record all confirmed failed refund IDs, and clear refund_id.
+            idempotencyKey = `rfnd_${pOrder.id}_${pOrder.order_number}_bal_${Date.now()}`;
+            const allFailedIds = Array.from(new Set([...recordedFailedIds, ...currentConfirmedFailedIds])).join(',');
+            db.prepare(`
+              UPDATE orders
+              SET refund_idempotency_key = ?,
+                  failed_refund_id = ?,
+                  refund_id = NULL
+              WHERE id = ?
+            `).run(idempotencyKey, allFailedIds, pOrder.id);
+          } else if (pOrder.refund_idempotency_key && pOrder.refund_idempotency_key.includes('_bal_')) {
+            // Ambiguous retry or continuation of existing balance attempt:
+            // Reuse the stored idempotency key to satisfy Razorpay's idempotency guarantee.
             idempotencyKey = pOrder.refund_idempotency_key;
           } else {
+            // Initial balance refund attempt:
             idempotencyKey = `rfnd_${pOrder.id}_${pOrder.order_number}_bal_${Date.now()}`;
             db.prepare('UPDATE orders SET refund_idempotency_key = ? WHERE id = ?').run(idempotencyKey, pOrder.id);
           }
         } else {
           // Standard full refund attempt or retry of failed attempt:
-          // Parse already recorded failed refund IDs:
-          const recordedFailedIds = (pOrder.failed_refund_id || '')
-            .split(',')
-            .map(s => s.trim())
-            .filter(Boolean);
-
-          // Check if there are any confirmed failed refund IDs from either lookup source
-          // that have not yet been recorded in failed_refund_id:
-          const hasUnrecordedFailure = confirmedFailedOrCancelled &&
-            currentConfirmedFailedIds.length > 0 &&
-            currentConfirmedFailedIds.some(id => !recordedFailedIds.includes(id));
-
           if (hasUnrecordedFailure) {
             // Confirmed failed attempt: Razorpay requires a fresh key for a distinct attempt.
             // Persist the new key and record all confirmed failed refund IDs immediately so subsequent retries reuse this key.

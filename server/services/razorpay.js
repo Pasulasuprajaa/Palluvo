@@ -300,6 +300,18 @@ async function fetchRazorpayPayment(paymentId) {
       is_mock: true
     };
   }
+  if (paymentId.startsWith('pay_mock_refund_balance_failed_') ||
+      paymentId.startsWith('pay_mock_refund_balance_retry_fail_') ||
+      paymentId.startsWith('pay_mock_refund_balance_pending_')) {
+    return {
+      id: paymentId,
+      status: 'captured',
+      amount: 500000,
+      amount_refunded: 100000,
+      refund_status: 'partial',
+      is_mock: true
+    };
+  }
   if (paymentId.startsWith('pay_mock_refund_pending_')) {
     return {
       id: paymentId,
@@ -330,7 +342,7 @@ async function fetchRazorpayPayment(paymentId) {
     };
   }
 
-  if (process.env.DISABLE_REAL_GATEWAY === 'true') {
+  if (process.env.DISABLE_REAL_GATEWAY === 'true' && (!razorpayInstance || !razorpayInstance._isMock)) {
     throw new Error(`Real Razorpay gateway calls are disabled in this environment (test isolation); payment ${paymentId} cannot be fetched`);
   }
 
@@ -401,10 +413,64 @@ async function fetchRazorpayPaymentRefunds(paymentId) {
       is_mock: true
     }];
   }
+  if (paymentId.startsWith('pay_mock_refund_balance_failed_')) {
+    return [
+      {
+        id: 'rfnd_mock_partial_1',
+        payment_id: paymentId,
+        amount: 100000,
+        status: 'processed',
+        is_mock: true
+      },
+      {
+        id: 'rfnd_mock_failed_bal_1',
+        payment_id: paymentId,
+        amount: 400000,
+        status: 'failed',
+        is_mock: true
+      }
+    ];
+  }
+  if (paymentId.startsWith('pay_mock_refund_balance_retry_fail_')) {
+    return [
+      {
+        id: 'rfnd_mock_partial_1',
+        payment_id: paymentId,
+        amount: 100000,
+        status: 'processed',
+        is_mock: true
+      },
+      {
+        id: 'rfnd_mock_failed_bal_retry_1',
+        payment_id: paymentId,
+        amount: 400000,
+        status: 'failed',
+        is_mock: true
+      }
+    ];
+  }
+  if (paymentId.startsWith('pay_mock_refund_balance_pending_')) {
+    return [
+      {
+        id: 'rfnd_mock_partial_1',
+        payment_id: paymentId,
+        amount: 100000,
+        status: 'processed',
+        is_mock: true
+      },
+      {
+        id: 'rfnd_mock_pending_bal_1',
+        payment_id: paymentId,
+        amount: 400000,
+        status: 'pending',
+        is_mock: true
+      }
+    ];
+  }
   if (paymentId.startsWith('pay_mock_refund_paginated_')) {
-    // Simulated paginated list: page 1 has 10 failed refunds; page 2 has an older pending refund
+    // Simulated paginated list: page 1 has 100 failed refunds; page 2 has an older pending refund (item 101)
     const items = [];
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= 100; i++) {
       items.push({
         id: `rfnd_mock_paginated_failed_${i}`,
         payment_id: paymentId,
@@ -413,7 +479,7 @@ async function fetchRazorpayPaymentRefunds(paymentId) {
         is_mock: true
       });
     }
-    // Older pending refund that falls outside the first page of 10 items
+    // Older pending refund that falls outside the first page of 100 items (101st refund)
     items.push({
       id: 'rfnd_mock_paginated_older_pending',
       payment_id: paymentId,
@@ -454,7 +520,7 @@ async function fetchRazorpayPaymentRefunds(paymentId) {
     return [];
   }
 
-  if (process.env.DISABLE_REAL_GATEWAY === 'true') {
+  if (process.env.DISABLE_REAL_GATEWAY === 'true' && (!razorpayInstance || !razorpayInstance._isMock)) {
     throw new Error(`Real Razorpay gateway calls are disabled in this environment (test isolation); refunds for payment ${paymentId} cannot be fetched`);
   }
 
@@ -473,8 +539,11 @@ async function fetchRazorpayPaymentRefunds(paymentId) {
       const items = (response && Array.isArray(response.items)) ? response.items : [];
       allItems.push(...items);
 
-      const totalCount = (response && typeof response.count === 'number') ? response.count : null;
-      if (items.length < pageSize || (totalCount !== null && allItems.length >= totalCount) || items.length === 0) {
+      // Razorpay defines collection count as the number of items returned in that response (page count),
+      // not the total count of matching refunds across all pages.
+      // Therefore, pagination must continue while a page is full (items.length === pageSize),
+      // unless response explicitly indicates has_more === false.
+      if (!items || items.length < pageSize || (response && response.has_more === false)) {
         hasMore = false;
       } else {
         skip += items.length;
@@ -492,7 +561,7 @@ async function refundRazorpayPayment(paymentId, options = {}) {
 
   const idempotencyKey = options.idempotencyKey || null;
 
-  if (paymentId.startsWith('pay_mock_refund_failed_')) {
+  if (paymentId.startsWith('pay_mock_refund_failed_') || paymentId.startsWith('pay_mock_refund_balance_retry_fail_')) {
     throw new Error('Simulated gateway refund failure (network error)');
   }
 
@@ -570,6 +639,14 @@ async function refundRazorpayPayment(paymentId, options = {}) {
   throw new Error(`Razorpay client instance is not configured; cannot process refund for non-mock payment ${paymentId}`);
 }
 
+function _setRazorpayInstanceForTest(instance) {
+  razorpayInstance = instance;
+}
+
+function _getRazorpayInstanceForTest() {
+  return razorpayInstance;
+}
+
 module.exports = {
   createRazorpayOrder,
   verifyPaymentSignature,
@@ -583,8 +660,10 @@ module.exports = {
   isLiveKeyMode,
   isTestKeyMode,
   get isGatewayConfigured() {
-    return Boolean(razorpayInstance && process.env.DISABLE_REAL_GATEWAY !== 'true');
+    return Boolean(razorpayInstance && (process.env.DISABLE_REAL_GATEWAY !== 'true' || razorpayInstance._isMock));
   },
   key_id,
-  key_secret
+  key_secret,
+  _setRazorpayInstanceForTest,
+  _getRazorpayInstanceForTest
 };
