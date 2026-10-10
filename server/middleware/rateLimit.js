@@ -1,8 +1,18 @@
 const { rateLimit, ipKeyGenerator, MemoryStore } = require('express-rate-limit');
 
+const isServerless = Boolean(
+  process.env.VERCEL ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT ||
+  process.env.NOW_REGION ||
+  process.env.NETLIFY
+);
+
 /**
- * Shared distributed rate limit store supporting Vercel KV / Upstash Redis REST API
- * with graceful in-memory fallback for local development or single-instance environments.
+ * Shared distributed rate limit store supporting Vercel KV / Upstash Redis REST API.
+ * In serverless environments (Vercel, AWS Lambda), a shared distributed store is required
+ * and fails closed (HTTP 503) if unconfigured or unreachable to prevent distributed brute-force bypass.
+ * In local development and non-serverless single-instance servers, falls back to process-local MemoryStore.
  */
 class SharedRateLimitStore {
   constructor(prefix = 'rl') {
@@ -27,7 +37,21 @@ class SharedRateLimitStore {
     this.localStore.init(options);
   }
 
+  createStoreUnavailableError(details) {
+    const err = new Error(
+      `Shared rate limit storage is required for serverless deployments to prevent distributed quota bypass. ` +
+      (details ? `(${details}) ` : '') +
+      `Configure KV_REST_API_URL / KV_REST_API_TOKEN or UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN.`
+    );
+    err.status = 503;
+    err.code = 'RATE_LIMIT_STORE_UNAVAILABLE';
+    return err;
+  }
+
   async get(key) {
+    if (isServerless && !this.isShared) {
+      throw this.createStoreUnavailableError('Missing shared KV/Redis credentials');
+    }
     if (!this.isShared) {
       return this.localStore.get(key);
     }
@@ -51,11 +75,17 @@ class SharedRateLimitStore {
       const resetTime = new Date(Date.now() + (ttl > 0 ? ttl * 1000 : this.windowMs));
       return { totalHits: count, resetTime };
     } catch (err) {
+      if (isServerless) {
+        throw this.createStoreUnavailableError(err.message);
+      }
       return this.localStore.get(key);
     }
   }
 
   async increment(key) {
+    if (isServerless && !this.isShared) {
+      throw this.createStoreUnavailableError('Missing shared KV/Redis credentials');
+    }
     if (!this.isShared) {
       return this.localStore.increment(key);
     }
@@ -89,12 +119,18 @@ class SharedRateLimitStore {
       const resetTime = new Date(Date.now() + (ttl > 0 ? ttl * 1000 : this.windowMs));
       return { totalHits: count, resetTime };
     } catch (err) {
-      // Graceful fallback to local in-memory counter if network fails
+      if (isServerless) {
+        throw this.createStoreUnavailableError(err.message);
+      }
+      // Graceful fallback to local in-memory counter only for non-serverless
       return this.localStore.increment(key);
     }
   }
 
   async decrement(key) {
+    if (isServerless && !this.isShared) {
+      throw this.createStoreUnavailableError('Missing shared KV/Redis credentials');
+    }
     if (!this.isShared) {
       return this.localStore.decrement(key);
     }
@@ -104,11 +140,17 @@ class SharedRateLimitStore {
         headers: { Authorization: `Bearer ${this.restToken}` }
       });
     } catch (err) {
+      if (isServerless) {
+        throw this.createStoreUnavailableError(err.message);
+      }
       return this.localStore.decrement(key);
     }
   }
 
   async resetKey(key) {
+    if (isServerless && !this.isShared) {
+      throw this.createStoreUnavailableError('Missing shared KV/Redis credentials');
+    }
     if (!this.isShared) {
       return this.localStore.resetKey(key);
     }
@@ -118,12 +160,17 @@ class SharedRateLimitStore {
         headers: { Authorization: `Bearer ${this.restToken}` }
       });
     } catch (err) {
+      if (isServerless) {
+        throw this.createStoreUnavailableError(err.message);
+      }
       return this.localStore.resetKey(key);
     }
   }
 
   async resetAll() {
-    return this.localStore.resetAll();
+    if (!this.isShared) {
+      return this.localStore.resetAll();
+    }
   }
 
   shutdown() {
