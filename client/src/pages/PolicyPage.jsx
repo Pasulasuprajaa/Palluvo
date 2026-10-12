@@ -276,25 +276,46 @@ export default function PolicyPage({ initialTab = 'privacy', onNavigate }) {
                 Our luxury saree advisors are available Monday through Saturday to answer any questions regarding fabrics, tailoring, or returns.
               </p>
 
-              <div className="space-y-3 pt-2 text-xs border-t border-white/10">
-                <div className="flex items-start gap-2.5">
-                  <Phone className="w-4 h-4 text-[#C5A059] shrink-0 mt-0.5" />
-                  <div className="flex flex-col gap-0.5">
-                    <a href="tel:+918897776984" className="hover:text-[#C5A059] transition">+91 88977 76984 (Concierge)</a>
-                    <a href="tel:+918498854323" className="hover:text-[#C5A059] transition">+91 84988 54323 (Customer Care)</a>
-                    <a href="tel:+918106789789" className="hover:text-[#C5A059] transition">+91 81067 89789 (Support & Orders)</a>
-                  </div>
+              <div className="space-y-2.5 pt-2 text-xs border-t border-white/10">
+                <div className="space-y-1.5">
+                  <div className="text-[10px] uppercase tracking-wider text-[#C5A059] font-semibold">Direct Helplines</div>
+                  <a
+                    href="tel:+918897776984"
+                    className="min-h-[44px] flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#C5A059]/40 text-[#FAF7F2] hover:text-[#C5A059] transition font-medium cursor-pointer"
+                  >
+                    <Phone className="w-4 h-4 text-[#C5A059] shrink-0" />
+                    <span>+91 88977 76984 <span className="text-[#C5A059]/80 font-normal">(Concierge)</span></span>
+                  </a>
+                  <a
+                    href="tel:+918498854323"
+                    className="min-h-[44px] flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#C5A059]/40 text-[#FAF7F2] hover:text-[#C5A059] transition font-medium cursor-pointer"
+                  >
+                    <Phone className="w-4 h-4 text-[#C5A059] shrink-0" />
+                    <span>+91 84988 54323 <span className="text-[#C5A059]/80 font-normal">(Customer Care)</span></span>
+                  </a>
+                  <a
+                    href="tel:+918106789789"
+                    className="min-h-[44px] flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#C5A059]/40 text-[#FAF7F2] hover:text-[#C5A059] transition font-medium cursor-pointer"
+                  >
+                    <Phone className="w-4 h-4 text-[#C5A059] shrink-0" />
+                    <span>+91 81067 89789 <span className="text-[#C5A059]/80 font-normal">(Support & Orders)</span></span>
+                  </a>
+                  <a
+                    href="mailto:info@palluvo.store"
+                    className="min-h-[44px] flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#C5A059]/40 text-[#FAF7F2] hover:text-[#C5A059] transition font-medium cursor-pointer"
+                  >
+                    <Mail className="w-4 h-4 text-[#C5A059] shrink-0" />
+                    <span>info@palluvo.store</span>
+                  </a>
                 </div>
-                <div className="flex items-center gap-2.5">
-                  <Mail className="w-4 h-4 text-[#C5A059] shrink-0" />
-                  <a href="mailto:info@palluvo.store" className="hover:text-[#C5A059] transition">info@palluvo.store</a>
-                </div>
-                <div className="flex items-center gap-2.5">
+
+                <div className="flex items-center gap-2.5 px-1 py-1 text-[#FAF7F2]/75">
                   <Clock className="w-4 h-4 text-[#C5A059] shrink-0" />
                   <span>10:00 AM – 8:00 PM IST (Mon–Sat)</span>
                 </div>
-                <div className="flex flex-col gap-1.5 pt-2 border-t border-white/10 text-xs text-[#FAF7F2]/85">
-                  <div className="flex items-start gap-2">
+
+                <div className="flex flex-col gap-2 pt-2 border-t border-white/10 text-xs text-[#FAF7F2]/85">
+                  <div className="flex items-start gap-2 px-1">
                     <MapPin className="w-4 h-4 text-[#C5A059] shrink-0 mt-0.5" />
                     <span>Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</span>
                   </div>
@@ -302,8 +323,9 @@ export default function PolicyPage({ initialTab = 'privacy', onNavigate }) {
                     href="https://www.google.com/maps/search/?api=1&query=Lavelle+Road%2C+Shanthala+Nagar%2C+Bengaluru%2C+Karnataka+560001"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[#C5A059] hover:text-[#E0C07F] font-semibold underline underline-offset-2 flex items-center gap-1 min-h-[38px]"
+                    className="min-h-[44px] flex items-center justify-center gap-2 px-3 py-2 bg-[#C5A059] hover:bg-[#E0C07F] text-[#1F1A1C] font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-sm cursor-pointer"
                   >
+                    <MapPin className="w-4 h-4 text-[#1F1A1C]" />
                     <span>Visit Flagship on Google Maps ↗</span>
                   </a>
                 </div>
