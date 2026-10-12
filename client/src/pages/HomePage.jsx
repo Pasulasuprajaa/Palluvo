@@ -102,7 +102,7 @@ export default function HomePage({ onNavigate }) {
   return (
     <div className="flex flex-col">
       {/* 1. HERO SECTION */}
-      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] min-h-[560px] sm:min-h-[620px] md:min-h-[85vh]">
+      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] min-h-[480px] sm:min-h-[620px] md:min-h-[85vh]">
         {/* Background Image with Crisp Portrait Framing (Clickable to Explore Sarees) */}
         <a
           href="/sarees"
@@ -130,7 +130,7 @@ export default function HomePage({ onNavigate }) {
         </a>
 
         {/* Hero Content with Seamless Luxury Editorial Styling */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 md:py-20 lg:py-24 w-full flex flex-col justify-end md:justify-center pointer-events-none">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-10 md:py-20 lg:py-24 w-full flex flex-col justify-end md:justify-center pointer-events-none">
           <div className="max-w-xl md:max-w-lg lg:max-w-xl xl:max-w-2xl pointer-events-auto">
             {/* Editorial Tag */}
             <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-[0.25em] text-[#E0C07F] mb-1.5 flex items-center gap-1.5">
@@ -139,18 +139,18 @@ export default function HomePage({ onNavigate }) {
             </p>
 
             {/* Headline */}
-            <h1 className="font-serif text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-normal leading-tight tracking-wide text-[#FAF7F2] drop-shadow-md">
+            <h1 className="font-serif text-xl sm:text-4xl md:text-5xl lg:text-6xl font-normal leading-tight tracking-wide text-[#FAF7F2] drop-shadow-md">
               Every Drape, <br />
               <span className="italic text-[#E0C07F]">A Little Magic.</span>
             </h1>
 
             {/* Compact Description */}
-            <p className="mt-2 text-xs sm:text-sm md:text-base text-[#FAF7F2]/90 leading-relaxed font-sans max-w-lg drop-shadow-sm">
+            <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm md:text-base text-[#FAF7F2]/90 leading-relaxed font-sans max-w-lg drop-shadow-sm">
               Authentic handloom sarees crafted in pure zari and raw silk by master artisans.
             </p>
 
             {/* Action Button */}
-            <div className="mt-4 sm:mt-6 flex items-center w-full sm:w-auto">
+            <div className="mt-3 sm:mt-6 flex items-center w-full sm:w-auto">
               <a
                 href="/sarees"
                 onClick={(e) => {
@@ -158,7 +158,7 @@ export default function HomePage({ onNavigate }) {
                   e.preventDefault();
                   onNavigate('shop');
                 }}
-                className="px-6 sm:px-8 py-3 min-h-[44px] bg-gradient-to-r from-[#5B1425] to-[#7E1E34] hover:from-[#7E1E34] hover:to-[#5B1425] text-[#FAF7F2] font-bold text-xs sm:text-sm uppercase tracking-wider rounded-xl transition-all duration-300 shadow-lg hover:shadow-2xl flex items-center justify-center gap-2 border border-[#C5A059]/50 active:scale-95 cursor-pointer text-center"
+                className="px-5 sm:px-8 py-2.5 sm:py-3 min-h-[44px] bg-gradient-to-r from-[#5B1425] to-[#7E1E34] hover:from-[#7E1E34] hover:to-[#5B1425] text-[#FAF7F2] font-bold text-xs sm:text-sm uppercase tracking-wider rounded-xl transition-all duration-300 shadow-lg hover:shadow-2xl flex items-center justify-center gap-2 border border-[#C5A059]/50 active:scale-95 cursor-pointer text-center"
               >
                 <span>Explore Sarees</span>
                 <ArrowRight className="w-4 h-4 text-[#C5A059] shrink-0" />
@@ -166,7 +166,7 @@ export default function HomePage({ onNavigate }) {
             </div>
 
             {/* Sleek Compact Trust Badges */}
-            <div className="mt-3 sm:mt-5 pt-2.5 sm:pt-3 border-t border-white/15 flex items-center justify-between sm:justify-start sm:gap-5 text-[10px] sm:text-xs text-[#E0C07F] font-medium">
+            <div className="mt-2.5 sm:mt-5 pt-2 sm:pt-3 border-t border-white/15 flex items-center justify-between sm:justify-start sm:gap-5 text-[10px] sm:text-xs text-[#E0C07F] font-medium">
               <span className="flex items-center gap-1">✦ Handcrafted Luxury</span>
               <span className="text-white/30">•</span>
               <span>Master Artisans</span>
@@ -178,8 +178,8 @@ export default function HomePage({ onNavigate }) {
       </section>
 
       {/* 2. CATEGORY SECTION (Horizontal Swipeable Carousel on Mobile) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-14 w-full">
-        <div className="mb-6 sm:mb-8">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 sm:py-14 w-full">
+        <div className="mb-5 sm:mb-8">
           <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C]">
             Shop by Weave & Fabric
           </h2>

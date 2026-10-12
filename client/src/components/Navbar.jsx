@@ -519,7 +519,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                     className="min-h-[44px] flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white border border-[#EAE2D7] hover:border-[#5B1425] hover:text-[#5B1425] active:bg-[#F4EFEB] transition font-medium text-xs cursor-pointer"
                   >
                     <Phone className="w-4 h-4 text-[#C5A059] shrink-0" />
-                    <span>+91 81067 89789 <span className="text-[#6E6467] font-normal">(Support)</span></span>
+                    <span>+91 81067 89789 <span className="text-[#6E6467] font-normal">(Support & Orders)</span></span>
                   </a>
                   <a
                     href="mailto:info@palluvo.store"

@@ -120,7 +120,7 @@ export default function Footer({ onNavigate }) {
                 className="min-h-[44px] inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#C5A059]/40 text-[#FAF7F2] hover:text-[#C5A059] transition font-medium cursor-pointer"
               >
                 <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-                <span>+91 81067 89789 <span className="text-[#C5A059]/80 font-normal">(Support)</span></span>
+                <span>+91 81067 89789 <span className="text-[#C5A059]/80 font-normal">(Support & Orders)</span></span>
               </a>
             </div>
             <div className="text-xs text-[#FAF7F2]/80 flex items-center gap-1.5 pt-0.5">
@@ -261,7 +261,7 @@ export default function Footer({ onNavigate }) {
                     </a>
                     <a href="tel:+918106789789" className="min-h-[44px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
                       <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-                      <span>Support: +91 81067 89789</span>
+                      <span>Support & Orders: +91 81067 89789</span>
                     </a>
                     <a href="mailto:info@palluvo.store" className="min-h-[44px] flex items-center gap-2 text-xs text-[#FAF7F2]/90 hover:text-[#C5A059] transition">
                       <Mail className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
@@ -363,7 +363,7 @@ export default function Footer({ onNavigate }) {
                   className="min-h-[44px] hover:text-[#C5A059] transition flex items-center gap-2 text-left cursor-pointer text-[#FAF7F2]/90 font-medium py-2 px-1 rounded-md hover:bg-white/5"
                 >
                   <Phone className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-                  <span>+91 81067 89789 <span className="text-[10px] text-[#C5A059] font-normal">(Orders)</span></span>
+                  <span>+91 81067 89789 <span className="text-[10px] text-[#C5A059] font-normal">(Support & Orders)</span></span>
                 </a>
                 <a
                   href="mailto:info@palluvo.store"
