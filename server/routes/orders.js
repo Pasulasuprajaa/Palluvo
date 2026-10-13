@@ -201,6 +201,7 @@ router.post('/cancel/:id', authenticateToken, requireDurableStorage, async (req,
     let refundError = null;
     let initialIdempotencyKey = order.refund_idempotency_key || null;
     let paymentId = order.razorpay_payment_id || null;
+    let isRefundFull = false;
 
     // Persist and initiate idempotent refund workflow for captured paid orders
     if (order.payment_status === 'Paid') {
@@ -224,7 +225,7 @@ router.post('/cancel/:id', authenticateToken, requireDurableStorage, async (req,
       }
 
       const isRefundProcessed = Boolean(refundResult && refundResult.status === 'processed');
-      const isRefundFull = isRefundProcessed && (!refundResult.amount || refundResult.amount >= Math.round(order.total_amount * 100));
+      isRefundFull = isRefundProcessed && (!refundResult.amount || refundResult.amount >= Math.round(order.total_amount * 100));
       refundId = refundResult ? refundResult.id : null;
       finalPaymentStatus = isRefundFull ? 'Refunded' : 'Refund_Pending';
     }
@@ -243,6 +244,14 @@ router.post('/cancel/:id', authenticateToken, requireDurableStorage, async (req,
       `).run(finalPaymentStatus, paymentId, refundId, refundError, initialIdempotencyKey, order.id, req.user.id);
 
       if (updateRes.changes > 0) {
+        if (isRefundFull) {
+          db.prepare(`
+            UPDATE payments
+            SET status = 'Refunded'
+            WHERE order_id = ?
+          `).run(order.id);
+        }
+
         const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
         for (const item of items) {
           db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')

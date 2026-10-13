@@ -24,6 +24,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db/database');
 const { JWT_SECRET } = require('../middleware/auth');
 const paymentsRouter = require('../routes/payments');
+const ordersRouter = require('../routes/orders');
 const { reconcilePendingRefunds, reconcileExpiredReservations } = paymentsRouter;
 const {
   refundRazorpayPayment,
@@ -45,6 +46,7 @@ async function runTests() {
     const app = express();
     app.use(express.json());
     app.use('/api/payments', paymentsRouter);
+    app.use('/api/orders', ordersRouter);
 
     server = http.createServer(app);
     await new Promise(resolve => server.listen(0, resolve));
@@ -53,7 +55,7 @@ async function runTests() {
 
     async function request(reqPath, options = {}) {
       return new Promise((resolve, reject) => {
-        const fullUrl = `${baseUrl}${reqPath}`;
+        const fullUrl = reqPath.startsWith('/api/') ? `http://localhost:${port}${reqPath}` : `${baseUrl}${reqPath}`;
         const url = new URL(fullUrl);
         const req = http.request(url, {
           method: options.method || 'GET',
@@ -613,6 +615,69 @@ async function runTests() {
     } finally {
       _setRazorpayInstanceForTest(savedInstance);
     }
+
+    // --- TEST SUITE P2: Order Cancellation Refund & Payment Ledger Updates ---
+    console.log('\n--- Testing [P2] Order Cancellation Refund & Payment Ledger ---');
+    const cancelUser = { id: 999, name: 'Cancel Test User', email: 'cancel_user@example.com', role: 'user' };
+    db.prepare(`
+      INSERT OR IGNORE INTO users (id, name, email, password_hash, role)
+      VALUES (?, ?, ?, 'hash123', ?)
+    `).run(cancelUser.id, cancelUser.name, cancelUser.email, cancelUser.role);
+    const cancelUserToken = jwt.sign({ id: cancelUser.id, email: cancelUser.email, role: cancelUser.role }, JWT_SECRET);
+
+    const cancelOrder = {
+      order_number: 'ORD-CANCEL-PAY-LEDGER-1',
+      user_id: cancelUser.id,
+      subtotal: 4500,
+      total_amount: 4500,
+      payment_method: 'razorpay',
+      payment_status: 'Paid',
+      razorpay_order_id: 'order_mock_cancel_1',
+      razorpay_payment_id: 'pay_mock_cancel_full_1',
+      status: 'Confirmed',
+      address_data: JSON.stringify({ name: 'Cancel Test', city: 'Hyderabad' })
+    };
+    const cancelOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, razorpay_payment_id, status, address_data)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      cancelOrder.order_number,
+      cancelOrder.user_id,
+      cancelOrder.subtotal,
+      cancelOrder.total_amount,
+      cancelOrder.payment_method,
+      cancelOrder.payment_status,
+      cancelOrder.razorpay_order_id,
+      cancelOrder.razorpay_payment_id,
+      cancelOrder.status,
+      cancelOrder.address_data
+    );
+    const cancelOrderId = cancelOrderInsert.lastInsertRowid;
+
+    // Insert corresponding payment record with status 'Captured'
+    db.prepare(`
+      INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status)
+      VALUES (?, ?, ?, 'sig_mock', ?, 'INR', 'Captured')
+    `).run(cancelOrderId, cancelOrder.razorpay_order_id, cancelOrder.razorpay_payment_id, Math.round(cancelOrder.total_amount * 100));
+
+    // Cancel order via POST /api/orders/cancel/:id
+    const cancelRes = await request(`/api/orders/cancel/${cancelOrderId}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cancelUserToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    assert.strictEqual(cancelRes.status, 200, 'Order cancellation should return 200 OK');
+    assert.strictEqual(cancelRes.body.refunded, true, 'Immediate processed refund should mark refunded: true');
+
+    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(cancelOrderId);
+    assert.strictEqual(updatedOrder.status, 'Cancelled', 'Order status must be Cancelled');
+    assert.strictEqual(updatedOrder.payment_status, 'Refunded', 'Order payment_status must be Refunded');
+
+    const updatedPayment = db.prepare('SELECT * FROM payments WHERE order_id = ?').get(cancelOrderId);
+    assert.strictEqual(updatedPayment.status, 'Refunded', 'Payments ledger status must be updated to Refunded');
+    console.log('✅ PASS: [P2] Order cancellation updates payment ledger status to Refunded on immediate full refund');
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {
