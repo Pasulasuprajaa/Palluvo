@@ -36,6 +36,14 @@
         }
       ],
       "destination": "/sarees/category-:slug.html"
+    },
+    {
+      "source": "/sarees/:slug",
+      "destination": "/api/render?path=/sarees/:slug"
+    },
+    {
+      "source": "/product/:slug",
+      "destination": "/api/render?path=/product/:slug"
     }
   ]
 }

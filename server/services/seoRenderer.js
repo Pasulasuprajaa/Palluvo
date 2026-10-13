@@ -310,10 +310,11 @@ function injectMetaTags(html, meta) {
 
   // Robots meta tag
   const isNoIndex = meta.isNotFound || meta.isNoIndex;
+  const robotsDirective = isNoIndex ? 'noindex, nofollow' : 'index, follow';
   if (modified.includes('<meta name="robots"')) {
-    modified = modified.replace(/<meta\s+name="robots"\s+content=".*?"\s*\/?>/is, `<meta name="robots" content="${isNoIndex ? 'noindex, nofollow' : 'index, follow'}" />`);
-  } else if (isNoIndex) {
-    modified = modified.replace('</head>', '  <meta name="robots" content="noindex, nofollow" />\n  </head>');
+    modified = modified.replace(/<meta\s+name="robots"\s+content=".*?"\s*\/?>/is, `<meta name="robots" content="${robotsDirective}" />`);
+  } else {
+    modified = modified.replace('</head>', `  <meta name="robots" content="${robotsDirective}" />\n  </head>`);
   }
 
   return modified;

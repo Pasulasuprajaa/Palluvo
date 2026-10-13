@@ -86,31 +86,49 @@ if (fs.existsSync(clientPublic)) {
   app.use(express.static(clientPublic, { index: false }));
 }
 
-// Serve dynamic SEO metadata for page routes and social crawlers
-app.use((req, res, next) => {
-  if (req.method !== 'GET') {
-    return next();
-  }
-  if (req.path.startsWith('/api') || req.path.startsWith('/public')) {
-    return next();
-  }
-
+function renderPageWithSeo(targetPath, query, req, res, next) {
   const htmlPath = fs.existsSync(clientIndex) ? clientIndex : (fs.existsSync(devIndex) ? devIndex : null);
   if (!htmlPath) return next();
 
   try {
     const rawHtml = fs.readFileSync(htmlPath, 'utf8');
-    const meta = getMetaForRoute(req.path, req.query);
+    const meta = getMetaForRoute(targetPath, query || {});
     const finalHtml = injectMetaTags(rawHtml, meta);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     if (meta.isNotFound) {
       return res.status(404).send(finalHtml);
     }
-    return res.send(finalHtml);
+    return res.status(200).send(finalHtml);
   } catch (err) {
     console.error('HTML SEO injection error:', err);
     return next();
   }
+}
+
+// Dedicated dynamic renderer endpoint for Vercel rewrites (e.g. /api/render?path=/sarees/:slug)
+app.get('/api/render', (req, res, next) => {
+  let targetPath = (req.query.path || req.headers['x-matched-path'] || req.url || '').split('?')[0];
+  if (!targetPath.startsWith('/')) {
+    targetPath = '/' + targetPath;
+  }
+  return renderPageWithSeo(targetPath, req.query, req, res, next);
+});
+
+// Serve dynamic SEO metadata for page routes and social crawlers
+app.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    return next();
+  }
+
+  // Handle serverless platform rewrites (e.g. x-matched-path on Vercel)
+  const matchedPath = req.headers['x-matched-path'];
+  const effectivePath = (matchedPath && !matchedPath.startsWith('/api')) ? matchedPath : req.path;
+
+  if (effectivePath.startsWith('/api') || effectivePath.startsWith('/public')) {
+    return next();
+  }
+
+  return renderPageWithSeo(effectivePath, req.query, req, res, next);
 });
 
 // Global error handler

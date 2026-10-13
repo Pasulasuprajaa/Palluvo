@@ -1,8 +1,102 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const db = require('../db/database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
+const { getMetaForRoute, injectMetaTags } = require('../services/seoRenderer');
+
+function publishProductRoute(productData) {
+  try {
+    const slug = productData?.slug;
+    if (!slug) return;
+
+    // 1. Update server/data/catalog.json if available
+    const catalogPath = path.join(__dirname, '..', 'data', 'catalog.json');
+    if (process.env.NODE_ENV !== 'test' && fs.existsSync(catalogPath)) {
+      try {
+        const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+        if (!Array.isArray(catalog.products)) {
+          catalog.products = [];
+        }
+        const existingIdx = catalog.products.findIndex(p => p.slug === slug);
+        const entry = {
+          name: productData.name,
+          slug: slug,
+          tagline: productData.tagline || '',
+          description: productData.description || productData.name,
+          short_desc: productData.short_desc || productData.name,
+          price: parseInt(productData.price, 10),
+          mrp: parseInt(productData.mrp, 10),
+          category_slug: productData.category_slug || 'banarasi',
+          fabric: productData.fabric,
+          occasion: productData.occasion,
+          primary_image: productData.primary_image || (productData.images && productData.images[0]) || '/images/categories/banarasi.jpg',
+          images: Array.isArray(productData.images) && productData.images.length > 0
+            ? productData.images.map(img => typeof img === 'string' ? img : img.image_url)
+            : [productData.primary_image || '/images/categories/banarasi.jpg']
+        };
+        if (existingIdx >= 0) {
+          catalog.products[existingIdx] = { ...catalog.products[existingIdx], ...entry };
+        } else {
+          catalog.products.push(entry);
+        }
+        fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2), 'utf8');
+      } catch (catErr) {
+        console.warn('Could not update catalog.json for published product:', catErr.message);
+      }
+    }
+
+    // 2. Publish prerendered static route file if client/dist exists
+    const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
+    const indexHtmlPath = path.join(clientDist, 'index.html');
+    if (fs.existsSync(indexHtmlPath)) {
+      const templateHtml = fs.readFileSync(indexHtmlPath, 'utf8');
+      const meta = getMetaForRoute(`/sarees/${slug}`);
+      const renderedHtml = injectMetaTags(templateHtml, meta);
+
+      const writeRoute = (routePath) => {
+        const cleanRoute = routePath.replace(/^\//, '').replace(/\/$/, '');
+        const targetDir = path.join(clientDist, cleanRoute);
+        fs.mkdirSync(targetDir, { recursive: true });
+        fs.writeFileSync(path.join(targetDir, 'index.html'), renderedHtml, 'utf8');
+      };
+
+      writeRoute(`/sarees/${slug}`);
+      writeRoute(`/product/${slug}`);
+    }
+  } catch (err) {
+    console.warn('Publish product route warning:', err.message);
+  }
+}
+
+function unpublishProductRoute(slug) {
+  try {
+    if (!slug) return;
+    const catalogPath = path.join(__dirname, '..', 'data', 'catalog.json');
+    if (process.env.NODE_ENV !== 'test' && fs.existsSync(catalogPath)) {
+      try {
+        const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+        if (Array.isArray(catalog.products)) {
+          catalog.products = catalog.products.filter(p => p.slug !== slug);
+          fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2), 'utf8');
+        }
+      } catch (e) {}
+    }
+
+    const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
+    const removeDir = (routePath) => {
+      const cleanRoute = routePath.replace(/^\//, '').replace(/\/$/, '');
+      const targetDir = path.join(clientDist, cleanRoute);
+      if (fs.existsSync(targetDir)) {
+        fs.rmSync(targetDir, { recursive: true, force: true });
+      }
+    };
+    removeDir(`/sarees/${slug}`);
+    removeDir(`/product/${slug}`);
+  } catch (e) {}
+}
 
 // Protect all admin routes
 router.use(authenticateToken, requireAdmin);
@@ -186,6 +280,23 @@ router.post('/products', requireDurableStorage, (req, res) => {
       });
     }
 
+    // Publish route statically to catalog.json and client/dist if present
+    const catRow = db.prepare('SELECT slug FROM categories WHERE id = ?').get(category_id);
+    publishProductRoute({
+      name: name.trim(),
+      slug,
+      tagline,
+      description,
+      short_desc,
+      category_slug: catRow?.slug || 'banarasi',
+      fabric,
+      occasion,
+      price,
+      mrp,
+      primary_image: (images && images[0]) || 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=1000&q=85',
+      images
+    });
+
     res.status(201).json({ message: '✨ Saree created successfully in PALLUVO catalog.', productId: prodId, slug });
   } catch (err) {
     console.error('Admin create product error:', err);
@@ -259,6 +370,16 @@ router.put('/products/:id', requireDurableStorage, (req, res) => {
       });
     }
 
+    const updatedProd = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
+    if (updatedProd) {
+      const catRow = db.prepare('SELECT slug FROM categories WHERE id = ?').get(updatedProd.category_id);
+      publishProductRoute({
+        ...updatedProd,
+        category_slug: catRow?.slug || 'banarasi',
+        images: images || []
+      });
+    }
+
     res.json({ message: 'Product updated successfully.' });
   } catch (err) {
     console.error('Admin update product error:', err);
@@ -269,7 +390,11 @@ router.put('/products/:id', requireDurableStorage, (req, res) => {
 // DELETE /api/admin/products/:id
 router.delete('/products/:id', requireDurableStorage, (req, res) => {
   try {
+    const prod = db.prepare('SELECT slug FROM products WHERE id = ?').get(req.params.id);
     db.prepare('DELETE FROM products WHERE id = ?').run(req.params.id);
+    if (prod && prod.slug) {
+      unpublishProductRoute(prod.slug);
+    }
     res.json({ message: 'Product deleted successfully.' });
   } catch (err) {
     console.error('Admin delete product error:', err);

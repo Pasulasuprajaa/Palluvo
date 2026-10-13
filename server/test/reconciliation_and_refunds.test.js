@@ -25,6 +25,8 @@ const db = require('../db/database');
 const { JWT_SECRET } = require('../middleware/auth');
 const paymentsRouter = require('../routes/payments');
 const ordersRouter = require('../routes/orders');
+const adminRouter = require('../routes/admin');
+const { getMetaForRoute, injectMetaTags } = require('../services/seoRenderer');
 const { reconcilePendingRefunds, reconcileExpiredReservations } = paymentsRouter;
 const {
   refundRazorpayPayment,
@@ -47,6 +49,21 @@ async function runTests() {
     app.use(express.json());
     app.use('/api/payments', paymentsRouter);
     app.use('/api/orders', ordersRouter);
+    app.use('/api/admin', adminRouter);
+    app.get('/api/render', (req, res, next) => {
+      let targetPath = (req.query.path || req.headers['x-matched-path'] || req.url || '').split('?')[0];
+      if (!targetPath.startsWith('/')) {
+        targetPath = '/' + targetPath;
+      }
+      const rawHtml = '<!DOCTYPE html><html><head><title>Default</title></head><body>App</body></html>';
+      const meta = getMetaForRoute(targetPath, req.query || {});
+      const finalHtml = injectMetaTags(rawHtml, meta);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      if (meta.isNotFound) {
+        return res.status(404).send(finalHtml);
+      }
+      return res.status(200).send(finalHtml);
+    });
 
     server = http.createServer(app);
     await new Promise(resolve => server.listen(0, resolve));
@@ -678,6 +695,80 @@ async function runTests() {
     const updatedPayment = db.prepare('SELECT * FROM payments WHERE order_id = ?').get(cancelOrderId);
     assert.strictEqual(updatedPayment.status, 'Refunded', 'Payments ledger status must be updated to Refunded');
     console.log('✅ PASS: [P2] Order cancellation updates payment ledger status to Refunded on immediate full refund');
+
+    // --- TEST SUITE P2: Runtime Product URL Preservation & Real 404 Routing ---
+    console.log('\n--- Testing [P2] Runtime Product URLs & Real 404 Routing ---');
+
+    // 1. Unknown product slug should return real 404 with noindex metadata
+    const unknownRes = await request('/api/render?path=/sarees/completely-unknown-saree-slug-999');
+    assert.strictEqual(unknownRes.status, 404, 'Unknown saree slug must return HTTP 404 status');
+    assert(unknownRes.body && typeof unknownRes.body === 'string', 'Body must be HTML string');
+    assert(unknownRes.body.includes('noindex, nofollow'), 'Unknown product route must include noindex, nofollow meta tag');
+    assert(unknownRes.body.includes('/404'), 'Unknown product route must set canonical to /404');
+    console.log('✅ PASS: [P2] Unknown product URL returns real 404 status and non-indexable metadata');
+
+    // 2. Admin creates a runtime product
+    const runtimeAdminUser = { id: 888, name: 'Admin Test User', email: 'admin_test@example.com', role: 'admin' };
+    db.prepare(`
+      INSERT OR IGNORE INTO users (id, name, email, password_hash, role)
+      VALUES (?, ?, ?, 'hash123', ?)
+    `).run(runtimeAdminUser.id, runtimeAdminUser.name, runtimeAdminUser.email, runtimeAdminUser.role);
+    const runtimeAdminUserToken = jwt.sign({ id: runtimeAdminUser.id, email: runtimeAdminUser.email, role: runtimeAdminUser.role }, JWT_SECRET);
+
+    // Ensure a category exists in disposable test DB
+    db.prepare(`
+      INSERT OR IGNORE INTO categories (id, name, slug, description)
+      VALUES (1, 'Paithani', 'paithani', 'Heritage Paithani Sarees')
+    `).run();
+    const cat = db.prepare('SELECT id FROM categories LIMIT 1').get();
+
+    const createProductRes = await request('/api/admin/products', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${runtimeAdminUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        name: 'Royal Heritage Paithani Edit',
+        tagline: 'Authentic pure silk zari drape',
+        description: 'Exquisite handloom piece woven by master artisans in Maharashtra.',
+        short_desc: 'Heritage handloom saree',
+        category_id: cat.id,
+        fabric: 'Pure Silk',
+        occasion: 'Festive',
+        price: 34500,
+        mrp: 42000,
+        stock_quantity: 5
+      }
+    });
+
+    assert.strictEqual(createProductRes.status, 201, 'Product creation should return 201 Created');
+    assert(createProductRes.body.slug, 'Product creation must return a slug');
+    const createdSlug = createProductRes.body.slug;
+    const createdProdId = createProductRes.body.productId;
+
+    // 3. Opening or refreshing runtime product route must return HTTP 200 with indexable metadata
+    const runtimeProductRes = await request(`/api/render?path=/sarees/${createdSlug}`);
+    assert.strictEqual(runtimeProductRes.status, 200, 'Valid runtime product must return HTTP 200');
+    assert(runtimeProductRes.body.includes('Royal Heritage Paithani Edit'), 'HTML must contain the product name');
+    assert(runtimeProductRes.body.includes('index, follow'), 'Valid runtime product must have index, follow metadata');
+    assert(runtimeProductRes.body.includes(`/sarees/${createdSlug}`), 'Canonical link must point to product URL');
+    console.log('✅ PASS: [P2] Runtime-created product direct URL returns HTTP 200 with indexable metadata');
+
+    // 4. Product deletion unpublishes route and subsequent requests return real 404
+    const deleteRes = await request(`/api/admin/products/${createdProdId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${runtimeAdminUserToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    assert.strictEqual(deleteRes.status, 200, 'Product deletion should return 200 OK');
+
+    const deletedProductRes = await request(`/api/render?path=/sarees/${createdSlug}`);
+    assert.strictEqual(deletedProductRes.status, 404, 'Deleted product must return HTTP 404');
+    assert(deletedProductRes.body.includes('noindex, nofollow'), 'Deleted product route must return noindex metadata');
+    console.log('✅ PASS: [P2] Deleted product route returns real 404 and noindex metadata');
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {
