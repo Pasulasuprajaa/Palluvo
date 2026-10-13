@@ -81,6 +81,10 @@ const devIndex = path.join(__dirname, '..', 'client', 'index.html');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist, { index: false }));
 }
+const clientPublic = path.join(__dirname, '..', 'client', 'public');
+if (fs.existsSync(clientPublic)) {
+  app.use(express.static(clientPublic, { index: false }));
+}
 
 // Serve dynamic SEO metadata for page routes and social crawlers
 app.use((req, res, next) => {

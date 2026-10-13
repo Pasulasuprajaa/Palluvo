@@ -307,6 +307,12 @@ router.get('/:slugOrId', async (req, res) => {
       product: {
         ...product,
         images: images.map(i => i.image_url),
+        thumbnails: images.map(i => {
+          const u = i.image_url;
+          if (typeof u === 'string' && u.startsWith('/images/')) return u.replace('/images/', '/images/thumbnails/');
+          if (typeof u === 'string' && u.includes('images.unsplash.com')) return u.replace(/w=\d+/, 'w=180');
+          return u;
+        }),
         imageObjects: images,
         variants,
         reviews,

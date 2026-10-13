@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Star, Heart, ShoppingBag, ShieldCheck, Truck, RotateCcw,
   Sparkles, Check, ChevronRight, Share2, ZoomIn, X, Plus, Minus, Tag, MapPin,
@@ -17,6 +17,7 @@ import FrequentlyBoughtTogether from '../components/FrequentlyBoughtTogether';
 import ProductQA from '../components/ProductQA';
 import RecentlyViewed from '../components/RecentlyViewed';
 import { updatePageMeta } from '../utils/seo';
+import { getThumbnailUrl } from '../utils/imageUtils';
 
 export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   const [product, setProduct] = useState(null);
@@ -26,6 +27,11 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('description');
   const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  // Lightbox Modal Accessibility & Focus Management Refs
+  const lightboxModalRef = useRef(null);
+  const lightboxCloseRef = useRef(null);
+  const lightboxTriggerRef = useRef(null);
 
   // Flipkart & Amazon feature modals
   const [bankOffersOpen, setBankOffersOpen] = useState(false);
@@ -66,6 +72,64 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Lightbox Focus Trapping, Escape Key Handling, and Scroll Lock
+  useEffect(() => {
+    if (lightboxOpen) {
+      lightboxTriggerRef.current = document.activeElement;
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+
+      // Move focus into modal close button
+      const timer = setTimeout(() => {
+        lightboxCloseRef.current?.focus();
+      }, 50);
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          setLightboxOpen(false);
+          return;
+        }
+
+        if (e.key === 'Tab' && lightboxModalRef.current) {
+          const focusable = lightboxModalRef.current.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusable.length === 0) {
+            e.preventDefault();
+            return;
+          }
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+
+          if (e.shiftKey) {
+            if (document.activeElement === first || !lightboxModalRef.current.contains(document.activeElement)) {
+              e.preventDefault();
+              last.focus();
+            }
+          } else {
+            if (document.activeElement === last || !lightboxModalRef.current.contains(document.activeElement)) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        clearTimeout(timer);
+        document.body.style.overflow = originalOverflow;
+        window.removeEventListener('keydown', handleKeyDown);
+        if (lightboxTriggerRef.current && typeof lightboxTriggerRef.current.focus === 'function') {
+          lightboxTriggerRef.current.focus();
+        }
+      };
+    }
+  }, [lightboxOpen]);
 
   useEffect(() => {
     async function fetchProduct() {
@@ -200,7 +264,10 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+    <div
+      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12"
+      aria-hidden={lightboxOpen ? 'true' : undefined}
+    >
       {/* Breadcrumb Navigation */}
       <nav className="flex items-center gap-2 text-xs text-gray-500 overflow-x-auto pb-1">
         <button onClick={() => onNavigate('home')} className="hover:text-[#5B1425] cursor-pointer">Home</button>
@@ -220,32 +287,67 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
         <div className="lg:col-span-6 flex flex-col-reverse sm:flex-row gap-4">
           {/* Vertical Thumbnails */}
           {product.images && product.images.length > 1 && (
-            <div className="flex sm:flex-col gap-3 overflow-x-auto sm:overflow-y-auto max-h-[520px] pb-2 sm:pb-0 scrollbar-none">
-              {product.images.map((img, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setSelectedImageIndex(idx)}
-                  className={`relative w-16 h-20 sm:w-20 sm:h-24 rounded-xl overflow-hidden border-2 shrink-0 transition cursor-pointer ${
-                    selectedImageIndex === idx ? 'border-[#5B1425] shadow-md scale-105' : 'border-transparent opacity-75 hover:opacity-100'
-                  }`}
-                >
-                  <img src={img} alt={`${product.name} - ${idx}`} className="w-full h-full object-cover" />
-                </button>
-              ))}
+            <div
+              role="tablist"
+              aria-label="Product image gallery thumbnails"
+              className="flex sm:flex-col gap-3 overflow-x-auto sm:overflow-y-auto max-h-[520px] pb-2 sm:pb-0 scrollbar-none"
+            >
+              {product.images.map((img, idx) => {
+                const isSelected = selectedImageIndex === idx;
+                const thumbSrc = (product.thumbnails && product.thumbnails[idx]) || getThumbnailUrl(img);
+                return (
+                  <button
+                    key={idx}
+                    role="tab"
+                    id={`gallery-thumb-${idx}`}
+                    aria-selected={isSelected}
+                    aria-controls="gallery-main-image"
+                    aria-label={`View image ${idx + 1} of ${product.images.length}`}
+                    onClick={() => setSelectedImageIndex(idx)}
+                    className={`relative w-16 h-20 sm:w-20 sm:h-24 rounded-xl overflow-hidden border-2 shrink-0 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none ${
+                      isSelected ? 'border-[#5B1425] shadow-md scale-105' : 'border-transparent opacity-75 hover:opacity-100'
+                    }`}
+                  >
+                    <img
+                      src={thumbSrc}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      width="80"
+                      height="96"
+                      onError={(e) => {
+                        if (e.currentTarget.src !== img) {
+                          e.currentTarget.src = img;
+                        }
+                      }}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                );
+              })}
             </div>
           )}
 
           {/* Main Visual Frame with Zoom & Lightbox */}
           <div className="relative flex-1 aspect-[3/4] max-h-[580px] rounded-2xl overflow-hidden bg-white border border-[#E8E1D5] shadow-sm group">
-            <img
-              src={currentImage}
-              alt={product.name}
-              className="w-full h-full object-cover cursor-zoom-in transition duration-500 group-hover:scale-105"
+            <button
+              type="button"
+              id="gallery-main-image"
               onClick={() => setLightboxOpen(true)}
-            />
+              className="w-full h-full block cursor-zoom-in text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] rounded-2xl overflow-hidden"
+              aria-label={`Enlarge image: ${product.name}`}
+              aria-haspopup="dialog"
+              aria-expanded={lightboxOpen}
+            >
+              <img
+                src={currentImage}
+                alt={product.name}
+                className="w-full h-full object-cover transition duration-500 group-hover:scale-105"
+              />
+            </button>
 
             {/* Badges */}
-            <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+            <div className="absolute top-4 left-4 flex flex-col gap-2 z-10 pointer-events-none">
               {product.discount_percent > 0 && (
                 <span className="bg-[#5B1425] text-white text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-md">
                   {product.discount_percent}% OFF
@@ -260,11 +362,15 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
 
             {/* Zoom Trigger Button */}
             <button
+              type="button"
               onClick={() => setLightboxOpen(true)}
-              className="absolute bottom-4 right-4 p-2.5 rounded-full bg-white/90 backdrop-blur-md text-gray-800 hover:bg-[#5B1425] hover:text-white transition shadow-lg"
+              className="absolute bottom-4 right-4 p-2.5 rounded-full bg-white/90 backdrop-blur-md text-gray-800 hover:bg-[#5B1425] hover:text-white transition shadow-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059]"
               title="Click to Zoom Fullscreen"
+              aria-label={`Zoom full screen: ${product.name}`}
+              aria-haspopup="dialog"
+              aria-expanded={lightboxOpen}
             >
-              <ZoomIn className="w-4 h-4" />
+              <ZoomIn className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -917,16 +1023,34 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
 
       {/* Fullscreen Lightbox Modal */}
       {lightboxOpen && (
-        <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4">
+        <div
+          ref={lightboxModalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="lightbox-modal-title"
+          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4 focus:outline-none"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setLightboxOpen(false);
+          }}
+        >
+          <h2 id="lightbox-modal-title" className="sr-only">
+            Enlarged view of {product?.name || 'Saree'}
+          </h2>
+
           <button
+            ref={lightboxCloseRef}
+            type="button"
             onClick={() => setLightboxOpen(false)}
-            className="absolute top-6 right-6 text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer"
+            aria-label="Close enlarged image view"
+            className="absolute top-6 right-6 text-white p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
           >
-            <X className="w-6 h-6" />
+            <X className="w-6 h-6" aria-hidden="true" />
+            <span className="sr-only">Close expanded view</span>
           </button>
+
           <img
             src={currentImage}
-            alt={product.name}
+            alt={product?.name || 'Saree full view'}
             className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
           />
         </div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Star, ShoppingBag, Heart, ArrowRight, Check, ShieldCheck } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { getThumbnailUrl } from '../utils/imageUtils';
 
 export default function QuickViewModal({ onNavigate }) {
   const { quickViewProduct, setQuickViewProduct, addToCart } = useCart();
@@ -35,14 +36,23 @@ export default function QuickViewModal({ onNavigate }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="quickview-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) setQuickViewProduct(null);
+      }}
+    >
       <div className="bg-[#FAF7F2] w-full max-w-4xl rounded-2xl shadow-2xl border border-[#EAE2D7] overflow-hidden relative flex flex-col md:flex-row max-h-[90vh]">
         {/* Close Button */}
         <button
           onClick={() => setQuickViewProduct(null)}
-          className="absolute top-4 right-4 z-20 p-2 rounded-full bg-white/80 text-[#1F1A1C] hover:bg-white hover:text-[#5B1425] transition shadow-md"
+          aria-label="Close quick view"
+          className="absolute top-4 right-4 z-20 p-2 rounded-full bg-white/80 text-[#1F1A1C] hover:bg-white hover:text-[#5B1425] transition shadow-md cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
         >
-          <X className="w-5 h-5" />
+          <X className="w-5 h-5" aria-hidden="true" />
         </button>
 
         {/* Left: Images */}
@@ -62,18 +72,39 @@ export default function QuickViewModal({ onNavigate }) {
 
           {/* Thumbnails */}
           {images.length > 1 && (
-            <div className="flex gap-2 mt-4 overflow-x-auto max-w-full pb-1">
-              {images.map((img, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setSelectedImageIndex(idx)}
-                  className={`w-14 h-16 rounded-lg overflow-hidden border-2 transition ${
-                    selectedImageIndex === idx ? 'border-[#5B1425] scale-105' : 'border-transparent opacity-70 hover:opacity-100'
-                  }`}
-                >
-                  <img src={img} alt="thumb" className="w-full h-full object-cover" />
-                </button>
-              ))}
+            <div
+              role="tablist"
+              aria-label="Product thumbnail gallery"
+              className="flex gap-2 mt-4 overflow-x-auto max-w-full pb-1"
+            >
+              {images.map((img, idx) => {
+                const thumbSrc = (quickViewProduct.thumbnails && quickViewProduct.thumbnails[idx]) || getThumbnailUrl(img);
+                return (
+                  <button
+                    key={idx}
+                    role="tab"
+                    aria-selected={selectedImageIndex === idx}
+                    aria-label={`View image ${idx + 1}`}
+                    onClick={() => setSelectedImageIndex(idx)}
+                    className={`w-14 h-16 rounded-lg overflow-hidden border-2 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none ${
+                      selectedImageIndex === idx ? 'border-[#5B1425] scale-105' : 'border-transparent opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <img
+                      src={thumbSrc}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      onError={(e) => {
+                        if (e.currentTarget.src !== img) {
+                          e.currentTarget.src = img;
+                        }
+                      }}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
