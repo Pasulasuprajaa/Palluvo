@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Star, Heart, ShoppingBag, ShieldCheck, Truck, RotateCcw,
   Sparkles, Check, ChevronRight, Share2, ZoomIn, X, Plus, Minus, Tag, MapPin,
@@ -264,10 +265,11 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   );
 
   return (
-    <div
-      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12"
-      aria-hidden={lightboxOpen ? 'true' : undefined}
-    >
+    <>
+      <div
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12"
+        aria-hidden={lightboxOpen ? 'true' : undefined}
+      >
       {/* Breadcrumb Navigation */}
       <nav className="flex items-center gap-2 text-xs text-gray-500 overflow-x-auto pb-1">
         <button onClick={() => onNavigate('home')} className="hover:text-[#5B1425] cursor-pointer">Home</button>
@@ -1021,41 +1023,6 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
         }}
       />
 
-      {/* Fullscreen Lightbox Modal */}
-      {lightboxOpen && (
-        <div
-          ref={lightboxModalRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="lightbox-modal-title"
-          className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4 focus:outline-none"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setLightboxOpen(false);
-          }}
-        >
-          <h2 id="lightbox-modal-title" className="sr-only">
-            Enlarged view of {product?.name || 'Saree'}
-          </h2>
-
-          <button
-            ref={lightboxCloseRef}
-            type="button"
-            onClick={() => setLightboxOpen(false)}
-            aria-label="Close enlarged image view"
-            className="absolute top-6 right-6 text-white p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
-          >
-            <X className="w-6 h-6" aria-hidden="true" />
-            <span className="sr-only">Close expanded view</span>
-          </button>
-
-          <img
-            src={currentImage}
-            alt={product?.name || 'Saree full view'}
-            className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
-          />
-        </div>
-      )}
-
       {/* Mobile Sticky Purchase Bar (Always within reach on smartphones) */}
       <div className="lg:hidden fixed bottom-14 left-0 right-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md border-t border-[#EAE2D7] p-3 shadow-2xl flex items-center justify-between gap-2 safe-area-pb">
         <div className="flex flex-col pl-1 min-w-[75px]">
@@ -1098,5 +1065,45 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
         </div>
       </div>
     </div>
+
+    {/* Fullscreen Lightbox Modal (rendered via portal outside the aria-hidden page wrapper) */}
+    {lightboxOpen && (typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            ref={lightboxModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lightbox-modal-title"
+            className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4 focus:outline-none"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setLightboxOpen(false);
+            }}
+          >
+            <h2 id="lightbox-modal-title" className="sr-only">
+              Enlarged view of {product?.name || 'Saree'}
+            </h2>
+
+            <button
+              ref={lightboxCloseRef}
+              type="button"
+              onClick={() => setLightboxOpen(false)}
+              aria-label="Close enlarged image view"
+              className="absolute top-6 right-6 text-white p-2.5 rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
+            >
+              <X className="w-6 h-6" aria-hidden="true" />
+              <span className="sr-only">Close expanded view</span>
+            </button>
+
+            <img
+              src={currentImage}
+              alt={product?.name || 'Saree full view'}
+              className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+            />
+          </div>,
+          document.body
+        )
+      : null
+    )}
+  </>
   );
 }
