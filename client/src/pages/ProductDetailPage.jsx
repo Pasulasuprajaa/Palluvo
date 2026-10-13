@@ -104,7 +104,10 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
     }
     if (slug) {
       fetchProduct();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const prefersReducedMotion =
+        typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+      window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
     }
   }, [slug]);
 

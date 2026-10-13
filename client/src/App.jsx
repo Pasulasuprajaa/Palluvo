@@ -116,7 +116,10 @@ function AppContent() {
   const navigate = (page, params = {}) => {
     setCurrentPage(page);
     setPageParams(params);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
 
     let urlPath = '/';
     if (page === 'shop') {

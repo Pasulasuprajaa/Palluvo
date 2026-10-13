@@ -394,7 +394,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                 { label: 'Track Order', icon: Truck, action: () => handleNav('track-order'), highlight: currentPage === 'track-order' },
                 { label: 'Contact Us', icon: MessageSquare, action: () => {
                   setMobileMenuOpen(false);
-                  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                  const prefersReducedMotion =
+                    typeof window !== 'undefined' &&
+                    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+                  window.scrollTo({ top: document.body.scrollHeight, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
                 }},
                 { label: 'About PALLUVO', icon: Info, action: () => handleNav('about'), highlight: currentPage === 'about' },
                 { label: 'Account', icon: User, action: () => {

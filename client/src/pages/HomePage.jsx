@@ -243,7 +243,7 @@ export default function HomePage({ onNavigate }) {
                   <img
                     src={cat.image_url}
                     alt=""
-                    loading={idx < 5 ? "eager" : "lazy"}
+                    loading="lazy"
                     decoding="async"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                   />
@@ -419,9 +419,9 @@ export default function HomePage({ onNavigate }) {
         ) : (
           <div>
             <div className="flex overflow-x-auto gap-3.5 sm:gap-6 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 pb-2">
-              {bestSellers.map((prod, idx) => (
+              {bestSellers.map((prod) => (
                 <div key={prod.id} className="w-56 sm:w-auto shrink-0 snap-item flex">
-                  <ProductCard product={prod} onNavigate={onNavigate} priority={idx < 4} />
+                  <ProductCard product={prod} onNavigate={onNavigate} />
                 </div>
               ))}
             </div>
