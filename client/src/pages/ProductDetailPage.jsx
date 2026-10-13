@@ -17,6 +17,7 @@ import ReviewModal from '../components/ReviewModal';
 import FrequentlyBoughtTogether from '../components/FrequentlyBoughtTogether';
 import ProductQA from '../components/ProductQA';
 import RecentlyViewed from '../components/RecentlyViewed';
+import NotFoundPage from './NotFoundPage';
 import { updatePageMeta } from '../utils/seo';
 import { getThumbnailUrl } from '../utils/imageUtils';
 
@@ -160,9 +161,14 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
             parsed = [data.product, ...parsed.filter(p => p.id !== data.product.id)].slice(0, 8);
             localStorage.setItem('palluvo_recently_viewed', JSON.stringify(parsed));
           } catch (e) {}
+        } else {
+          setProduct(null);
+          updatePageMeta('not-found', { path: `/sarees/${slug}` });
         }
       } catch (err) {
         console.error('Fetch product detail error:', err);
+        setProduct(null);
+        updatePageMeta('not-found', { path: `/sarees/${slug}` });
       } finally {
         setLoading(false);
       }
@@ -234,18 +240,7 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   }
 
   if (!product) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center bg-[#FAF7F2] p-6 text-center">
-        <h2 className="font-serif text-2xl font-bold text-[#5B1425] mb-2">Saree Drape Not Found</h2>
-        <p className="text-xs text-gray-500 mb-6">The requested saree might have been archived or belongs to an exclusive private vault edit.</p>
-        <button
-          onClick={() => onNavigate('shop')}
-          className="px-6 py-2.5 bg-[#5B1425] text-white text-xs font-semibold rounded-xl hover:bg-[#430e1b] transition"
-        >
-          Explore Boutique
-        </button>
-      </div>
-    );
+    return <NotFoundPage onNavigate={onNavigate} invalidPath={`/sarees/${slug}`} />;
   }
 
   const currentImage = product.images?.[selectedImageIndex] || product.primary_image || '/images/categories/banarasi.jpg';

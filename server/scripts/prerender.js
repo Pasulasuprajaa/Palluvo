@@ -52,6 +52,7 @@ try {
     '/account',
     '/wishlist',
     '/offers',
+    '/admin',
     '/about',
     '/heritage',
     '/artisans',
@@ -78,6 +79,7 @@ try {
   const notFoundMeta = getMetaForRoute('/404');
   const rendered404 = injectMetaTags(templateHtml, notFoundMeta);
   fs.writeFileSync(path.join(distDir, '404.html'), rendered404, 'utf8');
+  writePrerenderedFile('/404', rendered404);
 
   // 3. Category routes (/sarees?category=<slug>, /sarees/category/<slug>, /category/<slug>)
   const categories = catalog.categories || [];

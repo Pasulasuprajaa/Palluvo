@@ -1402,4 +1402,5 @@ module.exports = router;
 module.exports.reconcileExpiredReservations = reconcileExpiredReservations;
 module.exports.reconcileSingleExpiredOrder = reconcileSingleExpiredOrder;
 module.exports.reconcilePendingRefunds = reconcilePendingRefunds;
+module.exports.buildRefundPayload = buildRefundPayload;
 module.exports.ORDER_RESERVATION_TTL_MS = ORDER_RESERVATION_TTL_MS;

@@ -4,6 +4,8 @@ const db = require('../db/database');
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
 const { trackOrderLimiter } = require('../middleware/rateLimit');
 const { requireDurableStorage } = require('../middleware/storageGuard');
+const { refundRazorpayPayment } = require('../services/razorpay');
+const { buildRefundPayload } = require('./payments');
 
 // GET /api/orders (List user orders)
 router.get('/', authenticateToken, (req, res) => {
@@ -170,7 +172,7 @@ router.get('/:id', authenticateToken, (req, res) => {
 });
 
 // POST /api/orders/cancel/:id
-router.post('/cancel/:id', authenticateToken, requireDurableStorage, (req, res) => {
+router.post('/cancel/:id', authenticateToken, requireDurableStorage, async (req, res) => {
   try {
     const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
 
@@ -182,6 +184,10 @@ router.post('/cancel/:id', authenticateToken, requireDurableStorage, (req, res) 
       return res.status(400).json({ error: 'Order is already cancelled.' });
     }
 
+    if (order.payment_status === 'Refunded' || order.payment_status === 'Refund_Pending') {
+      return res.status(400).json({ error: 'Order cancellation and refund are already in progress or completed.' });
+    }
+
     if (order.payment_status === 'Failed' || order.payment_status === 'Expired') {
       return res.status(400).json({ error: 'Order payment failed or expired; reservation has already been released.' });
     }
@@ -190,12 +196,51 @@ router.post('/cancel/:id', authenticateToken, requireDurableStorage, (req, res) 
       return res.status(400).json({ error: 'Orders that are already shipped or delivered cannot be cancelled. Please contact concierge support for returns.' });
     }
 
+    let finalPaymentStatus = order.payment_status;
+    let refundId = order.refund_id || null;
+    let refundError = null;
+    let initialIdempotencyKey = order.refund_idempotency_key || null;
+    let paymentId = order.razorpay_payment_id || null;
+
+    // Persist and initiate idempotent refund workflow for captured paid orders
+    if (order.payment_status === 'Paid') {
+      if (!paymentId) {
+        const paymentRow = db.prepare('SELECT razorpay_payment_id FROM payments WHERE order_id = ? AND razorpay_payment_id IS NOT NULL ORDER BY id DESC LIMIT 1').get(order.id);
+        paymentId = paymentRow?.razorpay_payment_id || null;
+      }
+
+      if (!paymentId) {
+        return res.status(400).json({ error: 'Cannot cancel paid order without valid payment reference. Please contact concierge support.' });
+      }
+
+      initialIdempotencyKey = order.refund_idempotency_key || `rfnd_${order.id}_${order.order_number}`;
+      let refundResult = null;
+      try {
+        const refundPayload = buildRefundPayload(order, initialIdempotencyKey);
+        refundResult = await refundRazorpayPayment(paymentId, refundPayload);
+      } catch (refErr) {
+        console.error('Refund initiation error for cancelled order:', refErr);
+        refundError = refErr.message || 'Refund initiation failed';
+      }
+
+      const isRefundProcessed = Boolean(refundResult && refundResult.status === 'processed');
+      const isRefundFull = isRefundProcessed && (!refundResult.amount || refundResult.amount >= Math.round(order.total_amount * 100));
+      refundId = refundResult ? refundResult.id : null;
+      finalPaymentStatus = isRefundFull ? 'Refunded' : 'Refund_Pending';
+    }
+
     const cancelTx = db.transaction(() => {
       const updateRes = db.prepare(`
         UPDATE orders 
-        SET status = 'Cancelled', updated_at = CURRENT_TIMESTAMP 
+        SET status = 'Cancelled',
+            payment_status = ?,
+            razorpay_payment_id = COALESCE(?, razorpay_payment_id),
+            refund_id = ?,
+            refund_error = ?,
+            refund_idempotency_key = ?,
+            updated_at = CURRENT_TIMESTAMP 
         WHERE id = ? AND user_id = ? AND status != 'Cancelled' AND payment_status NOT IN ('Failed', 'Expired')
-      `).run(order.id, req.user.id);
+      `).run(finalPaymentStatus, paymentId, refundId, refundError, initialIdempotencyKey, order.id, req.user.id);
 
       if (updateRes.changes > 0) {
         const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
@@ -222,7 +267,19 @@ router.post('/cancel/:id', authenticateToken, requireDurableStorage, (req, res) 
       return res.status(400).json({ error: 'Order could not be cancelled or has already been cancelled.' });
     }
 
-    res.json({ message: 'Order cancelled successfully. Refund will be credited within 3-5 business days.' });
+    if (order.payment_status === 'Paid') {
+      const isFull = finalPaymentStatus === 'Refunded';
+      return res.json({
+        message: isFull
+          ? 'Order cancelled successfully. A full refund has been credited to your original payment method.'
+          : 'Order cancelled successfully. A refund has been initiated and will arrive within 3-5 business days.',
+        refunded: isFull,
+        refund_id: refundId,
+        payment_status: finalPaymentStatus
+      });
+    }
+
+    res.json({ message: 'Order cancelled successfully.' });
   } catch (err) {
     console.error('Order cancellation error:', err);
     res.status(500).json({ error: 'Failed to cancel order.' });
