@@ -13,14 +13,37 @@ function publishProductRoute(productData) {
     if (!slug) return;
 
     // 1. Update server/data/catalog.json if available
-    const catalogPath = path.join(__dirname, '..', 'data', 'catalog.json');
-    if (process.env.NODE_ENV !== 'test' && fs.existsSync(catalogPath)) {
+    const catalogPath = productData?.catalogPath || process.env.CATALOG_PATH || path.join(__dirname, '..', 'data', 'catalog.json');
+    const shouldUpdateCatalog = (process.env.NODE_ENV !== 'test' || Boolean(productData?.catalogPath || process.env.CATALOG_PATH)) && fs.existsSync(catalogPath);
+    if (shouldUpdateCatalog) {
       try {
         const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
         if (!Array.isArray(catalog.products)) {
           catalog.products = [];
         }
         const existingIdx = catalog.products.findIndex(p => p.slug === slug);
+        const existingItem = existingIdx >= 0 ? catalog.products[existingIdx] : null;
+
+        // Resolve images: if productData.images provided with items, use it; otherwise preserve existing catalog images or primary_image
+        let resolvedImages;
+        if (Array.isArray(productData.images) && productData.images.length > 0) {
+          resolvedImages = productData.images.map(img => typeof img === 'string' ? img : img.image_url).filter(Boolean);
+        } else if (existingItem && Array.isArray(existingItem.images) && existingItem.images.length > 0) {
+          resolvedImages = existingItem.images;
+        } else if (productData.primary_image) {
+          resolvedImages = [productData.primary_image];
+        } else if (existingItem?.primary_image) {
+          resolvedImages = [existingItem.primary_image];
+        } else {
+          resolvedImages = ['/images/categories/banarasi.jpg'];
+        }
+
+        const resolvedPrimary = productData.primary_image
+          || (Array.isArray(productData.images) && productData.images.length > 0 ? resolvedImages[0] : null)
+          || existingItem?.primary_image
+          || resolvedImages[0]
+          || '/images/categories/banarasi.jpg';
+
         const entry = {
           name: productData.name,
           slug: slug,
@@ -32,10 +55,8 @@ function publishProductRoute(productData) {
           category_slug: productData.category_slug || 'banarasi',
           fabric: productData.fabric,
           occasion: productData.occasion,
-          primary_image: productData.primary_image || (productData.images && productData.images[0]) || '/images/categories/banarasi.jpg',
-          images: Array.isArray(productData.images) && productData.images.length > 0
-            ? productData.images.map(img => typeof img === 'string' ? img : img.image_url)
-            : [productData.primary_image || '/images/categories/banarasi.jpg']
+          primary_image: resolvedPrimary,
+          images: resolvedImages
         };
         if (existingIdx >= 0) {
           catalog.products[existingIdx] = { ...catalog.products[existingIdx], ...entry };
@@ -373,10 +394,19 @@ router.put('/products/:id', requireDurableStorage, (req, res) => {
     const updatedProd = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
     if (updatedProd) {
       const catRow = db.prepare('SELECT slug FROM categories WHERE id = ?').get(updatedProd.category_id);
+      const persistedImages = db.prepare('SELECT image_url FROM product_images WHERE product_id = ? ORDER BY is_primary DESC, display_order ASC')
+        .all(req.params.id)
+        .map(r => r.image_url);
+
+      const resolvedImages = (images && Array.isArray(images))
+        ? images.map(img => typeof img === 'string' ? img : img.image_url).filter(Boolean)
+        : persistedImages;
+
       publishProductRoute({
         ...updatedProd,
         category_slug: catRow?.slug || 'banarasi',
-        images: images || []
+        primary_image: resolvedImages[0],
+        images: resolvedImages
       });
     }
 
@@ -593,5 +623,8 @@ router.get('/customers', (req, res) => {
     res.status(500).json({ error: 'Failed to fetch customers.' });
   }
 });
+
+router.publishProductRoute = publishProductRoute;
+router.unpublishProductRoute = unpublishProductRoute;
 
 module.exports = router;

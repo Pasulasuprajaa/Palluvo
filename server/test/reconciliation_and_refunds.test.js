@@ -51,7 +51,17 @@ async function runTests() {
     app.use('/api/orders', ordersRouter);
     app.use('/api/admin', adminRouter);
     app.get('/api/render', (req, res, next) => {
-      let targetPath = (req.query.path || req.headers['x-matched-path'] || req.url || '').split('?')[0];
+      if (req.query.path !== undefined && typeof req.query.path !== 'string') {
+        return res.status(400).json({
+          error: 'Invalid path parameter. Path must be a single string.',
+          code: 'INVALID_PATH'
+        });
+      }
+      const rawPath = typeof req.query.path === 'string'
+        ? req.query.path
+        : (typeof req.headers['x-matched-path'] === 'string' ? req.headers['x-matched-path'] : (req.url || ''));
+
+      let targetPath = (rawPath || '').split('?')[0];
       if (!targetPath.startsWith('/')) {
         targetPath = '/' + targetPath;
       }
@@ -769,6 +779,100 @@ async function runTests() {
     assert.strictEqual(deletedProductRes.status, 404, 'Deleted product must return HTTP 404');
     assert(deletedProductRes.body.includes('noindex, nofollow'), 'Deleted product route must return noindex metadata');
     console.log('✅ PASS: [P2] Deleted product route returns real 404 and noindex metadata');
+
+    // --- TEST SUITE P3: Render Endpoint Path Validation & Catalog Image Preservation ---
+    console.log('\n--- Testing [P3] Dynamic Render Path Validation & Catalog Image Preservation ---');
+
+    // 1. Repeated path query parameters should return 400 Bad Request instead of 500
+    const repeatedPathRes = await request('/api/render?path=%2F&path=%2Fsarees%2Fabc');
+    assert.strictEqual(repeatedPathRes.status, 400, 'Repeated path query parameters must return HTTP 400');
+    assert.strictEqual(repeatedPathRes.body?.code, 'INVALID_PATH', 'Response must return INVALID_PATH error code');
+    console.log('✅ PASS: [P3] Repeated path parameter rejected with controlled HTTP 400');
+
+    // 2. Fallback to x-matched-path when query path is omitted
+    const matchedPathRes = await request('/api/render', {
+      headers: {
+        'x-matched-path': '/sarees'
+      }
+    });
+    assert.strictEqual(matchedPathRes.status, 200, 'Fallback to x-matched-path should return HTTP 200');
+    assert(matchedPathRes.body.includes('Curated Luxury Sarees Collection'), 'x-matched-path should render route meta');
+    console.log('✅ PASS: [P3] x-matched-path fallback functions when query path is omitted');
+
+    // 3. Partial update with omitted images preserves existing product images in DB and publication
+    const customImage = 'https://images.unsplash.com/photo-test-artisan-paithani-1.jpg';
+    const prodWithImgRes = await request('/api/admin/products', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${runtimeAdminUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        name: 'Vibrant Kanjivaram Edit',
+        tagline: 'Pure zari weave',
+        description: 'Handcrafted luxury drape',
+        short_desc: 'Luxury silk saree',
+        category_id: cat.id,
+        fabric: 'Pure Silk',
+        occasion: 'Bridal',
+        price: 52000,
+        mrp: 65000,
+        images: [customImage]
+      }
+    });
+    assert.strictEqual(prodWithImgRes.status, 201, 'Product created with image');
+    const prodWithImgId = prodWithImgRes.body.productId;
+    const prodWithImgSlug = prodWithImgRes.body.slug;
+
+    // Verify initial image in DB
+    const initialImgs = db.prepare('SELECT image_url FROM product_images WHERE product_id = ?').all(prodWithImgId);
+    assert.strictEqual(initialImgs.length, 1, 'Should have 1 image initially');
+    assert.strictEqual(initialImgs[0].image_url, customImage, 'Should match custom image');
+
+    // Partial update omitting images field entirely
+    const partialUpdateRes = await request(`/api/admin/products/${prodWithImgId}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${runtimeAdminUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        price: 49999,
+        stock_quantity: 8
+      }
+    });
+    assert.strictEqual(partialUpdateRes.status, 200, 'Partial update succeeds');
+
+    // Verify database images remain intact
+    const postUpdateImgs = db.prepare('SELECT image_url FROM product_images WHERE product_id = ?').all(prodWithImgId);
+    assert.strictEqual(postUpdateImgs.length, 1, 'Persisted images should not be cleared');
+    assert.strictEqual(postUpdateImgs[0].image_url, customImage, 'Persisted image must be retained');
+
+    // Verify publishProductRoute preserves catalog image when images is omitted
+    const testCatalogPath = path.join(testDbDir, 'test_catalog.json');
+    fs.writeFileSync(testCatalogPath, JSON.stringify({
+      products: [{
+        slug: prodWithImgSlug,
+        name: 'Vibrant Kanjivaram Edit',
+        primary_image: customImage,
+        images: [customImage]
+      }]
+    }, null, 2), 'utf8');
+
+    // Call publishProductRoute without images, pointing to testCatalogPath
+    adminRouter.publishProductRoute({
+      slug: prodWithImgSlug,
+      name: 'Vibrant Kanjivaram Edit (Updated Price)',
+      price: 49999,
+      mrp: 65000,
+      catalogPath: testCatalogPath
+    });
+
+    const updatedCatalog = JSON.parse(fs.readFileSync(testCatalogPath, 'utf8'));
+    const updatedCatalogEntry = updatedCatalog.products.find(p => p.slug === prodWithImgSlug);
+    assert.strictEqual(updatedCatalogEntry.primary_image, customImage, 'Catalog primary_image must not be overwritten with fallback');
+    assert.deepStrictEqual(updatedCatalogEntry.images, [customImage], 'Catalog images array must preserve existing image');
+    console.log('✅ PASS: [P3] Partial product update preserves existing image rows and catalog entry');
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {

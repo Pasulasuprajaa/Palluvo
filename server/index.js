@@ -107,7 +107,18 @@ function renderPageWithSeo(targetPath, query, req, res, next) {
 
 // Dedicated dynamic renderer endpoint for Vercel rewrites (e.g. /api/render?path=/sarees/:slug)
 app.get('/api/render', (req, res, next) => {
-  let targetPath = (req.query.path || req.headers['x-matched-path'] || req.url || '').split('?')[0];
+  if (req.query.path !== undefined && typeof req.query.path !== 'string') {
+    return res.status(400).json({
+      error: 'Invalid path parameter. Path must be a single string.',
+      code: 'INVALID_PATH'
+    });
+  }
+
+  const rawPath = typeof req.query.path === 'string'
+    ? req.query.path
+    : (typeof req.headers['x-matched-path'] === 'string' ? req.headers['x-matched-path'] : (req.url || ''));
+
+  let targetPath = (rawPath || '').split('?')[0];
   if (!targetPath.startsWith('/')) {
     targetPath = '/' + targetPath;
   }
