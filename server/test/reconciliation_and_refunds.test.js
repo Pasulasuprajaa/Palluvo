@@ -1165,6 +1165,47 @@ async function runTests() {
     assert.notStrictEqual(decodedMig2.voter_id, legacyIpDerivedId, 'Renewal must not preserve legacy IP-derived voter ID');
     assert.notStrictEqual(decodedMig2.voter_id, decodedMig1.voter_id, 'Two browsers migrating legacy token must receive distinct per-browser IDs');
 
+    // 8n. [P2] Bind issued voter IDs to stable server-managed browser cookie & test repeated issuance
+    const clientRes1 = await request('/api/products/qa/voter-token');
+    assert.strictEqual(clientRes1.status, 200);
+    const setCookieHeader = clientRes1.headers['set-cookie'];
+    assert.ok(setCookieHeader, 'Server must issue Set-Cookie with browser session cookie');
+    const cookieString = Array.isArray(setCookieHeader) ? setCookieHeader[0].split(';')[0] : setCookieHeader.split(';')[0];
+    assert.ok(cookieString.includes('pv_bid='), 'Cookie must contain pv_bid session key');
+
+    const decodedClient1 = jwt.verify(clientRes1.body.voter_token, JWT_SECRET);
+
+    // Repeated token issuance from the same client session (passing cookie and NO existing token)
+    const clientRes2 = await request('/api/products/qa/voter-token', {
+      headers: { cookie: cookieString }
+    });
+    assert.strictEqual(clientRes2.status, 200);
+    const decodedClient2 = jwt.verify(clientRes2.body.voter_token, JWT_SECRET);
+    assert.strictEqual(
+      decodedClient2.voter_id,
+      decodedClient1.voter_id,
+      'Repeated token issuance from one client must bind to the same voter ID'
+    );
+
+    // 8o. [P2] Targeted vote limit protects question from unauthenticated vote inflation
+    // Perform additional anonymous votes on targetQaId from distinct tokens until limit (5) is reached
+    for (let i = 0; i < 4; i++) {
+      const extraTokenRes = await request('/api/products/qa/voter-token');
+      await request(`/api/products/qa/${targetQaId}/helpful`, {
+        method: 'POST',
+        body: { voter_token: extraTokenRes.body.voter_token }
+      });
+    }
+
+    // Next anonymous vote on same question exceeds targeted limit and must return 429
+    const spamTokenRes = await request('/api/products/qa/voter-token');
+    const limitRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
+      method: 'POST',
+      body: { voter_token: spamTokenRes.body.voter_token }
+    });
+    assert.strictEqual(limitRes.status, 429, 'Excessive unauthenticated votes for same question must return 429');
+    assert.strictEqual(limitRes.body.code, 'VOTE_LIMIT_EXCEEDED');
+
     console.log('✅ PASS: [P2] Helpful-vote endpoint binds anonymous identity to server-issued token and blocks distinct tokens from same caller');
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');

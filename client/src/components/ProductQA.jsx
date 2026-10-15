@@ -34,7 +34,7 @@ async function getOrFetchVoterToken(forceRefresh = false) {
     const headers = {};
     if (token) headers['x-voter-token'] = token;
 
-    const res = await fetch('/api/products/qa/voter-token', { headers });
+    const res = await fetch('/api/products/qa/voter-token', { headers, credentials: 'include' });
     if (res.ok) {
       const data = await res.json();
       if (data.voter_token) {
@@ -73,7 +73,7 @@ export default function ProductQA({ productId, initialQA = [] }) {
     if (initialQA && initialQA.length > 0) {
       setQaList(initialQA);
     } else if (productId) {
-      fetch(`/api/products/${productId}/qa`)
+      fetch(`/api/products/${productId}/qa`, { credentials: 'include' })
         .then(res => res.json())
         .then(data => {
           if (data.qa) setQaList(data.qa);
@@ -106,6 +106,7 @@ export default function ProductQA({ productId, initialQA = [] }) {
       let res = await fetch(`/api/products/qa/${qaId}/helpful`, {
         method: 'POST',
         headers,
+        credentials: 'include',
         body: JSON.stringify({ voter_token: voterToken })
       });
       let data = await res.json();
@@ -118,6 +119,7 @@ export default function ProductQA({ productId, initialQA = [] }) {
           res = await fetch(`/api/products/qa/${qaId}/helpful`, {
             method: 'POST',
             headers,
+            credentials: 'include',
             body: JSON.stringify({ voter_token: voterToken })
           });
           data = await res.json();

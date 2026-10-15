@@ -16,6 +16,46 @@ function getCallerIp(req) {
   return req.socket?.remoteAddress || '127.0.0.1';
 }
 
+const BROWSER_COOKIE_NAME = 'pv_bid';
+const anonymousQuestionVoteTracker = new Map(); // key: `${ip}:${qaId}`, val: [timestamps]
+
+function signBrowserId(bid) {
+  const hmac = crypto.createHmac('sha256', JWT_SECRET).update(`bid:${bid}`).digest('hex').slice(0, 32);
+  return `${bid}.${hmac}`;
+}
+
+function verifyBrowserId(signedValue) {
+  if (!signedValue || typeof signedValue !== 'string') return null;
+  const dotIndex = signedValue.lastIndexOf('.');
+  if (dotIndex === -1) return null;
+  const bid = signedValue.slice(0, dotIndex);
+  const sig = signedValue.slice(dotIndex + 1);
+  if (!bid.startsWith('bid_')) return null;
+  const expected = crypto.createHmac('sha256', JWT_SECRET).update(`bid:${bid}`).digest('hex').slice(0, 32);
+  if (sig.length === expected.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+    return bid;
+  }
+  return null;
+}
+
+function getBrowserIdFromReq(req) {
+  const cookieHeader = req?.headers?.cookie;
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(/(?:^|;\s*)pv_bid=([^;]+)/);
+  if (!match) return null;
+  const raw = decodeURIComponent(match[1].trim());
+  return verifyBrowserId(raw);
+}
+
+function setBrowserIdCookie(res, bid) {
+  if (!res || typeof res.setHeader !== 'function') return;
+  const signed = signBrowserId(bid);
+  res.setHeader(
+    'Set-Cookie',
+    `${BROWSER_COOKIE_NAME}=${encodeURIComponent(signed)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`
+  );
+}
+
 function isLegacyVoterId(voterId, req) {
   if (!voterId || typeof voterId !== 'string') return true;
   // Modern per-browser voter IDs start with 'voter_'
@@ -33,8 +73,16 @@ function isLegacyVoterId(voterId, req) {
   return false;
 }
 
-function issueVoterToken(req) {
+function issueVoterToken(req, res) {
   let voterId = null;
+  let browserId = getBrowserIdFromReq(req);
+
+  // 1. If the client sends an established server-managed browser cookie, bind voterId to it
+  if (browserId) {
+    voterId = 'voter_' + browserId;
+  }
+
+  // 2. If no cookie, inspect existingToken from headers/query/body
   const existingToken = (
     req?.headers?.['x-voter-token'] ||
     req?.query?.token ||
@@ -42,25 +90,36 @@ function issueVoterToken(req) {
     ''
   ).trim();
 
-  if (existingToken) {
+  if (!voterId && existingToken) {
     try {
       const decoded = jwt.verify(existingToken, JWT_SECRET, { ignoreExpiration: true });
       if (decoded && decoded.voter_type === 'anonymous_qa_voter' && decoded.voter_id) {
         // Migrate legacy IP-derived voter IDs to distinct per-browser IDs
         if (!isLegacyVoterId(decoded.voter_id, req)) {
           voterId = decoded.voter_id;
+          browserId = voterId.startsWith('voter_bid_')
+            ? voterId.replace(/^voter_/, '')
+            : 'bid_' + voterId.replace(/^voter_/, '');
         }
       }
     } catch (e) {}
   }
 
+  // 3. If neither cookie nor valid existing token exists, generate fresh browser ID
   if (!voterId) {
-    voterId = 'voter_' + crypto.randomUUID();
+    browserId = 'bid_' + crypto.randomUUID();
+    voterId = 'voter_' + browserId;
+  }
+
+  // Set the stable server-managed session cookie on response
+  if (browserId && res) {
+    setBrowserIdCookie(res, browserId);
   }
 
   return jwt.sign(
     {
       voter_id: voterId,
+      browser_id: browserId,
       voter_type: 'anonymous_qa_voter',
       nonce: crypto.randomBytes(8).toString('hex')
     },
@@ -323,10 +382,10 @@ router.get('/search/suggestions', async (req, res) => {
   }
 });
 
-// GET /api/products/qa/voter-token (Issue a signed, stable anonymous voter token)
+// GET /api/products/qa/voter-token (Issue a signed, stable anonymous voter token bound to browser session)
 router.get('/qa/voter-token', (req, res) => {
   try {
-    const token = issueVoterToken(req);
+    const token = issueVoterToken(req, res);
     res.json({ success: true, voter_token: token });
   } catch (err) {
     res.status(500).json({ error: 'Failed to issue voter token.' });
@@ -426,7 +485,7 @@ router.get('/:slugOrId', async (req, res) => {
 router.get('/:productId/qa', (req, res) => {
   try {
     const qas = db.prepare('SELECT * FROM product_qa WHERE product_id = ? ORDER BY helpful_votes DESC, created_at DESC').all(req.params.productId);
-    const voterToken = issueVoterToken(req);
+    const voterToken = issueVoterToken(req, res);
     res.json({ qa: qas, voter_token: voterToken });
   } catch (err) {
     console.error('QA fetch error:', err);
@@ -485,11 +544,27 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, (req, res) =
     // Determine unique voter key from authenticated user or server-issued signed anonymous voter token
     let voterKey;
     let userId = null;
+    const cookieBid = getBrowserIdFromReq(req);
 
     if (req.user?.id) {
       voterKey = `usr_${req.user.id}`;
       userId = req.user.id;
     } else {
+      // Targeted rate limit for unauthenticated anonymous helpful votes on this question from caller IP
+      const callerIp = getCallerIp(req);
+      const rateKey = `${callerIp}:${qaId}`;
+      const now = Date.now();
+      const windowMs = 15 * 60 * 1000;
+      const maxVotesPerQuestion = 5;
+
+      const recent = (anonymousQuestionVoteTracker.get(rateKey) || []).filter(ts => now - ts < windowMs);
+      if (recent.length >= maxVotesPerQuestion) {
+        return res.status(429).json({
+          error: 'Vote limit reached for this question from your network. Please try again later or sign in.',
+          code: 'VOTE_LIMIT_EXCEEDED'
+        });
+      }
+
       const rawToken = (req.body?.voter_token || req.headers['x-voter-token'] || '').trim();
       if (!rawToken) {
         return res.status(400).json({ error: 'Valid server-issued voter token or authentication is required.' });
@@ -518,8 +593,14 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, (req, res) =
       voterKey = `anon_${verified.voter_id}`;
     }
 
-    // Check if voter has already voted on this question
-    const existingVote = db.prepare('SELECT id FROM product_qa_votes WHERE qa_id = ? AND voter_key = ?').get(qaId, voterKey);
+    // Check if voter (or this browser session) has already voted on this question
+    const candidateKeys = [voterKey];
+    if (cookieBid && !req.user?.id) {
+      candidateKeys.push(`anon_voter_${cookieBid}`);
+    }
+
+    const placeholders = candidateKeys.map(() => '?').join(', ');
+    const existingVote = db.prepare(`SELECT id FROM product_qa_votes WHERE qa_id = ? AND voter_key IN (${placeholders})`).get(qaId, ...candidateKeys);
     if (existingVote) {
       return res.json({
         success: true,
@@ -535,11 +616,26 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, (req, res) =
         voterKey,
         userId
       );
+      if (cookieBid && !req.user?.id && `anon_voter_${cookieBid}` !== voterKey) {
+        db.prepare('INSERT OR IGNORE INTO product_qa_votes (qa_id, voter_key, user_id) VALUES (?, ?, ?)').run(
+          qaId,
+          `anon_voter_${cookieBid}`,
+          userId
+        );
+      }
       db.prepare('UPDATE product_qa SET helpful_votes = helpful_votes + 1 WHERE id = ?').run(qaId);
     });
 
     try {
       recordVote();
+      if (!req.user?.id) {
+        const callerIp = getCallerIp(req);
+        const rateKey = `${callerIp}:${qaId}`;
+        const now = Date.now();
+        const recent = (anonymousQuestionVoteTracker.get(rateKey) || []).filter(ts => now - ts < 15 * 60 * 1000);
+        recent.push(now);
+        anonymousQuestionVoteTracker.set(rateKey, recent);
+      }
     } catch (insertErr) {
       if (insertErr.code === 'SQLITE_CONSTRAINT' || insertErr.message.includes('UNIQUE')) {
         const currentItem = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(qaId);

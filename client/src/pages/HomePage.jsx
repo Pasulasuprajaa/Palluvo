@@ -125,8 +125,8 @@ export default function HomePage({ onNavigate }) {
               className="w-full h-full object-cover object-[center_top] sm:object-[center_12%] md:object-[right_center] lg:object-[82%_center] opacity-100 transition-transform duration-1000 ease-out group-hover:scale-105"
             />
           </picture>
-          {/* Subtle Vignette Gradient: High contrast for typography while keeping the bride's portrait vibrant and clear */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/75 via-45% to-black/20 md:bg-gradient-to-r md:from-[#1F1A1C]/95 md:from-28% md:via-[#1F1A1C]/50 md:via-52% md:to-transparent pointer-events-none" />
+          {/* Subtle Vignette Gradient: Confines lower scrim to the bottom text area so the bride's portrait and saree remain luminous and clear */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C]/95 via-[#1F1A1C]/40 via-30% to-transparent md:bg-gradient-to-r md:from-[#1F1A1C]/95 md:from-28% md:via-[#1F1A1C]/50 md:via-52% md:to-transparent pointer-events-none" />
         </a>
 
         {/* Hero Content with Seamless Luxury Editorial Styling */}
