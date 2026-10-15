@@ -2,13 +2,37 @@ import React, { useState, useEffect } from 'react';
 import { HelpCircle, Search, ThumbsUp, MessageSquare, Sparkles, Send, CheckCircle2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 
+function getOrCreateVoterToken() {
+  try {
+    let token = localStorage.getItem('palluvo_qa_voter_token');
+    if (!token) {
+      token = 'vt_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+      localStorage.setItem('palluvo_qa_voter_token', token);
+    }
+    return token;
+  } catch (e) {
+    return 'fallback_' + Date.now();
+  }
+}
+
+function getStoredVotedIds() {
+  try {
+    const raw = localStorage.getItem('palluvo_voted_qa_ids');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return new Set(parsed);
+    }
+  } catch (e) {}
+  return new Set();
+}
+
 export default function ProductQA({ productId, initialQA = [] }) {
   const [qaList, setQaList] = useState(initialQA);
   const [searchQuery, setSearchQuery] = useState('');
   const [newQuestion, setNewQuestion] = useState('');
   const [askerName, setAskerName] = useState('');
   const [isAsking, setIsAsking] = useState(false);
-  const [votedIds, setVotedIds] = useState(new Set());
+  const [votedIds, setVotedIds] = useState(() => getStoredVotedIds());
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -36,14 +60,36 @@ export default function ProductQA({ productId, initialQA = [] }) {
     }
 
     try {
-      const res = await fetch(`/api/products/qa/${qaId}/helpful`, { method: 'POST' });
+      const voterToken = getOrCreateVoterToken();
+      const authToken = localStorage.getItem('palluvo_token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+      const res = await fetch(`/api/products/qa/${qaId}/helpful`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ voter_token: voterToken })
+      });
       const data = await res.json();
       if (res.ok) {
         setQaList(prev => prev.map(item =>
-          item.id === qaId ? { ...item, helpful_votes: (item.helpful_votes || 0) + 1 } : item
+          item.id === qaId ? { ...item, helpful_votes: typeof data.helpful_votes === 'number' ? data.helpful_votes : (item.helpful_votes || 0) + 1 } : item
         ));
-        setVotedIds(prev => new Set([...prev, qaId]));
-        showToast('Thank you for your feedback!', 'success');
+        setVotedIds(prev => {
+          const updated = new Set([...prev, qaId]);
+          try {
+            localStorage.setItem('palluvo_voted_qa_ids', JSON.stringify(Array.from(updated)));
+          } catch (e) {}
+          return updated;
+        });
+
+        if (data.already_voted) {
+          showToast('You already voted this answer as helpful.', 'info');
+        } else {
+          showToast('Thank you for your feedback!', 'success');
+        }
+      } else {
+        showToast(data.error || 'Failed to record vote.', 'error');
       }
     } catch (e) {
       showToast('Failed to record vote.', 'error');

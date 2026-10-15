@@ -426,6 +426,20 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
     CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
     CREATE INDEX IF NOT EXISTS idx_product_qa_product ON product_qa(product_id);
+
+    -- Q&A Helpful Votes Table (Tracks unique votes per voter key / user)
+    CREATE TABLE IF NOT EXISTS product_qa_votes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      qa_id INTEGER NOT NULL,
+      voter_key TEXT NOT NULL,
+      user_id INTEGER DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(qa_id, voter_key),
+      FOREIGN KEY (qa_id) REFERENCES product_qa(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_qa_votes_qa ON product_qa_votes(qa_id);
+    CREATE INDEX IF NOT EXISTS idx_qa_votes_key ON product_qa_votes(voter_key);
   `);
 
   // Migration: Add return columns to orders if not exist
@@ -510,19 +524,49 @@ function initSchema() {
     }
     // Flush WAL to disk
     db.pragma('wal_checkpoint(TRUNCATE)');
-    // Migration: Remove legacy seeded Q&A records with invented customer names/votes
+    // One-time Migration: Remove exact legacy fixture rows (identified by exact question text and user_name)
+    // or legacy concierge answers, without affecting legitimate customer questions.
     try {
-      db.prepare(`
-        DELETE FROM product_qa 
-        WHERE user_name IN ('Meera Deshmukh', 'Sneha Kulkarni', 'Kavitha R.', 'Tanvi Agarwal', 'Pooja Malhotra')
-           OR answered_by = 'PALLUVO Master Weaver Concierge'
-      `).run();
-    } catch (e) {}
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          migration_name TEXT PRIMARY KEY,
+          applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      const migrationRan = db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_legacy_qa_fixtures'").get();
+      if (!migrationRan) {
+        const legacyFixtures = [
+          { user_name: 'Meera Deshmukh', question: 'Does this saree come with an unstitched blouse piece included?' },
+          { user_name: 'Meera Deshmukh', question: 'Is this 100% pure silk and does it come with a Silk Mark certification tag?' },
+          { user_name: 'Sneha Kulkarni', question: 'What is the recommended care instruction for this pure silk saree?' },
+          { user_name: 'Sneha Kulkarni', question: 'Does the blouse piece match the body or the pallu?' },
+          { user_name: 'Kavitha R.', question: 'What is the approximate weight of this bridal Kanjivaram saree?' },
+          { user_name: 'Tanvi Agarwal', question: 'How sheer is the organza fabric on this saree?' },
+          { user_name: 'Tanvi Agarwal', question: 'Is the organza fabric scratchy or stiff on sensitive skin?' },
+          { user_name: 'Pooja Malhotra', question: 'Are fall and edging pre-stitched on this saree?' },
+          { user_name: 'Pooja Malhotra', question: 'Are fall and pico pre-stitched on this saree?' }
+        ];
+
+        const deleteStmt = db.prepare('DELETE FROM product_qa WHERE user_name = ? AND question = ?');
+        for (const item of legacyFixtures) {
+          deleteStmt.run(item.user_name, item.question);
+        }
+
+        db.prepare("DELETE FROM product_qa WHERE answered_by = 'PALLUVO Master Weaver Concierge'").run();
+
+        db.prepare("INSERT OR IGNORE INTO schema_migrations (migration_name) VALUES ('cleanup_legacy_qa_fixtures')").run();
+      }
+    } catch (e) {
+      console.log('Legacy QA fixture migration note:', e.message);
+    }
   } catch (e) {
     console.log('Product image migration note:', e.message);
   }
 }
 
 initSchema();
+
+db.initSchema = initSchema;
 
 module.exports = db;

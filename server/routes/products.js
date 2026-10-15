@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
+const { optionalAuth } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
 const { reconcileExpiredReservations } = require('./payments');
 
@@ -372,12 +373,72 @@ router.post('/:productId/qa', requireDurableStorage, (req, res) => {
   }
 });
 
-// POST /api/products/qa/:id/helpful (Upvote helpfulness)
-router.post('/qa/:id/helpful', requireDurableStorage, (req, res) => {
+// POST /api/products/qa/:id/helpful (Upvote helpfulness idempotently per voter)
+router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, (req, res) => {
   try {
-    db.prepare('UPDATE product_qa SET helpful_votes = helpful_votes + 1 WHERE id = ?').run(req.params.id);
-    const item = db.prepare('SELECT * FROM product_qa WHERE id = ?').get(req.params.id);
-    res.json({ success: true, helpful_votes: item ? item.helpful_votes : 1 });
+    const qaId = parseInt(req.params.id, 10);
+    if (isNaN(qaId)) {
+      return res.status(400).json({ error: 'Invalid question ID.' });
+    }
+
+    const qaItem = db.prepare('SELECT id, helpful_votes FROM product_qa WHERE id = ?').get(qaId);
+    if (!qaItem) {
+      return res.status(404).json({ error: 'Question not found.' });
+    }
+
+    // Determine unique voter key from authenticated user or stable anonymous voter token
+    const voterToken = (req.body?.voter_token || req.headers['x-voter-token'] || '').trim();
+    let voterKey;
+    if (req.user?.id) {
+      voterKey = `usr_${req.user.id}`;
+    } else if (voterToken) {
+      voterKey = `anon_${voterToken}`;
+    } else {
+      const forwarded = req.headers['x-forwarded-for'];
+      const rawIp = (typeof forwarded === 'string' ? forwarded.split(',')[0] : (req.socket?.remoteAddress || req.ip || 'anon')).trim();
+      voterKey = `ip_${rawIp}`;
+    }
+
+    // Check if voter has already voted on this question
+    const existingVote = db.prepare('SELECT id FROM product_qa_votes WHERE qa_id = ? AND voter_key = ?').get(qaId, voterKey);
+    if (existingVote) {
+      return res.json({
+        success: true,
+        helpful_votes: qaItem.helpful_votes,
+        already_voted: true
+      });
+    }
+
+    // Atomically record vote and increment helpful_votes count
+    const recordVote = db.transaction(() => {
+      db.prepare('INSERT INTO product_qa_votes (qa_id, voter_key, user_id) VALUES (?, ?, ?)').run(
+        qaId,
+        voterKey,
+        req.user?.id || null
+      );
+      db.prepare('UPDATE product_qa SET helpful_votes = helpful_votes + 1 WHERE id = ?').run(qaId);
+    });
+
+    try {
+      recordVote();
+    } catch (insertErr) {
+      if (insertErr.code === 'SQLITE_CONSTRAINT' || insertErr.message.includes('UNIQUE')) {
+        const currentItem = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(qaId);
+        return res.json({
+          success: true,
+          helpful_votes: currentItem ? currentItem.helpful_votes : qaItem.helpful_votes,
+          already_voted: true
+        });
+      }
+      throw insertErr;
+    }
+
+    const updated = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(qaId);
+    res.json({
+      success: true,
+      helpful_votes: updated ? updated.helpful_votes : qaItem.helpful_votes + 1,
+      already_voted: false
+    });
   } catch (err) {
     console.error('Helpful vote error:', err);
     res.status(500).json({ error: 'Failed to record vote.' });

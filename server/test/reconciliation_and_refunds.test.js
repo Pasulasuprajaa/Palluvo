@@ -88,9 +88,16 @@ async function runTests() {
       return new Promise((resolve, reject) => {
         const fullUrl = reqPath.startsWith('/api/') ? `http://localhost:${port}${reqPath}` : `${baseUrl}${reqPath}`;
         const url = new URL(fullUrl);
+        const headers = Object.assign({}, options.headers || {});
+        if (options.token) {
+          headers['Authorization'] = `Bearer ${options.token}`;
+        }
+        if (options.body && !headers['Content-Type'] && !headers['content-type']) {
+          headers['Content-Type'] = 'application/json';
+        }
         const req = http.request(url, {
           method: options.method || 'GET',
-          headers: options.headers || {}
+          headers
         }, res => {
           let body = '';
           res.on('data', chunk => body += chunk);
@@ -982,6 +989,93 @@ async function runTests() {
     assert.strictEqual(returnedQA.answered_by, null, 'Exposed QA must not contain fake concierge attribution');
     assert.strictEqual(returnedQA.helpful_votes, 0, 'Exposed QA must start with 0 helpful votes');
     console.log('✅ PASS: [P2] Seeded Q&A and GET endpoint strictly avoid unverified concierge claims and fabricated social proof');
+
+    // 7. Verify real customer questions with names matching former fixtures are NOT wiped on database restart/init
+    const realCustomerQuestionText = 'Can this bridal saree be delivered with custom blouse stitching in Pune?';
+    db.prepare(`
+      INSERT INTO product_qa (product_id, question, answer, answered_by, helpful_votes, user_name)
+      VALUES (?, ?, NULL, NULL, 0, 'Meera Deshmukh')
+    `).run(prodWithImgId, realCustomerQuestionText);
+
+    // Simulate database startup / schema initialization
+    if (typeof db.initSchema === 'function') {
+      db.initSchema();
+    }
+
+    const preservedRow = db.prepare(`
+      SELECT * FROM product_qa WHERE user_name = 'Meera Deshmukh' AND question = ?
+    `).get(realCustomerQuestionText);
+    assert.ok(preservedRow, 'Legitimate customer question from Meera Deshmukh must NOT be deleted on database initialization');
+    assert.strictEqual(preservedRow.user_name, 'Meera Deshmukh');
+    console.log('✅ PASS: [P2] Database schema init does not delete real customer questions matching former fixture names');
+
+    // 8. Verify helpful-vote uniqueness and idempotency on POST /api/products/qa/:id/helpful
+    const targetQaId = askQARes.body.qa.id;
+
+    // 8a. Anonymous voter 1 casts helpful vote
+    const vote1Res = await request(`/api/products/qa/${targetQaId}/helpful`, {
+      method: 'POST',
+      body: { voter_token: 'voter_token_alpha' }
+    });
+    assert.strictEqual(vote1Res.status, 200);
+    assert.strictEqual(vote1Res.body.success, true);
+    assert.strictEqual(vote1Res.body.helpful_votes, 1);
+    assert.strictEqual(vote1Res.body.already_voted, false);
+
+    // 8b. Replay from anonymous voter 1 (must NOT increment count)
+    const replay1Res = await request(`/api/products/qa/${targetQaId}/helpful`, {
+      method: 'POST',
+      body: { voter_token: 'voter_token_alpha' }
+    });
+    assert.strictEqual(replay1Res.status, 200);
+    assert.strictEqual(replay1Res.body.success, true);
+    assert.strictEqual(replay1Res.body.helpful_votes, 1, 'Replayed vote must not increment helpful_votes');
+    assert.strictEqual(replay1Res.body.already_voted, true, 'Replayed vote must return already_voted: true');
+
+    // 8c. Distinct anonymous voter 2 casts helpful vote
+    const vote2Res = await request(`/api/products/qa/${targetQaId}/helpful`, {
+      method: 'POST',
+      body: { voter_token: 'voter_token_beta' }
+    });
+    assert.strictEqual(vote2Res.status, 200);
+    assert.strictEqual(vote2Res.body.success, true);
+    assert.strictEqual(vote2Res.body.helpful_votes, 2, 'Distinct voter must increment helpful_votes to 2');
+    assert.strictEqual(vote2Res.body.already_voted, false);
+
+    // 8d. Authenticated user casts helpful vote
+    const authVoteRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
+      method: 'POST',
+      token: reviewUserToken
+    });
+    assert.strictEqual(authVoteRes.status, 200);
+    assert.strictEqual(authVoteRes.body.success, true);
+    assert.strictEqual(authVoteRes.body.helpful_votes, 3, 'Authenticated user vote must increment count to 3');
+    assert.strictEqual(authVoteRes.body.already_voted, false);
+
+    // 8e. Replay from authenticated user
+    const replayAuthRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
+      method: 'POST',
+      token: reviewUserToken
+    });
+    assert.strictEqual(replayAuthRes.status, 200);
+    assert.strictEqual(replayAuthRes.body.success, true);
+    assert.strictEqual(replayAuthRes.body.helpful_votes, 3, 'Authenticated user replay must not increment count');
+    assert.strictEqual(replayAuthRes.body.already_voted, true);
+
+    // 8f. Error handling for invalid QA ID and non-existent QA ID
+    const invalidIdRes = await request('/api/products/qa/not-a-number/helpful', {
+      method: 'POST',
+      body: { voter_token: 'token_err' }
+    });
+    assert.strictEqual(invalidIdRes.status, 400, 'Non-integer question ID must return 400');
+
+    const notFoundRes = await request('/api/products/qa/999999/helpful', {
+      method: 'POST',
+      body: { voter_token: 'token_err' }
+    });
+    assert.strictEqual(notFoundRes.status, 404, 'Non-existent question ID must return 404');
+
+    console.log('✅ PASS: [P2] Helpful-vote endpoint strictly enforces voter uniqueness and replay idempotency');
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {
