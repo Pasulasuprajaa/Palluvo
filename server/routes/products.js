@@ -16,13 +16,28 @@ function getCallerIp(req) {
   return req.socket?.remoteAddress || '127.0.0.1';
 }
 
-function generateStableVoterId(ip) {
-  return crypto.createHmac('sha256', JWT_SECRET).update(`qa_voter_stable:${ip}`).digest('hex').slice(0, 32);
-}
-
 function issueVoterToken(req) {
-  const ip = getCallerIp(req);
-  const voterId = generateStableVoterId(ip);
+  let voterId = null;
+  const existingToken = (
+    req?.headers?.['x-voter-token'] ||
+    req?.query?.token ||
+    req?.body?.voter_token ||
+    ''
+  ).trim();
+
+  if (existingToken) {
+    try {
+      const decoded = jwt.verify(existingToken, JWT_SECRET, { ignoreExpiration: true });
+      if (decoded && decoded.voter_type === 'anonymous_qa_voter' && decoded.voter_id) {
+        voterId = decoded.voter_id;
+      }
+    } catch (e) {}
+  }
+
+  if (!voterId) {
+    voterId = 'voter_' + crypto.randomUUID();
+  }
+
   return jwt.sign(
     {
       voter_id: voterId,
@@ -35,15 +50,20 @@ function issueVoterToken(req) {
 }
 
 function verifyVoterToken(token) {
-  if (!token || typeof token !== 'string') return null;
+  if (!token || typeof token !== 'string') {
+    return { valid: false, error: 'MISSING' };
+  }
   try {
     const decoded = jwt.verify(token.trim(), JWT_SECRET);
     if (decoded && decoded.voter_type === 'anonymous_qa_voter' && decoded.voter_id) {
-      return decoded.voter_id;
+      return { valid: true, voter_id: decoded.voter_id };
     }
-    return null;
+    return { valid: false, error: 'INVALID' };
   } catch (err) {
-    return null;
+    if (err.name === 'TokenExpiredError') {
+      return { valid: false, error: 'EXPIRED' };
+    }
+    return { valid: false, error: 'INVALID' };
   }
 }
 
@@ -452,12 +472,21 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, (req, res) =
         return res.status(400).json({ error: 'Valid server-issued voter token or authentication is required.' });
       }
 
-      const verifiedVoterId = verifyVoterToken(rawToken);
-      if (!verifiedVoterId) {
-        return res.status(400).json({ error: 'Invalid or forged voter token. A valid server-issued voter token is required.' });
+      const verified = verifyVoterToken(rawToken);
+      if (!verified.valid) {
+        if (verified.error === 'EXPIRED') {
+          return res.status(401).json({
+            error: 'Voter token has expired. Please refresh your token.',
+            code: 'TOKEN_EXPIRED'
+          });
+        }
+        return res.status(400).json({
+          error: 'Invalid or forged voter token. A valid server-issued voter token is required.',
+          code: 'INVALID_TOKEN'
+        });
       }
 
-      voterKey = `anon_${verifiedVoterId}`;
+      voterKey = `anon_${verified.voter_id}`;
     }
 
     // Check if voter has already voted on this question

@@ -1027,80 +1027,108 @@ async function runTests() {
     });
     assert.strictEqual(noTokenRes.status, 400, 'Request with no voter token and no auth must return 400');
 
-    // 8c. Issue signed anonymous voter tokens from the server
+    // 8c. Issue signed anonymous voter tokens for distinct browsers
     const tokenRes1 = await request('/api/products/qa/voter-token');
     assert.strictEqual(tokenRes1.status, 200);
     assert.ok(tokenRes1.body.voter_token, 'Server must return signed voter_token');
-    const serverVoterToken1 = tokenRes1.body.voter_token;
+    const browserToken1 = tokenRes1.body.voter_token;
 
-    // Request a second token from the same caller: contains different nonce, producing a distinct token string
+    // A second guest browser requests a token (without passing an existing token)
     const tokenRes2 = await request('/api/products/qa/voter-token');
     assert.strictEqual(tokenRes2.status, 200);
-    const serverVoterToken2 = tokenRes2.body.voter_token;
-    assert.notStrictEqual(serverVoterToken1, serverVoterToken2, 'Repeated token requests produce distinct signed token strings');
+    const browserToken2 = tokenRes2.body.voter_token;
+    assert.notStrictEqual(browserToken1, browserToken2, 'Distinct browsers receive distinct signed tokens');
 
-    // 8d. Anonymous caller votes with serverVoterToken1
+    // 8d. Anonymous guest browser 1 votes
     const vote1Res = await request(`/api/products/qa/${targetQaId}/helpful`, {
       method: 'POST',
-      body: { voter_token: serverVoterToken1 }
+      body: { voter_token: browserToken1 }
     });
     assert.strictEqual(vote1Res.status, 200);
     assert.strictEqual(vote1Res.body.success, true);
-    assert.strictEqual(vote1Res.body.helpful_votes, 1, 'First vote with server-issued token increments count to 1');
+    assert.strictEqual(vote1Res.body.helpful_votes, 1, 'First guest vote increments count to 1');
     assert.strictEqual(vote1Res.body.already_voted, false);
 
-    // 8e. REGRESSION TEST: Same caller sends distinct token serverVoterToken2
-    // Must NOT increment count; identity is bound to the server-issued caller identity
-    const voteDistinctTokenRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
-      method: 'POST',
-      body: { voter_token: serverVoterToken2 }
-    });
-    assert.strictEqual(voteDistinctTokenRes.status, 200);
-    assert.strictEqual(voteDistinctTokenRes.body.success, true);
-    assert.strictEqual(voteDistinctTokenRes.body.helpful_votes, 1, 'Distinct token from same caller must NOT increment helpful_votes');
-    assert.strictEqual(voteDistinctTokenRes.body.already_voted, true, 'Distinct token from same caller must return already_voted: true');
-
-    // 8f. Replay with serverVoterToken1
+    // 8e. Anonymous guest browser 1 re-votes (must be blocked idempotently)
     const replay1Res = await request(`/api/products/qa/${targetQaId}/helpful`, {
       method: 'POST',
-      body: { voter_token: serverVoterToken1 }
+      body: { voter_token: browserToken1 }
     });
     assert.strictEqual(replay1Res.status, 200);
-    assert.strictEqual(replay1Res.body.success, true);
-    assert.strictEqual(replay1Res.body.helpful_votes, 1, 'Replayed vote must not increment helpful_votes');
+    assert.strictEqual(replay1Res.body.helpful_votes, 1, 'Replayed vote from browser 1 must not increment count');
     assert.strictEqual(replay1Res.body.already_voted, true);
 
-    // 8g. Authenticated user casts helpful vote
+    // 8f. [P3] Separate guest browser 2 behind the same IP can also vote
+    const vote2Res = await request(`/api/products/qa/${targetQaId}/helpful`, {
+      method: 'POST',
+      body: { voter_token: browserToken2 }
+    });
+    assert.strictEqual(vote2Res.status, 200);
+    assert.strictEqual(vote2Res.body.success, true);
+    assert.strictEqual(vote2Res.body.helpful_votes, 2, 'Distinct guest browser must increment count to 2');
+    assert.strictEqual(vote2Res.body.already_voted, false);
+
+    // 8g. [P2] Expired anonymous voter token returns 401 with TOKEN_EXPIRED
+    const expiredToken = jwt.sign(
+      { voter_id: 'voter_renewal_test_id', voter_type: 'anonymous_qa_voter' },
+      JWT_SECRET,
+      { expiresIn: '-1s' }
+    );
+    const expiredVoteRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
+      method: 'POST',
+      body: { voter_token: expiredToken }
+    });
+    assert.strictEqual(expiredVoteRes.status, 401, 'Expired voter token must return 401');
+    assert.strictEqual(expiredVoteRes.body.code, 'TOKEN_EXPIRED', 'Response must indicate TOKEN_EXPIRED');
+
+    // 8h. [P2] Refreshing the expired token preserves the voter_id
+    const refreshRes = await request('/api/products/qa/voter-token', {
+      headers: { 'x-voter-token': expiredToken }
+    });
+    assert.strictEqual(refreshRes.status, 200);
+    const renewedToken = refreshRes.body.voter_token;
+    const decodedRenewed = jwt.verify(renewedToken, JWT_SECRET);
+    assert.strictEqual(decodedRenewed.voter_id, 'voter_renewal_test_id', 'Token renewal must preserve original voter_id');
+
+    // 8i. Voting with the renewed token succeeds
+    const renewedVoteRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
+      method: 'POST',
+      body: { voter_token: renewedToken }
+    });
+    assert.strictEqual(renewedVoteRes.status, 200);
+    assert.strictEqual(renewedVoteRes.body.helpful_votes, 3, 'Vote with renewed token must succeed and increment count to 3');
+    assert.strictEqual(renewedVoteRes.body.already_voted, false);
+
+    // 8j. Authenticated user casts helpful vote
     const authVoteRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
       method: 'POST',
       token: reviewUserToken
     });
     assert.strictEqual(authVoteRes.status, 200);
     assert.strictEqual(authVoteRes.body.success, true);
-    assert.strictEqual(authVoteRes.body.helpful_votes, 2, 'Authenticated user vote must increment count to 2');
+    assert.strictEqual(authVoteRes.body.helpful_votes, 4, 'Authenticated user vote must increment count to 4');
     assert.strictEqual(authVoteRes.body.already_voted, false);
 
-    // 8h. Replay from authenticated user (even when sending a distinct arbitrary token)
+    // 8k. Replay from authenticated user
     const replayAuthRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
       method: 'POST',
       token: reviewUserToken,
       body: { voter_token: 'arbitrary_token_sent_by_logged_in_user' }
     });
     assert.strictEqual(replayAuthRes.status, 200);
-    assert.strictEqual(replayAuthRes.body.success, true);
-    assert.strictEqual(replayAuthRes.body.helpful_votes, 2, 'Authenticated user replay must not increment count');
+    assert.strictEqual(replayAuthRes.body.helpful_votes, 4, 'Authenticated user replay must not increment count');
     assert.strictEqual(replayAuthRes.body.already_voted, true);
 
-    // 8i. Error handling for invalid QA ID and non-existent QA ID
+    // 8l. Error handling for invalid QA ID and non-existent QA ID
     const invalidIdRes = await request('/api/products/qa/not-a-number/helpful', {
       method: 'POST',
-      body: { voter_token: serverVoterToken1 }
+      body: { voter_token: browserToken1 }
     });
     assert.strictEqual(invalidIdRes.status, 400, 'Non-integer question ID must return 400');
 
     const notFoundRes = await request('/api/products/qa/999999/helpful', {
       method: 'POST',
-      body: { voter_token: serverVoterToken1 }
+      body: { voter_token: browserToken1 }
     });
     assert.strictEqual(notFoundRes.status, 404, 'Non-existent question ID must return 404');
 

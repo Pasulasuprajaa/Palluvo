@@ -2,22 +2,41 @@ import React, { useState, useEffect } from 'react';
 import { HelpCircle, Search, ThumbsUp, MessageSquare, Sparkles, Send, CheckCircle2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 
-async function getOrFetchVoterToken() {
+function isTokenValid(token) {
+  if (!token || typeof token !== 'string') return false;
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  try {
+    const rawPayload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const decodedStr = typeof atob === 'function' ? atob(rawPayload) : Buffer.from(rawPayload, 'base64').toString('utf-8');
+    const payload = JSON.parse(decodedStr);
+    if (payload.exp && (payload.exp * 1000 <= Date.now() + 60000)) {
+      return false; // Expired or expiring within 60s
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function getOrFetchVoterToken(forceRefresh = false) {
   try {
     let token = localStorage.getItem('palluvo_qa_voter_token');
-    // Validate that stored token is in JWT format (3 dot-separated parts)
-    if (token && (typeof token !== 'string' || token.split('.').length !== 3)) {
-      token = null;
-      localStorage.removeItem('palluvo_qa_voter_token');
+    if (!forceRefresh && isTokenValid(token)) {
+      return token;
     }
-    if (!token) {
-      const res = await fetch('/api/products/qa/voter-token');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.voter_token) {
-          token = data.voter_token;
-          localStorage.setItem('palluvo_qa_voter_token', token);
-        }
+
+    // Existing token is expired or missing; pass existing token to preserve voter_id during renewal
+    const headers = {};
+    if (token) headers['x-voter-token'] = token;
+
+    const res = await fetch('/api/products/qa/voter-token', { headers });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.voter_token) {
+        token = data.voter_token;
+        localStorage.setItem('palluvo_qa_voter_token', token);
+        return token;
       }
     }
     return token;
@@ -74,18 +93,33 @@ export default function ProductQA({ productId, initialQA = [] }) {
     }
 
     try {
-      const voterToken = await getOrFetchVoterToken();
+      let voterToken = await getOrFetchVoterToken();
       const authToken = localStorage.getItem('palluvo_token');
       const headers = { 'Content-Type': 'application/json' };
       if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
       if (voterToken) headers['x-voter-token'] = voterToken;
 
-      const res = await fetch(`/api/products/qa/${qaId}/helpful`, {
+      let res = await fetch(`/api/products/qa/${qaId}/helpful`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ voter_token: voterToken })
       });
-      const data = await res.json();
+      let data = await res.json();
+
+      // If token expired on server, auto-refresh and retry once
+      if (!res.ok && (data.code === 'TOKEN_EXPIRED' || (data.error && data.error.toLowerCase().includes('token')))) {
+        voterToken = await getOrFetchVoterToken(true);
+        if (voterToken) {
+          headers['x-voter-token'] = voterToken;
+          res = await fetch(`/api/products/qa/${qaId}/helpful`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ voter_token: voterToken })
+          });
+          data = await res.json();
+        }
+      }
+
       if (res.ok) {
         setQaList(prev => prev.map(item =>
           item.id === qaId ? { ...item, helpful_votes: typeof data.helpful_votes === 'number' ? data.helpful_votes : (item.helpful_votes || 0) + 1 } : item
