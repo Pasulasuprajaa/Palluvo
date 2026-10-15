@@ -72,7 +72,7 @@ export default function ProductQA({ productId, initialQA = [] }) {
         setQaList(prev => [data.qa, ...prev]);
       }
       setNewQuestion('');
-      showToast('✨ Your question has been verified & answered by our Master Weaver Concierge!', 'success');
+      showToast(data.message || '✨ Your question has been submitted for concierge review.', 'success');
     } catch (err) {
       showToast(err.message || 'Failed to post question.', 'error');
     } finally {
@@ -162,7 +162,7 @@ export default function ProductQA({ productId, initialQA = [] }) {
               </div>
 
               {/* Answer */}
-              {item.answer && (
+              {item.answer ? (
                 <div className="flex items-start gap-3 pl-0 sm:pl-2">
                   <span className="font-bold text-[#C5A059] text-xs shrink-0 font-serif">A:</span>
                   <div className="space-y-1.5 flex-1">
@@ -188,6 +188,12 @@ export default function ProductQA({ productId, initialQA = [] }) {
                       </button>
                     </div>
                   </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 pl-0 sm:pl-2 text-[11px] text-amber-800 bg-amber-50/70 border border-amber-200/60 rounded-lg px-2.5 py-1.5">
+                  <span className="italic">Awaiting artisan concierge review &amp; answer</span>
+                  <span>•</span>
+                  <span className="text-gray-500">Asked by {item.user_name || 'Patron'}</span>
                 </div>
               )}
             </div>

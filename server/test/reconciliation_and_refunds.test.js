@@ -26,6 +26,8 @@ const { JWT_SECRET } = require('../middleware/auth');
 const paymentsRouter = require('../routes/payments');
 const ordersRouter = require('../routes/orders');
 const adminRouter = require('../routes/admin');
+const reviewsRouter = require('../routes/reviews');
+const productsRouter = require('../routes/products');
 const { getMetaForRoute, injectMetaTags } = require('../services/seoRenderer');
 const { reconcilePendingRefunds, reconcileExpiredReservations } = paymentsRouter;
 const {
@@ -50,6 +52,8 @@ async function runTests() {
     app.use('/api/payments', paymentsRouter);
     app.use('/api/orders', ordersRouter);
     app.use('/api/admin', adminRouter);
+    app.use('/api/reviews', reviewsRouter);
+    app.use('/api/products', productsRouter);
     app.get('/api/render', (req, res, next) => {
       if (req.query.path !== undefined && typeof req.query.path !== 'string') {
         return res.status(400).json({
@@ -873,6 +877,86 @@ async function runTests() {
     assert.strictEqual(updatedCatalogEntry.primary_image, customImage, 'Catalog primary_image must not be overwritten with fallback');
     assert.deepStrictEqual(updatedCatalogEntry.images, [customImage], 'Catalog images array must preserve existing image');
     console.log('✅ PASS: [P3] Partial product update preserves existing image rows and catalog entry');
+
+    // --- TEST SUITE P2: Customer Trust (Verified Reviews & Concierge Q&A Safety) ---
+    console.log('\n--- Testing [P2] Verified Purchase Checks & Unapproved Q&A Gating ---');
+
+    // 1. Review submitted by a user who has NOT purchased the product must have verified_purchase === 0
+    const reviewUser = { id: 777, name: 'Reviewer Test User', email: 'reviewer_trust@example.com', role: 'user' };
+    db.prepare(`
+      INSERT OR IGNORE INTO users (id, name, email, password_hash, role)
+      VALUES (?, ?, ?, 'hash_rev_123', ?)
+    `).run(reviewUser.id, reviewUser.name, reviewUser.email, reviewUser.role);
+    const reviewUserToken = jwt.sign({ id: reviewUser.id, name: reviewUser.name, email: reviewUser.email, role: reviewUser.role }, JWT_SECRET);
+
+    const unverifiedReviewRes = await request('/api/reviews', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${reviewUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        product_id: prodWithImgId,
+        rating: 4,
+        comment: 'Lovely drape, considering purchasing for wedding.'
+      }
+    });
+    assert.strictEqual(unverifiedReviewRes.status, 201, 'Review submission should succeed');
+
+    const unverifiedRow = db.prepare('SELECT * FROM reviews WHERE user_id = ? AND product_id = ? ORDER BY id DESC LIMIT 1').get(reviewUser.id, prodWithImgId);
+    assert.strictEqual(unverifiedRow.verified_purchase, 0, 'Unpurchased product review must have verified_purchase === 0');
+    assert.strictEqual(unverifiedRow.title, 'Customer Review', 'Default title for unverified review should be Customer Review');
+    console.log('✅ PASS: [P2] Review on unpurchased product correctly persisted with verified_purchase === 0');
+
+    // 2. Review submitted by a user who HAS purchased the product with Paid status must have verified_purchase === 1
+    const paidOrder = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, status, address_data)
+      VALUES ('ORD-VERIFIED-REV-1', ?, 52000, 52000, 'razorpay', 'Paid', 'Delivered', '{"city":"Bengaluru"}')
+    `).run(reviewUser.id);
+    db.prepare(`
+      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+      VALUES (?, ?, 'Vibrant Kanjivaram Edit', 52000, 1)
+    `).run(paidOrder.lastInsertRowid, prodWithImgId);
+
+    const verifiedReviewRes = await request('/api/reviews', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${reviewUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        product_id: prodWithImgId,
+        rating: 5,
+        comment: 'Received the saree yesterday, pure silk zari weave is immaculate.'
+      }
+    });
+    assert.strictEqual(verifiedReviewRes.status, 201, 'Verified review submission should succeed');
+
+    const verifiedRow = db.prepare('SELECT * FROM reviews WHERE user_id = ? AND product_id = ? ORDER BY id DESC LIMIT 1').get(reviewUser.id, prodWithImgId);
+    assert.strictEqual(verifiedRow.verified_purchase, 1, 'Purchased product review must have verified_purchase === 1');
+    assert.strictEqual(verifiedRow.title, 'Verified Saree Drape Experience', 'Default title for verified review should reflect verified experience');
+    console.log('✅ PASS: [P2] Review on paid purchased product correctly marked with verified_purchase === 1');
+
+    // 3. Asking a question leaves answer as NULL by default in production/test environments without staff review
+    const askQARes = await request(`/api/products/${prodWithImgId}/qa`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: {
+        question: 'Does this Kanjivaram saree include Silk Mark tag certification?',
+        user_name: 'Heritage Seeker'
+      }
+    });
+    assert.strictEqual(askQARes.status, 201, 'Question submission should succeed');
+    assert.strictEqual(askQARes.body.qa.answer, null, 'Public endpoint must NOT insert simulated answer without staff approval');
+    assert.strictEqual(askQARes.body.qa.answered_by, null, 'Public endpoint must NOT attribute canned answer to Master Weaver Concierge');
+    assert(askQARes.body.message.includes('reviewed'), 'Response message should clarify question is awaiting concierge review');
+
+    const savedQARow = db.prepare('SELECT * FROM product_qa WHERE id = ?').get(askQARes.body.qa.id);
+    assert.strictEqual(savedQARow.answer, null, 'Database row must store answer as NULL until approved');
+    assert.strictEqual(savedQARow.answered_by, null, 'Database row must store answered_by as NULL until approved');
+    console.log('✅ PASS: [P2] Q&A questions remain unanswered without fake concierge verification');
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {

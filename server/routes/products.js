@@ -351,12 +351,21 @@ router.post('/:productId/qa', requireDurableStorage, (req, res) => {
       VALUES (?, ?, ?, ?, ?, 0)
     `);
 
-    // Auto generate concierge answer simulator
-    const answer = 'Namaste! Thank you for inquiring. Our artisan concierge team has verified that this piece complies with authentic weaving standards and comes carefully inspected in signature luxury packaging.';
-    const result = insert.run(req.params.productId, name, question.trim(), answer, 'PALLUVO Master Weaver Concierge');
+    // In production and real environments, leave questions unanswered until real staff review occurs.
+    // Concierge answer simulation is strictly gated to development/demo environments when explicitly enabled.
+    const isDevOrDemo = process.env.NODE_ENV === 'development' && process.env.ENABLE_CONCIERGE_SIMULATOR === 'true';
+    const answer = isDevOrDemo
+      ? 'Namaste! Thank you for inquiring. Our artisan concierge team has received your query and will assist shortly.'
+      : null;
+    const answeredBy = answer ? 'PALLUVO Master Weaver Concierge' : null;
+
+    const result = insert.run(req.params.productId, name, question.trim(), answer, answeredBy);
 
     const newQA = db.prepare('SELECT * FROM product_qa WHERE id = ?').get(result.lastInsertRowid);
-    res.status(201).json({ qa: newQA, message: 'Your question has been answered by our Master Weaver Concierge.' });
+    const message = answer
+      ? 'Your question has been answered by our Master Weaver Concierge.'
+      : 'Thank you! Your question has been submitted and will be answered once reviewed by our artisan concierge team.';
+    res.status(201).json({ qa: newQA, message });
   } catch (err) {
     console.error('Post QA error:', err);
     res.status(500).json({ error: 'Failed to post question.' });

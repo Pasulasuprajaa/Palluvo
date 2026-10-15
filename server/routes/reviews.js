@@ -62,7 +62,7 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
       LIMIT 1
     `).get(req.user.id, product_id);
 
-    const isVerified = purchased ? 1 : 1; // Default to 1 for demo delight
+    const isVerified = purchased ? 1 : 0;
 
     const insert = db.prepare(`
       INSERT INTO reviews (product_id, user_id, user_name, rating, title, comment, verified_purchase)
@@ -74,7 +74,7 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
       req.user.id,
       req.user.name,
       cleanRating,
-      title ? title.trim() : 'Verified Saree Drape Experience',
+      title ? title.trim() : (purchased ? 'Verified Saree Drape Experience' : 'Customer Review'),
       comment.trim(),
       isVerified
     );
