@@ -5,7 +5,7 @@ const router = express.Router();
 const db = require('../db/database');
 const { optionalAuth, JWT_SECRET } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
-const { anonymousVoteLimiter } = require('../middleware/rateLimit');
+const { anonymousVoteLimiter, anonymousVoteStore, getNormalizedIp } = require('../middleware/rateLimit');
 const { reconcileExpiredReservations } = require('./payments');
 
 function getCallerIp(req) {
@@ -529,7 +529,7 @@ router.post('/:productId/qa', requireDurableStorage, (req, res) => {
 });
 
 // POST /api/products/qa/:id/helpful (Upvote helpfulness idempotently per voter)
-router.post('/qa/:id/helpful', optionalAuth, anonymousVoteLimiter, requireDurableStorage, (req, res) => {
+router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, res) => {
   try {
     const qaId = parseInt(req.params.id, 10);
     if (isNaN(qaId)) {
@@ -594,6 +594,22 @@ router.post('/qa/:id/helpful', optionalAuth, anonymousVoteLimiter, requireDurabl
       });
     }
 
+    // Only charge shared rate limit quota for eligible new-vote attempts by unauthenticated guests
+    if (!req.user?.id) {
+      const allowed = await new Promise((resolve) => {
+        anonymousVoteLimiter(req, res, (err) => {
+          if (err) {
+            if (!res.headersSent) {
+              res.status(err.status || 500).json({ error: err.message });
+            }
+            return resolve(false);
+          }
+          resolve(!res.headersSent);
+        });
+      });
+      if (!allowed) return;
+    }
+
     // Atomically record vote and increment helpful_votes count
     const recordVote = db.transaction(() => {
       db.prepare('INSERT INTO product_qa_votes (qa_id, voter_key, user_id) VALUES (?, ?, ?)').run(
@@ -615,6 +631,11 @@ router.post('/qa/:id/helpful', optionalAuth, anonymousVoteLimiter, requireDurabl
       recordVote();
     } catch (insertErr) {
       if (insertErr.code === 'SQLITE_CONSTRAINT' || insertErr.message.includes('UNIQUE')) {
+        // Refund quota for concurrent duplicate vote collision
+        if (!req.user?.id && anonymousVoteStore && typeof anonymousVoteStore.decrement === 'function') {
+          const clientIp = getNormalizedIp(req);
+          await anonymousVoteStore.decrement(clientIp).catch(() => {});
+        }
         const currentItem = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(qaId);
         return res.json({
           success: true,

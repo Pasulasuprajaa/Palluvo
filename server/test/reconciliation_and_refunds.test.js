@@ -1214,6 +1214,89 @@ async function runTests() {
     }
     assert.strictEqual(hitLimit, true, 'Excessive unauthenticated votes exceeding shared limit must return 429 VOTE_LIMIT_EXCEEDED');
 
+    // 8p. [P2] Malformed, tokenless, rejected, and already-voted requests do not consume quota
+    const askSecondQARes = await request(`/api/products/${prodWithImgId}/qa`, {
+      method: 'POST',
+      body: {
+        name: 'Priya Verma',
+        question: 'Is dry cleaning mandatory for this silk?'
+      }
+    });
+    const targetQaId2 = askSecondQARes.body.qa.id;
+
+    // Reset rate limiter store for clean testing of invalid requests isolation
+    const { anonymousVoteStore } = require('../middleware/rateLimit');
+    if (anonymousVoteStore && typeof anonymousVoteStore.resetAll === 'function') {
+      await anonymousVoteStore.resetAll();
+    }
+
+    // Send 30 rejected/invalid requests (10 invalid QA ID, 10 missing token, 10 forged token)
+    for (let i = 0; i < 10; i++) {
+      const r1 = await request('/api/products/qa/invalid-id/helpful', { method: 'POST' });
+      assert.strictEqual(r1.status, 400);
+      const r2 = await request(`/api/products/qa/${targetQaId2}/helpful`, { method: 'POST', body: {} });
+      assert.strictEqual(r2.status, 400);
+      const r3 = await request(`/api/products/qa/${targetQaId2}/helpful`, { method: 'POST', body: { voter_token: 'forged_fake_token' } });
+      assert.strictEqual(r3.status, 400);
+    }
+
+    // If rejected requests consumed quota, the 25-request limit would be exhausted.
+    // Verify that a legitimate new vote attempt still succeeds with HTTP 200:
+    const freshGuestToken = (await request('/api/products/qa/voter-token')).body.voter_token;
+    const freshVoteRes = await request(`/api/products/qa/${targetQaId2}/helpful`, {
+      method: 'POST',
+      body: { voter_token: freshGuestToken }
+    });
+    assert.strictEqual(freshVoteRes.status, 200, 'Legitimate vote must succeed because rejected requests did not consume quota');
+    assert.strictEqual(freshVoteRes.body.helpful_votes, 1);
+
+    // Replaying an already-voted request must also NOT consume quota
+    const replayFreshRes = await request(`/api/products/qa/${targetQaId2}/helpful`, {
+      method: 'POST',
+      body: { voter_token: freshGuestToken }
+    });
+    assert.strictEqual(replayFreshRes.status, 200);
+    assert.strictEqual(replayFreshRes.body.already_voted, true);
+
+    // 8q. [P2] Preserve a zero KV TTL instead of extending the vote window
+    const originalFetch = global.fetch;
+    let expireTriggered = false;
+    global.fetch = async (url, opts) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/pipeline')) {
+        return {
+          ok: true,
+          json: async () => [
+            { result: 5 },
+            { result: 0 } // Legitimate Redis TTL of 0 seconds remaining
+          ]
+        };
+      }
+      if (urlStr.includes('/EXPIRE/')) {
+        expireTriggered = true;
+        return { ok: true, json: async () => ({ result: 1 }) };
+      }
+      return originalFetch(url, opts);
+    };
+
+    try {
+      const { SharedRateLimitStore } = require('../middleware/rateLimit');
+      const testStore = new SharedRateLimitStore('test_ttl_zero', 900000);
+      testStore.restUrl = 'https://mock-kv.upstash.io';
+      testStore.restToken = 'mock_token';
+      testStore.isShared = true;
+
+      const beforeIncr = Date.now();
+      const incrResult = await testStore.increment('ip_test_key');
+      assert.strictEqual(expireTriggered, false, 'TTL of 0 must NOT trigger another EXPIRE command');
+      assert.ok(
+        incrResult.resetTime.getTime() <= beforeIncr + 1000,
+        'TTL of 0 must preserve near-zero resetTime rather than extending window by 900s'
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+
     console.log('✅ PASS: [P2] Helpful-vote endpoint binds anonymous identity to server-issued token and blocks distinct tokens from same caller');
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');

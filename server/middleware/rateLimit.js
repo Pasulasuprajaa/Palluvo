@@ -85,8 +85,9 @@ class SharedRateLimitStore {
 
       const rawCount = data[0]?.result;
       const count = rawCount !== undefined && rawCount !== null ? (parseInt(rawCount, 10) || 0) : 0;
-      const ttl = parseInt(data[1]?.result, 10) || -1;
-      const resetTime = new Date(Date.now() + (ttl > 0 ? ttl * 1000 : this.windowMs));
+      const rawTtl = parseInt(data[1]?.result, 10);
+      const ttl = Number.isNaN(rawTtl) ? -1 : rawTtl;
+      const resetTime = new Date(Date.now() + (ttl >= 0 ? ttl * 1000 : this.windowMs));
       return { totalHits: count, resetTime };
     } catch (err) {
       if (isServerless) {
@@ -138,9 +139,14 @@ class SharedRateLimitStore {
       if (isNaN(count)) {
         throw new Error('KV pipeline returned non-numeric INCR result');
       }
-      let ttl = parseInt(data[1]?.result, 10) || -1;
+      const rawTtl = parseInt(data[1]?.result, 10);
+      let ttl = Number.isNaN(rawTtl) ? -1 : rawTtl;
 
-      // If the key was newly created and has no TTL, set expiration
+      // In Redis/KV, TTL returns:
+      // >= 0: seconds remaining (including 0 when expiring in < 1s)
+      // -1: key exists but has no expiration
+      // -2: key does not exist
+      // Only set expiration if the key has no expiry (-1) or was newly created (count === 1)
       if (ttl === -1 || count === 1) {
         const expireRes = await fetch(`${this.restUrl}/EXPIRE/${encodeURIComponent(fullKey)}/${windowSec}`, {
           headers: { Authorization: `Bearer ${this.restToken}` }
@@ -155,7 +161,7 @@ class SharedRateLimitStore {
         ttl = windowSec;
       }
 
-      const resetTime = new Date(Date.now() + (ttl > 0 ? ttl * 1000 : this.windowMs));
+      const resetTime = new Date(Date.now() + (ttl >= 0 ? ttl * 1000 : this.windowMs));
       return { totalHits: count, resetTime };
     } catch (err) {
       if (isServerless) {
@@ -314,13 +320,14 @@ const apiLimiter = rateLimit({
 
 // Rate limiter for unauthenticated helpful votes to prevent bot flood / vote manipulation
 // Uses generous abuse threshold (25 votes / 15 min) to prevent locking out legitimate multi-user shared NATs
+const anonymousVoteStore = createSharedRateLimitStore('qa_vote_anon', 15 * 60 * 1000);
 const anonymousVoteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 25,
   standardHeaders: true,
   legacyHeaders: false,
   validate: false,
-  store: createSharedRateLimitStore('qa_vote_anon', 15 * 60 * 1000),
+  store: anonymousVoteStore,
   keyGenerator: (req) => getNormalizedIp(req),
   skip: (req) => Boolean(req.user?.id),
   message: {
@@ -402,6 +409,7 @@ module.exports = {
   trackOrderLimiter,
   apiLimiter,
   anonymousVoteLimiter,
+  anonymousVoteStore,
   SharedRateLimitStore,
   getNormalizedIp,
   AccountRiskTracker,
