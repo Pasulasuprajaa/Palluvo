@@ -93,7 +93,7 @@ export default function ProductQA({ productId, initialQA = [] }) {
               Customer Questions & Answers (Q&A)
             </h3>
             <p className="text-xs text-gray-500">
-              Verified answers from PALLUVO Master Weavers and textile curators
+              Community questions and answers regarding fabric, care, borders, and styling
             </p>
           </div>
         </div>
@@ -115,7 +115,7 @@ export default function ProductQA({ productId, initialQA = [] }) {
       <form onSubmit={handleAskQuestion} className="bg-[#FAF7F2] p-4 rounded-xl border border-[#C5A059]/30 space-y-3">
         <div className="text-xs font-semibold text-[#5B1425] flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
-          <span>Ask our Weaver Concierge about fabric, care, borders, or styling</span>
+          <span>Have a question about fabric, care, borders, or styling? Ask below</span>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <input
@@ -127,7 +127,7 @@ export default function ProductQA({ productId, initialQA = [] }) {
           />
           <input
             type="text"
-            placeholder="Type your question here (e.g. Does this saree come with Silk Mark tag?)..."
+            placeholder="Type your question here (e.g. Does this saree come with an unstitched blouse piece?)..."
             value={newQuestion}
             onChange={(e) => setNewQuestion(e.target.value)}
             required
@@ -148,7 +148,7 @@ export default function ProductQA({ productId, initialQA = [] }) {
       <div className="space-y-4 divide-y divide-[#E8E1D5]">
         {filteredQA.length === 0 ? (
           <div className="py-6 text-center text-xs text-gray-500">
-            {searchQuery ? `No matching questions found for "${searchQuery}". Be the first to ask!` : 'No questions asked yet. Ask our Weaver Concierge!'}
+            {searchQuery ? `No matching questions found for "${searchQuery}". Be the first to ask!` : 'No questions asked yet. Ask a question about this saree!'}
           </div>
         ) : (
           filteredQA.map((item) => (
@@ -170,10 +170,16 @@ export default function ProductQA({ productId, initialQA = [] }) {
                       {item.answer}
                     </p>
                     <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
-                      <span className="flex items-center gap-1 text-emerald-800 font-medium bg-emerald-50 px-2 py-0.5 rounded">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        {item.answered_by || 'PALLUVO Master Weaver Concierge'}
-                      </span>
+                      {item.answered_by ? (
+                        <span className="flex items-center gap-1 text-emerald-800 font-medium bg-emerald-50 px-2 py-0.5 rounded">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>{item.answered_by}</span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-600 font-medium bg-gray-100 px-2 py-0.5 rounded">
+                          <span>Staff Response</span>
+                        </span>
+                      )}
                       <span>•</span>
                       <span>Asked by {item.user_name || 'Patron'}</span>
                       <span>•</span>

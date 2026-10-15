@@ -958,6 +958,22 @@ async function runTests() {
     assert.strictEqual(savedQARow.answered_by, null, 'Database row must store answered_by as NULL until approved');
     console.log('✅ PASS: [P2] Q&A questions remain unanswered without fake concierge verification');
 
+    // 4. Verify seed data and database default do not include fake concierge claims or Silk Mark certification claims
+    const fakeConciergeCount = db.prepare("SELECT COUNT(*) as count FROM product_qa WHERE answered_by = 'PALLUVO Master Weaver Concierge'").get().count;
+    assert.strictEqual(fakeConciergeCount, 0, 'No Q&A records may be attributed to Master Weaver Concierge without staff review');
+
+    const fakeSilkMarkClaimCount = db.prepare("SELECT COUNT(*) as count FROM product_qa WHERE answer LIKE '%Silk Mark Organization of India%'").get().count;
+    assert.strictEqual(fakeSilkMarkClaimCount, 0, 'No unverified Silk Mark tag certification claims may exist in seeded Q&A');
+
+    // 5. Verify GET /api/products/:productId/qa returns questions without fake concierge attribution
+    const getQARes = await request(`/api/products/${prodWithImgId}/qa`);
+    assert.strictEqual(getQARes.status, 200, 'GET /qa should return 200');
+    assert(Array.isArray(getQARes.body.qa), 'Should return qa array');
+    const returnedQA = getQARes.body.qa.find(q => q.id === askQARes.body.qa.id);
+    assert.strictEqual(returnedQA.answer, null, 'Exposed QA must not contain fake answer');
+    assert.strictEqual(returnedQA.answered_by, null, 'Exposed QA must not contain fake concierge attribution');
+    console.log('✅ PASS: [P2] Seeded Q&A and GET endpoint strictly avoid unverified concierge claims');
+
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {
     if (server) {

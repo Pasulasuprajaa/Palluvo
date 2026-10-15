@@ -1268,46 +1268,47 @@ function seedDatabase(options = {}) {
       VALUES (?, ?, ?, ?, ?, ?)
     `);
 
+    // Seed example customer questions without canned/unverified expert claims
     const qas = [
       {
         slug: 'royal-crimson-banarasi-katan-silk-saree',
         user_name: 'Meera Deshmukh',
-        question: 'Is this 100% pure silk and does it come with a Silk Mark certification tag?',
-        answer: 'Namaste Meera! Yes, all PALLUVO Katan Silk Sarees are 100% pure mulberry silk authenticated with the official Silk Mark Organization of India tag attached with tamper-proof seal.',
-        answered_by: 'PALLUVO Master Weaver Concierge',
-        helpful_votes: 28
+        question: 'Does this saree come with an unstitched blouse piece included?',
+        answer: null,
+        answered_by: null,
+        helpful_votes: 12
       },
       {
         slug: 'royal-crimson-banarasi-katan-silk-saree',
         user_name: 'Sneha Kulkarni',
-        question: 'Does the blouse piece match the body or the pallu?',
-        answer: 'It includes an unstitched 0.8 meter pure katan silk blouse piece matching the royal crimson body with an intricate antique gold zari border for the sleeves and back neck.',
-        answered_by: 'PALLUVO Master Weaver Concierge',
-        helpful_votes: 19
+        question: 'What is the recommended care instruction for this pure silk saree?',
+        answer: null,
+        answered_by: null,
+        helpful_votes: 9
       },
       {
         slug: 'vaidarbhi-pure-kanjivaram-bridal-gold-silk-saree',
         user_name: 'Kavitha R.',
         question: 'What is the approximate weight of this bridal Kanjivaram saree?',
-        answer: 'This heirloom piece weighs approximately 850 - 920 grams owing to its heavy 3-ply pure mulberry silk yarn and rich gold-dipped silver zari korvai border.',
-        answered_by: 'PALLUVO Master Weaver Concierge',
-        helpful_votes: 35
+        answer: null,
+        answered_by: null,
+        helpful_votes: 15
       },
       {
         slug: 'noor-rose-gold-embroidered-organza-saree',
         user_name: 'Tanvi Agarwal',
-        question: 'Is the organza fabric scratchy or stiff on sensitive skin?',
-        answer: 'Not at all! We use whisper-soft, high-grade silk organza that has a fluid drape and featherlight touch, carefully treated to remain soft and non-irritating.',
-        answered_by: 'PALLUVO Master Weaver Concierge',
-        helpful_votes: 14
+        question: 'How sheer is the organza fabric on this saree?',
+        answer: null,
+        answered_by: null,
+        helpful_votes: 6
       },
       {
         slug: 'midnight-velvet-sequined-cocktail-saree',
         user_name: 'Pooja Malhotra',
-        question: 'Are fall and pico pre-stitched on this saree?',
-        answer: 'Yes! All PALLUVO ready-to-wear sarees come complimentary with high-grade micro-cotton fall and precision laser pico pre-done at no extra charge.',
-        answered_by: 'PALLUVO Master Weaver Concierge',
-        helpful_votes: 42
+        question: 'Are fall and edging pre-stitched on this saree?',
+        answer: null,
+        answered_by: null,
+        helpful_votes: 18
       }
     ];
 

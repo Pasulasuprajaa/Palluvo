@@ -411,7 +411,7 @@ function initSchema() {
       user_name TEXT NOT NULL,
       question TEXT NOT NULL,
       answer TEXT,
-      answered_by TEXT DEFAULT 'PALLUVO Master Weaver Concierge',
+      answered_by TEXT DEFAULT NULL,
       helpful_votes INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
@@ -510,6 +510,14 @@ function initSchema() {
     }
     // Flush WAL to disk
     db.pragma('wal_checkpoint(TRUNCATE)');
+    // Migration: Clear unverified concierge answers from past seeds in existing databases
+    try {
+      db.prepare(`
+        UPDATE product_qa 
+        SET answer = NULL, answered_by = NULL 
+        WHERE answered_by = 'PALLUVO Master Weaver Concierge'
+      `).run();
+    } catch (e) {}
   } catch (e) {
     console.log('Product image migration note:', e.message);
   }

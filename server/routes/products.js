@@ -357,13 +357,13 @@ router.post('/:productId/qa', requireDurableStorage, (req, res) => {
     const answer = isDevOrDemo
       ? 'Namaste! Thank you for inquiring. Our artisan concierge team has received your query and will assist shortly.'
       : null;
-    const answeredBy = answer ? 'PALLUVO Master Weaver Concierge' : null;
+    const answeredBy = answer ? 'PALLUVO Concierge (Demo Simulator)' : null;
 
     const result = insert.run(req.params.productId, name, question.trim(), answer, answeredBy);
 
     const newQA = db.prepare('SELECT * FROM product_qa WHERE id = ?').get(result.lastInsertRowid);
     const message = answer
-      ? 'Your question has been answered by our Master Weaver Concierge.'
+      ? 'Your question has been answered (Demo Simulator).'
       : 'Thank you! Your question has been submitted and will be answered once reviewed by our artisan concierge team.';
     res.status(201).json({ qa: newQA, message });
   } catch (err) {
