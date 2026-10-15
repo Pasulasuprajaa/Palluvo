@@ -1031,17 +1031,22 @@ async function runTests() {
     const tokenRes1 = await request('/api/products/qa/voter-token');
     assert.strictEqual(tokenRes1.status, 200);
     assert.ok(tokenRes1.body.voter_token, 'Server must return signed voter_token');
+    const cookie1 = tokenRes1.headers['set-cookie']?.[0]?.split(';')[0];
+    assert.ok(cookie1, 'Server must issue Set-Cookie header for browser 1');
     const browserToken1 = tokenRes1.body.voter_token;
 
     // A second guest browser requests a token (without passing an existing token)
     const tokenRes2 = await request('/api/products/qa/voter-token');
     assert.strictEqual(tokenRes2.status, 200);
+    const cookie2 = tokenRes2.headers['set-cookie']?.[0]?.split(';')[0];
+    assert.ok(cookie2, 'Server must issue Set-Cookie header for browser 2');
     const browserToken2 = tokenRes2.body.voter_token;
     assert.notStrictEqual(browserToken1, browserToken2, 'Distinct browsers receive distinct signed tokens');
 
     // 8d. Anonymous guest browser 1 votes
     const vote1Res = await request(`/api/products/qa/${targetQaId}/helpful`, {
       method: 'POST',
+      headers: { Cookie: cookie1 },
       body: { voter_token: browserToken1 }
     });
     assert.strictEqual(vote1Res.status, 200);
@@ -1052,6 +1057,7 @@ async function runTests() {
     // 8e. Anonymous guest browser 1 re-votes (must be blocked idempotently)
     const replay1Res = await request(`/api/products/qa/${targetQaId}/helpful`, {
       method: 'POST',
+      headers: { Cookie: cookie1 },
       body: { voter_token: browserToken1 }
     });
     assert.strictEqual(replay1Res.status, 200);
@@ -1061,6 +1067,7 @@ async function runTests() {
     // 8f. [P3] Separate guest browser 2 behind the same IP can also vote
     const vote2Res = await request(`/api/products/qa/${targetQaId}/helpful`, {
       method: 'POST',
+      headers: { Cookie: cookie2 },
       body: { voter_token: browserToken2 }
     });
     assert.strictEqual(vote2Res.status, 200);
@@ -1069,13 +1076,16 @@ async function runTests() {
     assert.strictEqual(vote2Res.body.already_voted, false);
 
     // 8g. [P2] Expired anonymous voter token returns 401 with TOKEN_EXPIRED
+    const expiredBid = 'bid_expired_' + Date.now();
+    const expiredCookie = `pv_bid=${encodeURIComponent(productsRouter.signBrowserId(expiredBid))}`;
     const expiredToken = jwt.sign(
-      { voter_id: 'voter_renewal_test_id', voter_type: 'anonymous_qa_voter' },
+      { voter_id: 'voter_' + expiredBid, browser_id: expiredBid, voter_type: 'anonymous_qa_voter' },
       JWT_SECRET,
       { expiresIn: '-1s' }
     );
     const expiredVoteRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
       method: 'POST',
+      headers: { Cookie: expiredCookie },
       body: { voter_token: expiredToken }
     });
     assert.strictEqual(expiredVoteRes.status, 401, 'Expired voter token must return 401');
@@ -1083,16 +1093,18 @@ async function runTests() {
 
     // 8h. [P2] Refreshing the expired token preserves the voter_id
     const refreshRes = await request('/api/products/qa/voter-token', {
-      headers: { 'x-voter-token': expiredToken }
+      headers: { 'x-voter-token': expiredToken, Cookie: expiredCookie }
     });
     assert.strictEqual(refreshRes.status, 200);
+    const renewedCookie = refreshRes.headers['set-cookie']?.[0]?.split(';')[0] || expiredCookie;
     const renewedToken = refreshRes.body.voter_token;
     const decodedRenewed = jwt.verify(renewedToken, JWT_SECRET);
-    assert.strictEqual(decodedRenewed.voter_id, 'voter_renewal_test_id', 'Token renewal must preserve original voter_id');
+    assert.strictEqual(decodedRenewed.voter_id, 'voter_' + expiredBid, 'Token renewal must preserve original voter_id');
 
     // 8i. Voting with the renewed token succeeds
     const renewedVoteRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
       method: 'POST',
+      headers: { Cookie: renewedCookie },
       body: { voter_token: renewedToken }
     });
     assert.strictEqual(renewedVoteRes.status, 200);
@@ -1122,12 +1134,14 @@ async function runTests() {
     // 8l. Error handling for invalid QA ID and non-existent QA ID
     const invalidIdRes = await request('/api/products/qa/not-a-number/helpful', {
       method: 'POST',
+      headers: { Cookie: cookie1 },
       body: { voter_token: browserToken1 }
     });
     assert.strictEqual(invalidIdRes.status, 400, 'Non-integer question ID must return 400');
 
     const notFoundRes = await request('/api/products/qa/999999/helpful', {
       method: 'POST',
+      headers: { Cookie: cookie1 },
       body: { voter_token: browserToken1 }
     });
     assert.strictEqual(notFoundRes.status, 404, 'Non-existent question ID must return 404');
@@ -1143,6 +1157,7 @@ async function runTests() {
     // Direct vote with un-migrated legacy token requests migration
     const legacyVoteRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
       method: 'POST',
+      headers: { Cookie: cookie1 },
       body: { voter_token: legacyToken }
     });
     assert.strictEqual(legacyVoteRes.status, 401, 'Legacy voter token must require migration');
@@ -1191,8 +1206,10 @@ async function runTests() {
     // Verify that guests 6, 7, and 8 behind the same IP can vote successfully without 5-person network lockout
     for (let i = 0; i < 3; i++) {
       const guestTokenRes = await request('/api/products/qa/voter-token');
+      const cookie = guestTokenRes.headers['set-cookie']?.[0]?.split(';')[0];
       const guestVoteRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
         method: 'POST',
+        headers: cookie ? { Cookie: cookie } : {},
         body: { voter_token: guestTokenRes.body.voter_token }
       });
       assert.strictEqual(guestVoteRes.status, 200, `Guest ${i + 6} behind same network must not be locked out`);
@@ -1202,8 +1219,10 @@ async function runTests() {
     let hitLimit = false;
     for (let i = 0; i < 30; i++) {
       const extraTokenRes = await request('/api/products/qa/voter-token');
+      const extraCookie = extraTokenRes.headers['set-cookie']?.[0]?.split(';')[0];
       const res = await request(`/api/products/qa/${targetQaId}/helpful`, {
         method: 'POST',
+        headers: extraCookie ? { Cookie: extraCookie } : {},
         body: { voter_token: extraTokenRes.body.voter_token }
       });
       if (res.status === 429) {
@@ -1235,16 +1254,19 @@ async function runTests() {
       const r1 = await request('/api/products/qa/invalid-id/helpful', { method: 'POST' });
       assert.strictEqual(r1.status, 400);
       const r2 = await request(`/api/products/qa/${targetQaId2}/helpful`, { method: 'POST', body: {} });
-      assert.strictEqual(r2.status, 400);
+      assert.strictEqual(r2.status, 400, 'Missing token request must return 400');
       const r3 = await request(`/api/products/qa/${targetQaId2}/helpful`, { method: 'POST', body: { voter_token: 'forged_fake_token' } });
-      assert.strictEqual(r3.status, 400);
+      assert.strictEqual(r3.status, 400, 'Forged token request must return 400');
     }
 
     // If rejected requests consumed quota, the 25-request limit would be exhausted.
     // Verify that a legitimate new vote attempt still succeeds with HTTP 200:
-    const freshGuestToken = (await request('/api/products/qa/voter-token')).body.voter_token;
+    const freshGuestTokenRes = await request('/api/products/qa/voter-token');
+    const freshGuestCookie = freshGuestTokenRes.headers['set-cookie']?.[0]?.split(';')[0];
+    const freshGuestToken = freshGuestTokenRes.body.voter_token;
     const freshVoteRes = await request(`/api/products/qa/${targetQaId2}/helpful`, {
       method: 'POST',
+      headers: freshGuestCookie ? { Cookie: freshGuestCookie } : {},
       body: { voter_token: freshGuestToken }
     });
     assert.strictEqual(freshVoteRes.status, 200, 'Legitimate vote must succeed because rejected requests did not consume quota');
@@ -1253,6 +1275,7 @@ async function runTests() {
     // Replaying an already-voted request must also NOT consume quota
     const replayFreshRes = await request(`/api/products/qa/${targetQaId2}/helpful`, {
       method: 'POST',
+      headers: freshGuestCookie ? { Cookie: freshGuestCookie } : {},
       body: { voter_token: freshGuestToken }
     });
     assert.strictEqual(replayFreshRes.status, 200);
@@ -1297,7 +1320,7 @@ async function runTests() {
       global.fetch = originalFetch;
     }
 
-    // 8r. [P2] Concurrent helpful-vote race condition with distinct tokens / same cookie
+    // 8r. [P2] Concurrent helpful-vote race condition with distinct voter IDs for the same browser
     const askThirdQARes = await request(`/api/products/${prodWithImgId}/qa`, {
       method: 'POST',
       body: {
@@ -1308,18 +1331,18 @@ async function runTests() {
     const targetQaId3 = askThirdQARes.body.qa.id;
     assert.ok(targetQaId3, 'Target Q&A question 3 created');
 
-    const testBid = 'bid_concurrent_test_' + Date.now();
+    const testBid = 'bid_concurrent_race_' + Date.now();
     const signedCookie = productsRouter.signBrowserId(testBid);
     const cookieHeader = `pv_bid=${encodeURIComponent(signedCookie)}`;
 
-    // Issue two distinct valid voter tokens bound to this browser ID
+    // Issue two distinct valid voter tokens with DIFFERENT voter_id claims but the SAME signed browser_id
     const token1 = jwt.sign(
-      { voter_id: 'voter_' + testBid, browser_id: testBid, voter_type: 'anonymous_qa_voter', nonce: 'nonce_1' },
+      { voter_id: 'voter_race_claim_1', browser_id: testBid, voter_type: 'anonymous_qa_voter' },
       JWT_SECRET,
       { expiresIn: '30d' }
     );
     const token2 = jwt.sign(
-      { voter_id: 'voter_' + testBid, browser_id: testBid, voter_type: 'anonymous_qa_voter', nonce: 'nonce_2' },
+      { voter_id: 'voter_race_claim_2', browser_id: testBid, voter_type: 'anonymous_qa_voter' },
       JWT_SECRET,
       { expiresIn: '30d' }
     );
@@ -1338,32 +1361,54 @@ async function runTests() {
     assert.strictEqual(mismatchRes.status, 401, 'Token mismatched with cookie session must be rejected with 401');
     assert.strictEqual(mismatchRes.body.code, 'TOKEN_SESSION_MISMATCH');
 
-    // Fire two concurrent vote requests with same cookie and distinct valid tokens
-    const [voteRes1, voteRes2] = await Promise.all([
-      request(`/api/products/qa/${targetQaId3}/helpful`, {
-        method: 'POST',
-        headers: { Cookie: cookieHeader },
-        body: { voter_token: token1 }
-      }),
-      request(`/api/products/qa/${targetQaId3}/helpful`, {
-        method: 'POST',
-        headers: { Cookie: cookieHeader },
-        body: { voter_token: token2 }
-      })
-    ]);
+    // Synchronize both requests after initial lookup to force the race before transaction commit
+    let waitingRequest = null;
+    let barrierReleased = false;
+    productsRouter._beforeVoteTransactionHook = async (req) => {
+      if (req.params.id !== String(targetQaId3)) return;
+      if (!waitingRequest) {
+        await new Promise((resolve) => {
+          waitingRequest = resolve;
+        });
+      } else {
+        barrierReleased = true;
+        const releaseFirst = waitingRequest;
+        waitingRequest = null;
+        releaseFirst();
+      }
+    };
 
-    assert.strictEqual(voteRes1.status, 200);
-    assert.strictEqual(voteRes2.status, 200);
+    try {
+      // Fire two concurrent vote requests with same cookie and distinct valid voter IDs
+      const [voteRes1, voteRes2] = await Promise.all([
+        request(`/api/products/qa/${targetQaId3}/helpful`, {
+          method: 'POST',
+          headers: { Cookie: cookieHeader },
+          body: { voter_token: token1 }
+        }),
+        request(`/api/products/qa/${targetQaId3}/helpful`, {
+          method: 'POST',
+          headers: { Cookie: cookieHeader },
+          body: { voter_token: token2 }
+        })
+      ]);
 
-    // Exactly one must win the race (already_voted: false), and one must lose (already_voted: true)
-    const winners = [voteRes1, voteRes2].filter(r => r.body.already_voted === false);
-    const losers = [voteRes1, voteRes2].filter(r => r.body.already_voted === true);
-    assert.strictEqual(winners.length, 1, 'Exactly one concurrent request must win the vote');
-    assert.strictEqual(losers.length, 1, 'The competing concurrent request must detect already_voted: true');
+      assert.strictEqual(barrierReleased, true, 'Both concurrent requests must be synchronized after initial lookup');
+      assert.strictEqual(voteRes1.status, 200);
+      assert.strictEqual(voteRes2.status, 200);
 
-    // The database helpful_votes must be EXACTLY 1, not 2
-    const qaInDb = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(targetQaId3);
-    assert.strictEqual(qaInDb.helpful_votes, 1, 'Helpful votes count must increment only once (count=1, not 2)');
+      // Exactly one must win the race (already_voted: false), and one must lose (already_voted: true)
+      const winners = [voteRes1, voteRes2].filter(r => r.body.already_voted === false);
+      const losers = [voteRes1, voteRes2].filter(r => r.body.already_voted === true);
+      assert.strictEqual(winners.length, 1, 'Exactly one concurrent request must win the vote');
+      assert.strictEqual(losers.length, 1, 'The competing concurrent request must detect already_voted: true via browser constraint');
+
+      // The database helpful_votes must be EXACTLY 1, not 2
+      const qaInDb = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(targetQaId3);
+      assert.strictEqual(qaInDb.helpful_votes, 1, 'Helpful votes count must increment only once (count=1, not 2)');
+    } finally {
+      productsRouter._beforeVoteTransactionHook = null;
+    }
 
     // 8s. [P3] Verify that the rate limiter wrapper settles immediately on 429 without hanging
     const mockRes = new (require('events').EventEmitter)();
@@ -1401,6 +1446,65 @@ async function runTests() {
 
     const limiterWrapperResult = await testLimiterPromise;
     assert.strictEqual(limiterWrapperResult, false, 'Limiter wrapper must settle immediately with false on 429 finish');
+
+    // 8t. [P2] Require valid browser session cookie on anonymous vote submissions & block repeated token issuance without cookie persistence
+    const askFourthQARes = await request(`/api/products/${prodWithImgId}/qa`, {
+      method: 'POST',
+      body: {
+        name: 'Meera Nambiar',
+        question: 'What is the blouse fabric piece length included?'
+      }
+    });
+    const targetQaId4 = askFourthQARes.body.qa.id;
+    assert.ok(targetQaId4, 'Target Q&A question 4 created');
+
+    // Repeated token issuance without cookie persistence:
+    // Repeatedly request tokens without storing or sending cookies, then attempt to vote
+    for (let i = 0; i < 3; i++) {
+      const tokenRes = await request('/api/products/qa/voter-token');
+      assert.strictEqual(tokenRes.status, 200);
+      assert.ok(tokenRes.body.voter_token);
+
+      // Attempt to vote without providing the session cookie
+      const voteWithoutCookieRes = await request(`/api/products/qa/${targetQaId4}/helpful`, {
+        method: 'POST',
+        body: { voter_token: tokenRes.body.voter_token }
+      });
+      assert.strictEqual(
+        voteWithoutCookieRes.status,
+        401,
+        'Anonymous vote submission without valid session cookie must be rejected with HTTP 401'
+      );
+      assert.strictEqual(voteWithoutCookieRes.body.code, 'COOKIE_REQUIRED');
+    }
+
+    // Question vote count must remain 0 after all rejected attempts
+    const qa4Before = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(targetQaId4);
+    assert.strictEqual(qa4Before.helpful_votes, 0, 'No votes should be counted without cookie persistence');
+
+    // Now issue a token WITH cookie persistence, and vote with cookie
+    const tokenWithCookieRes = await request('/api/products/qa/voter-token');
+    const persistedCookieHeader = tokenWithCookieRes.headers['set-cookie']?.[0]?.split(';')[0];
+    assert.ok(persistedCookieHeader, 'Set-Cookie header must be present on token issuance');
+
+    const validVoteRes = await request(`/api/products/qa/${targetQaId4}/helpful`, {
+      method: 'POST',
+      headers: { Cookie: persistedCookieHeader },
+      body: { voter_token: tokenWithCookieRes.body.voter_token }
+    });
+    assert.strictEqual(validVoteRes.status, 200, 'Vote with valid cookie session must succeed');
+    assert.strictEqual(validVoteRes.body.already_voted, false);
+    assert.strictEqual(validVoteRes.body.helpful_votes, 1);
+
+    // Replay with the same cookie session must be blocked
+    const replayVoteRes = await request(`/api/products/qa/${targetQaId4}/helpful`, {
+      method: 'POST',
+      headers: { Cookie: persistedCookieHeader },
+      body: { voter_token: tokenWithCookieRes.body.voter_token }
+    });
+    assert.strictEqual(replayVoteRes.status, 200);
+    assert.strictEqual(replayVoteRes.body.already_voted, true);
+    assert.strictEqual(replayVoteRes.body.helpful_votes, 1);
 
     console.log('✅ PASS: [P2] Helpful-vote endpoint binds anonymous identity to server-issued token and blocks distinct tokens from same caller');
 

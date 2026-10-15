@@ -138,9 +138,12 @@ function verifyVoterToken(token, req) {
       if (isLegacyVoterId(decoded.voter_id, req)) {
         return { valid: false, error: 'LEGACY_MIGRATION_REQUIRED' };
       }
-      // If caller sends an established browser cookie, ensure token is bound to this cookie
-      const cookieBid = getBrowserIdFromReq(req);
-      if (cookieBid) {
+      // Require browser cookie for anonymous voter token validation when request is provided
+      if (req && !req.user?.id) {
+        const cookieBid = getBrowserIdFromReq(req);
+        if (!cookieBid) {
+          return { valid: false, error: 'COOKIE_REQUIRED' };
+        }
         const tokenBid = decoded.browser_id || (
           decoded.voter_id && decoded.voter_id.startsWith('voter_bid_')
             ? decoded.voter_id.replace(/^voter_/, '')
@@ -149,6 +152,11 @@ function verifyVoterToken(token, req) {
         if (tokenBid && tokenBid !== cookieBid) {
           return { valid: false, error: 'COOKIE_MISMATCH' };
         }
+        return {
+          valid: true,
+          voter_id: decoded.voter_id,
+          browser_id: cookieBid
+        };
       }
       return {
         valid: true,
@@ -589,6 +597,12 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
             code: 'TOKEN_LEGACY_MIGRATION'
           });
         }
+        if (verified.error === 'COOKIE_REQUIRED') {
+          return res.status(401).json({
+            error: 'Valid browser session cookie is required to submit a helpful vote. Please enable cookies or refresh your session.',
+            code: 'COOKIE_REQUIRED'
+          });
+        }
         if (verified.error === 'COOKIE_MISMATCH') {
           return res.status(401).json({
             error: 'Voter token is not bound to this browser session. Please refresh your token.',
@@ -601,11 +615,15 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
         });
       }
 
-      voterKey = `anon_${verified.voter_id}`;
-      if (!cookieBid && verified.browser_id) {
-        cookieBid = verified.browser_id;
-        setBrowserIdCookie(res, cookieBid);
+      // Require browser cookie before accepting an anonymous vote
+      if (!cookieBid) {
+        return res.status(401).json({
+          error: 'Valid browser session cookie is required to submit a helpful vote. Please enable cookies or refresh your session.',
+          code: 'COOKIE_REQUIRED'
+        });
       }
+
+      voterKey = `anon_${verified.voter_id}`;
     }
 
     const browserKey = (cookieBid && !req.user?.id) ? `anon_voter_${cookieBid}` : null;
@@ -624,6 +642,11 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
         helpful_votes: qaItem.helpful_votes,
         already_voted: true
       });
+    }
+
+    // Synchronize concurrent requests after the initial lookup to test transaction isolation
+    if (typeof router._beforeVoteTransactionHook === 'function') {
+      await router._beforeVoteTransactionHook(req);
     }
 
     // Only charge shared rate limit quota for eligible new-vote attempts by unauthenticated guests.
@@ -712,5 +735,6 @@ router.issueVoterToken = issueVoterToken;
 router.verifyVoterToken = verifyVoterToken;
 router.signBrowserId = signBrowserId;
 router.verifyBrowserId = verifyBrowserId;
+router._beforeVoteTransactionHook = null;
 
 module.exports = router;
