@@ -111,8 +111,8 @@ export default function ProductQA({ productId, initialQA = [] }) {
       });
       let data = await res.json();
 
-      // If token expired on server or requires migration, auto-refresh and retry once
-      if (!res.ok && (data.code === 'TOKEN_EXPIRED' || data.code === 'TOKEN_LEGACY_MIGRATION' || (data.error && data.error.toLowerCase().includes('token')))) {
+      // If token expired on server, requires migration, or had session mismatch, auto-refresh and retry once
+      if (!res.ok && (data.code === 'TOKEN_EXPIRED' || data.code === 'TOKEN_LEGACY_MIGRATION' || data.code === 'TOKEN_SESSION_MISMATCH' || (data.error && data.error.toLowerCase().includes('token')))) {
         voterToken = await getOrFetchVoterToken(true);
         if (voterToken) {
           headers['x-voter-token'] = voterToken;

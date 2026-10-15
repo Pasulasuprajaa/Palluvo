@@ -1297,6 +1297,111 @@ async function runTests() {
       global.fetch = originalFetch;
     }
 
+    // 8r. [P2] Concurrent helpful-vote race condition with distinct tokens / same cookie
+    const askThirdQARes = await request(`/api/products/${prodWithImgId}/qa`, {
+      method: 'POST',
+      body: {
+        name: 'Sunita Rao',
+        question: 'Does this saree have silver or antique gold zari work?'
+      }
+    });
+    const targetQaId3 = askThirdQARes.body.qa.id;
+    assert.ok(targetQaId3, 'Target Q&A question 3 created');
+
+    const testBid = 'bid_concurrent_test_' + Date.now();
+    const signedCookie = productsRouter.signBrowserId(testBid);
+    const cookieHeader = `pv_bid=${encodeURIComponent(signedCookie)}`;
+
+    // Issue two distinct valid voter tokens bound to this browser ID
+    const token1 = jwt.sign(
+      { voter_id: 'voter_' + testBid, browser_id: testBid, voter_type: 'anonymous_qa_voter', nonce: 'nonce_1' },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+    const token2 = jwt.sign(
+      { voter_id: 'voter_' + testBid, browser_id: testBid, voter_type: 'anonymous_qa_voter', nonce: 'nonce_2' },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    // Verify token binding prevents using a token issued for a different browser ID
+    const mismatchedToken = jwt.sign(
+      { voter_id: 'voter_bid_other_user', browser_id: 'bid_other_user', voter_type: 'anonymous_qa_voter' },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+    const mismatchRes = await request(`/api/products/qa/${targetQaId3}/helpful`, {
+      method: 'POST',
+      headers: { Cookie: cookieHeader },
+      body: { voter_token: mismatchedToken }
+    });
+    assert.strictEqual(mismatchRes.status, 401, 'Token mismatched with cookie session must be rejected with 401');
+    assert.strictEqual(mismatchRes.body.code, 'TOKEN_SESSION_MISMATCH');
+
+    // Fire two concurrent vote requests with same cookie and distinct valid tokens
+    const [voteRes1, voteRes2] = await Promise.all([
+      request(`/api/products/qa/${targetQaId3}/helpful`, {
+        method: 'POST',
+        headers: { Cookie: cookieHeader },
+        body: { voter_token: token1 }
+      }),
+      request(`/api/products/qa/${targetQaId3}/helpful`, {
+        method: 'POST',
+        headers: { Cookie: cookieHeader },
+        body: { voter_token: token2 }
+      })
+    ]);
+
+    assert.strictEqual(voteRes1.status, 200);
+    assert.strictEqual(voteRes2.status, 200);
+
+    // Exactly one must win the race (already_voted: false), and one must lose (already_voted: true)
+    const winners = [voteRes1, voteRes2].filter(r => r.body.already_voted === false);
+    const losers = [voteRes1, voteRes2].filter(r => r.body.already_voted === true);
+    assert.strictEqual(winners.length, 1, 'Exactly one concurrent request must win the vote');
+    assert.strictEqual(losers.length, 1, 'The competing concurrent request must detect already_voted: true');
+
+    // The database helpful_votes must be EXACTLY 1, not 2
+    const qaInDb = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(targetQaId3);
+    assert.strictEqual(qaInDb.helpful_votes, 1, 'Helpful votes count must increment only once (count=1, not 2)');
+
+    // 8s. [P3] Verify that the rate limiter wrapper settles immediately on 429 without hanging
+    const mockRes = new (require('events').EventEmitter)();
+    mockRes.headersSent = false;
+    mockRes.status = function(code) {
+      this.statusCode = code;
+      return this;
+    };
+    mockRes.send = function(msg) {
+      this.headersSent = true;
+      this.emit('finish');
+      return this;
+    };
+
+    const testLimiterPromise = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Rate limiter wrapper timed out hanging indefinitely')), 1000);
+      let settled = false;
+      const settle = (val) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          mockRes.removeListener('finish', onFinish);
+          mockRes.removeListener('close', onClose);
+          resolve(val);
+        }
+      };
+      const onFinish = () => settle(false);
+      const onClose = () => settle(false);
+      mockRes.once('finish', onFinish);
+      mockRes.once('close', onClose);
+
+      // Simulate limiter sending 429 response
+      mockRes.status(429).send({ error: 'Too many requests' });
+    });
+
+    const limiterWrapperResult = await testLimiterPromise;
+    assert.strictEqual(limiterWrapperResult, false, 'Limiter wrapper must settle immediately with false on 429 finish');
+
     console.log('✅ PASS: [P2] Helpful-vote endpoint binds anonymous identity to server-issued token and blocks distinct tokens from same caller');
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');

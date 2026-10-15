@@ -138,7 +138,27 @@ function verifyVoterToken(token, req) {
       if (isLegacyVoterId(decoded.voter_id, req)) {
         return { valid: false, error: 'LEGACY_MIGRATION_REQUIRED' };
       }
-      return { valid: true, voter_id: decoded.voter_id };
+      // If caller sends an established browser cookie, ensure token is bound to this cookie
+      const cookieBid = getBrowserIdFromReq(req);
+      if (cookieBid) {
+        const tokenBid = decoded.browser_id || (
+          decoded.voter_id && decoded.voter_id.startsWith('voter_bid_')
+            ? decoded.voter_id.replace(/^voter_/, '')
+            : (decoded.voter_id && decoded.voter_id.startsWith('voter_') ? decoded.voter_id.replace(/^voter_/, '') : null)
+        );
+        if (tokenBid && tokenBid !== cookieBid) {
+          return { valid: false, error: 'COOKIE_MISMATCH' };
+        }
+      }
+      return {
+        valid: true,
+        voter_id: decoded.voter_id,
+        browser_id: decoded.browser_id || (
+          decoded.voter_id && decoded.voter_id.startsWith('voter_bid_')
+            ? decoded.voter_id.replace(/^voter_/, '')
+            : (decoded.voter_id && decoded.voter_id.startsWith('voter_') ? decoded.voter_id.replace(/^voter_/, '') : null)
+        )
+      };
     }
     return { valid: false, error: 'INVALID' };
   } catch (err) {
@@ -544,7 +564,7 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
     // Determine unique voter key from authenticated user or server-issued signed anonymous voter token
     let voterKey;
     let userId = null;
-    const cookieBid = getBrowserIdFromReq(req);
+    let cookieBid = getBrowserIdFromReq(req);
 
     if (req.user?.id) {
       voterKey = `usr_${req.user.id}`;
@@ -569,6 +589,12 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
             code: 'TOKEN_LEGACY_MIGRATION'
           });
         }
+        if (verified.error === 'COOKIE_MISMATCH') {
+          return res.status(401).json({
+            error: 'Voter token is not bound to this browser session. Please refresh your token.',
+            code: 'TOKEN_SESSION_MISMATCH'
+          });
+        }
         return res.status(400).json({
           error: 'Invalid or forged voter token. A valid server-issued voter token is required.',
           code: 'INVALID_TOKEN'
@@ -576,12 +602,18 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
       }
 
       voterKey = `anon_${verified.voter_id}`;
+      if (!cookieBid && verified.browser_id) {
+        cookieBid = verified.browser_id;
+        setBrowserIdCookie(res, cookieBid);
+      }
     }
+
+    const browserKey = (cookieBid && !req.user?.id) ? `anon_voter_${cookieBid}` : null;
 
     // Check if voter (or this browser session) has already voted on this question
     const candidateKeys = [voterKey];
-    if (cookieBid && !req.user?.id) {
-      candidateKeys.push(`anon_voter_${cookieBid}`);
+    if (browserKey && browserKey !== voterKey) {
+      candidateKeys.push(browserKey);
     }
 
     const placeholders = candidateKeys.map(() => '?').join(', ');
@@ -594,33 +626,51 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
       });
     }
 
-    // Only charge shared rate limit quota for eligible new-vote attempts by unauthenticated guests
+    // Only charge shared rate limit quota for eligible new-vote attempts by unauthenticated guests.
+    // Explicitly settle wrapper on response finish/close to prevent pending async handlers when limiter returns 429.
     if (!req.user?.id) {
       const allowed = await new Promise((resolve) => {
+        let settled = false;
+        const settle = (val) => {
+          if (!settled) {
+            settled = true;
+            res.removeListener('finish', onFinish);
+            res.removeListener('close', onClose);
+            resolve(val);
+          }
+        };
+        const onFinish = () => settle(false);
+        const onClose = () => settle(false);
+
+        res.once('finish', onFinish);
+        res.once('close', onClose);
+
         anonymousVoteLimiter(req, res, (err) => {
           if (err) {
             if (!res.headersSent) {
               res.status(err.status || 500).json({ error: err.message });
             }
-            return resolve(false);
+            return settle(false);
           }
-          resolve(!res.headersSent);
+          settle(!res.headersSent);
         });
       });
       if (!allowed) return;
     }
 
-    // Atomically record vote and increment helpful_votes count
+    // Atomically record vote and increment helpful_votes count.
+    // The browserKey insert uses strict INSERT INTO (not OR IGNORE) so any concurrent duplicate
+    // throws SQLITE_CONSTRAINT, rolling back the transaction before helpful_votes can increment.
     const recordVote = db.transaction(() => {
       db.prepare('INSERT INTO product_qa_votes (qa_id, voter_key, user_id) VALUES (?, ?, ?)').run(
         qaId,
         voterKey,
         userId
       );
-      if (cookieBid && !req.user?.id && `anon_voter_${cookieBid}` !== voterKey) {
-        db.prepare('INSERT OR IGNORE INTO product_qa_votes (qa_id, voter_key, user_id) VALUES (?, ?, ?)').run(
+      if (browserKey && browserKey !== voterKey) {
+        db.prepare('INSERT INTO product_qa_votes (qa_id, voter_key, user_id) VALUES (?, ?, ?)').run(
           qaId,
-          `anon_voter_${cookieBid}`,
+          browserKey,
           userId
         );
       }
@@ -660,5 +710,7 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
 
 router.issueVoterToken = issueVoterToken;
 router.verifyVoterToken = verifyVoterToken;
+router.signBrowserId = signBrowserId;
+router.verifyBrowserId = verifyBrowserId;
 
 module.exports = router;
