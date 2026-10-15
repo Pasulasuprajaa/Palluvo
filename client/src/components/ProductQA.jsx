@@ -148,7 +148,7 @@ export default function ProductQA({ productId, initialQA = [] }) {
       <div className="space-y-4 divide-y divide-[#E8E1D5]">
         {filteredQA.length === 0 ? (
           <div className="py-6 text-center text-xs text-gray-500">
-            {searchQuery ? `No matching questions found for "${searchQuery}". Be the first to ask!` : 'No questions asked yet. Ask a question about this saree!'}
+            {searchQuery ? `No matching questions found for "${searchQuery}". Be the first to ask!` : 'No questions asked yet for this piece. Have a query? Ask our team above!'}
           </div>
         ) : (
           filteredQA.map((item) => (

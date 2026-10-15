@@ -956,6 +956,7 @@ async function runTests() {
     const savedQARow = db.prepare('SELECT * FROM product_qa WHERE id = ?').get(askQARes.body.qa.id);
     assert.strictEqual(savedQARow.answer, null, 'Database row must store answer as NULL until approved');
     assert.strictEqual(savedQARow.answered_by, null, 'Database row must store answered_by as NULL until approved');
+    assert.strictEqual(savedQARow.helpful_votes, 0, 'New questions must initialize with 0 helpful votes');
     console.log('✅ PASS: [P2] Q&A questions remain unanswered without fake concierge verification');
 
     // 4. Verify seed data and database default do not include fake concierge claims or Silk Mark certification claims
@@ -965,14 +966,22 @@ async function runTests() {
     const fakeSilkMarkClaimCount = db.prepare("SELECT COUNT(*) as count FROM product_qa WHERE answer LIKE '%Silk Mark Organization of India%'").get().count;
     assert.strictEqual(fakeSilkMarkClaimCount, 0, 'No unverified Silk Mark tag certification claims may exist in seeded Q&A');
 
-    // 5. Verify GET /api/products/:productId/qa returns questions without fake concierge attribution
+    // 5. Verify no invented customer names or preset helpful vote totals exist in Q&A
+    const fakeNamesCount = db.prepare("SELECT COUNT(*) as count FROM product_qa WHERE user_name IN ('Meera Deshmukh', 'Sneha Kulkarni', 'Kavitha R.', 'Tanvi Agarwal', 'Pooja Malhotra')").get().count;
+    assert.strictEqual(fakeNamesCount, 0, 'No seeded Q&A rows with invented customer names may exist');
+
+    const presetVotesCount = db.prepare("SELECT COUNT(*) as count FROM product_qa WHERE helpful_votes > 0").get().count;
+    assert.strictEqual(presetVotesCount, 0, 'No seeded Q&A records may have fabricated helpful-vote counts');
+
+    // 6. Verify GET /api/products/:productId/qa returns questions without fake concierge attribution
     const getQARes = await request(`/api/products/${prodWithImgId}/qa`);
     assert.strictEqual(getQARes.status, 200, 'GET /qa should return 200');
     assert(Array.isArray(getQARes.body.qa), 'Should return qa array');
     const returnedQA = getQARes.body.qa.find(q => q.id === askQARes.body.qa.id);
     assert.strictEqual(returnedQA.answer, null, 'Exposed QA must not contain fake answer');
     assert.strictEqual(returnedQA.answered_by, null, 'Exposed QA must not contain fake concierge attribution');
-    console.log('✅ PASS: [P2] Seeded Q&A and GET endpoint strictly avoid unverified concierge claims');
+    assert.strictEqual(returnedQA.helpful_votes, 0, 'Exposed QA must start with 0 helpful votes');
+    console.log('✅ PASS: [P2] Seeded Q&A and GET endpoint strictly avoid unverified concierge claims and fabricated social proof');
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {

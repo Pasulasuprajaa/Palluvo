@@ -510,12 +510,12 @@ function initSchema() {
     }
     // Flush WAL to disk
     db.pragma('wal_checkpoint(TRUNCATE)');
-    // Migration: Clear unverified concierge answers from past seeds in existing databases
+    // Migration: Remove legacy seeded Q&A records with invented customer names/votes
     try {
       db.prepare(`
-        UPDATE product_qa 
-        SET answer = NULL, answered_by = NULL 
-        WHERE answered_by = 'PALLUVO Master Weaver Concierge'
+        DELETE FROM product_qa 
+        WHERE user_name IN ('Meera Deshmukh', 'Sneha Kulkarni', 'Kavitha R.', 'Tanvi Agarwal', 'Pooja Malhotra')
+           OR answered_by = 'PALLUVO Master Weaver Concierge'
       `).run();
     } catch (e) {}
   } catch (e) {

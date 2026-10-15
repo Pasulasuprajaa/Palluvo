@@ -1261,69 +1261,9 @@ function seedDatabase(options = {}) {
     }
   }
 
-  // 8. Seed Product Questions & Answers (Q&A)
-  try {
-    const insertQA = db.prepare(`
-      INSERT INTO product_qa (product_id, user_name, question, answer, answered_by, helpful_votes)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
-    // Seed example customer questions without canned/unverified expert claims
-    const qas = [
-      {
-        slug: 'royal-crimson-banarasi-katan-silk-saree',
-        user_name: 'Meera Deshmukh',
-        question: 'Does this saree come with an unstitched blouse piece included?',
-        answer: null,
-        answered_by: null,
-        helpful_votes: 12
-      },
-      {
-        slug: 'royal-crimson-banarasi-katan-silk-saree',
-        user_name: 'Sneha Kulkarni',
-        question: 'What is the recommended care instruction for this pure silk saree?',
-        answer: null,
-        answered_by: null,
-        helpful_votes: 9
-      },
-      {
-        slug: 'vaidarbhi-pure-kanjivaram-bridal-gold-silk-saree',
-        user_name: 'Kavitha R.',
-        question: 'What is the approximate weight of this bridal Kanjivaram saree?',
-        answer: null,
-        answered_by: null,
-        helpful_votes: 15
-      },
-      {
-        slug: 'noor-rose-gold-embroidered-organza-saree',
-        user_name: 'Tanvi Agarwal',
-        question: 'How sheer is the organza fabric on this saree?',
-        answer: null,
-        answered_by: null,
-        helpful_votes: 6
-      },
-      {
-        slug: 'midnight-velvet-sequined-cocktail-saree',
-        user_name: 'Pooja Malhotra',
-        question: 'Are fall and edging pre-stitched on this saree?',
-        answer: null,
-        answered_by: null,
-        helpful_votes: 18
-      }
-    ];
-
-    for (const q of qas) {
-      const prodId = productMap[q.slug];
-      if (prodId) {
-        const existingQA = db.prepare('SELECT id FROM product_qa WHERE product_id = ? AND question = ?').get(prodId, q.question);
-        if (!existingQA) {
-          insertQA.run(prodId, q.user_name, q.question, q.answer, q.answered_by, q.helpful_votes);
-        }
-      }
-    }
-  } catch (e) {
-    console.error('QA seed note:', e.message);
-  }
+  // 8. Product Questions & Answers (Q&A)
+  // Clean initialization: No fabricated customer activity, fictional names, or preset vote counts are seeded.
+  // Questions and helpful votes are created exclusively by genuine customer interactions.
 
   console.log('--- PALLUVO Database Seeding Completed Successfully! ---');
 }
