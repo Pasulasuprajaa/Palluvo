@@ -2,16 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { HelpCircle, Search, ThumbsUp, MessageSquare, Sparkles, Send, CheckCircle2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 
-function getOrCreateVoterToken() {
+async function getOrFetchVoterToken() {
   try {
     let token = localStorage.getItem('palluvo_qa_voter_token');
+    // Validate that stored token is in JWT format (3 dot-separated parts)
+    if (token && (typeof token !== 'string' || token.split('.').length !== 3)) {
+      token = null;
+      localStorage.removeItem('palluvo_qa_voter_token');
+    }
     if (!token) {
-      token = 'vt_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-      localStorage.setItem('palluvo_qa_voter_token', token);
+      const res = await fetch('/api/products/qa/voter-token');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.voter_token) {
+          token = data.voter_token;
+          localStorage.setItem('palluvo_qa_voter_token', token);
+        }
+      }
     }
     return token;
   } catch (e) {
-    return 'fallback_' + Date.now();
+    return null;
   }
 }
 
@@ -43,6 +54,9 @@ export default function ProductQA({ productId, initialQA = [] }) {
         .then(res => res.json())
         .then(data => {
           if (data.qa) setQaList(data.qa);
+          if (data.voter_token && !localStorage.getItem('palluvo_qa_voter_token')) {
+            localStorage.setItem('palluvo_qa_voter_token', data.voter_token);
+          }
         })
         .catch(() => {});
     }
@@ -60,10 +74,11 @@ export default function ProductQA({ productId, initialQA = [] }) {
     }
 
     try {
-      const voterToken = getOrCreateVoterToken();
+      const voterToken = await getOrFetchVoterToken();
       const authToken = localStorage.getItem('palluvo_token');
       const headers = { 'Content-Type': 'application/json' };
       if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      if (voterToken) headers['x-voter-token'] = voterToken;
 
       const res = await fetch(`/api/products/qa/${qaId}/helpful`, {
         method: 'POST',

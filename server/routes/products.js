@@ -1,9 +1,51 @@
+const crypto = require('crypto');
 const express = require('express');
+const jwt = require('jsonwebtoken');
 const router = express.Router();
 const db = require('../db/database');
-const { optionalAuth } = require('../middleware/auth');
+const { optionalAuth, JWT_SECRET } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
 const { reconcileExpiredReservations } = require('./payments');
+
+function getCallerIp(req) {
+  if (req.ip) return req.ip;
+  const forwarded = req.headers && req.headers['x-forwarded-for'];
+  if (forwarded) {
+    return typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : forwarded[0].trim();
+  }
+  return req.socket?.remoteAddress || '127.0.0.1';
+}
+
+function generateStableVoterId(ip) {
+  return crypto.createHmac('sha256', JWT_SECRET).update(`qa_voter_stable:${ip}`).digest('hex').slice(0, 32);
+}
+
+function issueVoterToken(req) {
+  const ip = getCallerIp(req);
+  const voterId = generateStableVoterId(ip);
+  return jwt.sign(
+    {
+      voter_id: voterId,
+      voter_type: 'anonymous_qa_voter',
+      nonce: crypto.randomBytes(8).toString('hex')
+    },
+    JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+}
+
+function verifyVoterToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const decoded = jwt.verify(token.trim(), JWT_SECRET);
+    if (decoded && decoded.voter_type === 'anonymous_qa_voter' && decoded.voter_id) {
+      return decoded.voter_id;
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
 
 // GET /api/products (List with comprehensive filtering, search, and sorting)
 router.get('/', async (req, res) => {
@@ -238,6 +280,16 @@ router.get('/search/suggestions', async (req, res) => {
   }
 });
 
+// GET /api/products/qa/voter-token (Issue a signed, stable anonymous voter token)
+router.get('/qa/voter-token', (req, res) => {
+  try {
+    const token = issueVoterToken(req);
+    res.json({ success: true, voter_token: token });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to issue voter token.' });
+  }
+});
+
 // GET /api/products/:slugOrId (Single product details with gallery, variants, reviews, and related items)
 router.get('/:slugOrId', async (req, res) => {
   try {
@@ -331,7 +383,8 @@ router.get('/:slugOrId', async (req, res) => {
 router.get('/:productId/qa', (req, res) => {
   try {
     const qas = db.prepare('SELECT * FROM product_qa WHERE product_id = ? ORDER BY helpful_votes DESC, created_at DESC').all(req.params.productId);
-    res.json({ qa: qas });
+    const voterToken = issueVoterToken(req);
+    res.json({ qa: qas, voter_token: voterToken });
   } catch (err) {
     console.error('QA fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch questions.' });
@@ -386,17 +439,25 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, (req, res) =
       return res.status(404).json({ error: 'Question not found.' });
     }
 
-    // Determine unique voter key from authenticated user or stable anonymous voter token
-    const voterToken = (req.body?.voter_token || req.headers['x-voter-token'] || '').trim();
+    // Determine unique voter key from authenticated user or server-issued signed anonymous voter token
     let voterKey;
+    let userId = null;
+
     if (req.user?.id) {
       voterKey = `usr_${req.user.id}`;
-    } else if (voterToken) {
-      voterKey = `anon_${voterToken}`;
+      userId = req.user.id;
     } else {
-      const forwarded = req.headers['x-forwarded-for'];
-      const rawIp = (typeof forwarded === 'string' ? forwarded.split(',')[0] : (req.socket?.remoteAddress || req.ip || 'anon')).trim();
-      voterKey = `ip_${rawIp}`;
+      const rawToken = (req.body?.voter_token || req.headers['x-voter-token'] || '').trim();
+      if (!rawToken) {
+        return res.status(400).json({ error: 'Valid server-issued voter token or authentication is required.' });
+      }
+
+      const verifiedVoterId = verifyVoterToken(rawToken);
+      if (!verifiedVoterId) {
+        return res.status(400).json({ error: 'Invalid or forged voter token. A valid server-issued voter token is required.' });
+      }
+
+      voterKey = `anon_${verifiedVoterId}`;
     }
 
     // Check if voter has already voted on this question
@@ -414,7 +475,7 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, (req, res) =
       db.prepare('INSERT INTO product_qa_votes (qa_id, voter_key, user_id) VALUES (?, ?, ?)').run(
         qaId,
         voterKey,
-        req.user?.id || null
+        userId
       );
       db.prepare('UPDATE product_qa SET helpful_votes = helpful_votes + 1 WHERE id = ?').run(qaId);
     });
@@ -444,5 +505,8 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, (req, res) =
     res.status(500).json({ error: 'Failed to record vote.' });
   }
 });
+
+router.issueVoterToken = issueVoterToken;
+router.verifyVoterToken = verifyVoterToken;
 
 module.exports = router;
