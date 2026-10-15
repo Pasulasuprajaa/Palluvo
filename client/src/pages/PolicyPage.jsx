@@ -320,7 +320,7 @@ export default function PolicyPage({ initialTab = 'privacy', onNavigate }) {
                     <span>Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</span>
                   </div>
                   <a
-                    href="https://www.google.com/maps/search/?api=1&query=Lavelle+Road%2C+Shanthala+Nagar%2C+Bengaluru%2C+Karnataka+560001"
+                    href="https://maps.app.goo.gl/wkcLwsNgHp39z4pe7"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="min-h-[44px] flex items-center justify-center gap-2 px-3 py-2 bg-[#C5A059] hover:bg-[#E0C07F] text-[#1F1A1C] font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-sm cursor-pointer"

@@ -539,7 +539,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                     <span>Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</span>
                   </div>
                   <a
-                    href="https://www.google.com/maps/search/?api=1&query=Lavelle+Road%2C+Shanthala+Nagar%2C+Bengaluru%2C+Karnataka+560001"
+                    href="https://maps.app.goo.gl/wkcLwsNgHp39z4pe7"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="min-h-[44px] flex items-center justify-center gap-2 w-full px-3 py-2.5 bg-[#5B1425] text-[#FAF7F2] font-semibold text-xs rounded-lg hover:bg-[#7E1E34] transition shadow-xs cursor-pointer"
