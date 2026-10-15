@@ -1187,24 +1187,32 @@ async function runTests() {
       'Repeated token issuance from one client must bind to the same voter ID'
     );
 
-    // 8o. [P2] Targeted vote limit protects question from unauthenticated vote inflation
-    // Perform additional anonymous votes on targetQaId from distinct tokens until limit (5) is reached
-    for (let i = 0; i < 4; i++) {
+    // 8o. [P2] Avoid 5-person lockout on shared networks & enforce generous abuse threshold in shared store
+    // Verify that guests 6, 7, and 8 behind the same IP can vote successfully without 5-person network lockout
+    for (let i = 0; i < 3; i++) {
+      const guestTokenRes = await request('/api/products/qa/voter-token');
+      const guestVoteRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
+        method: 'POST',
+        body: { voter_token: guestTokenRes.body.voter_token }
+      });
+      assert.strictEqual(guestVoteRes.status, 200, `Guest ${i + 6} behind same network must not be locked out`);
+    }
+
+    // Continue sending anonymous votes until the generous abuse limit (25) is reached
+    let hitLimit = false;
+    for (let i = 0; i < 30; i++) {
       const extraTokenRes = await request('/api/products/qa/voter-token');
-      await request(`/api/products/qa/${targetQaId}/helpful`, {
+      const res = await request(`/api/products/qa/${targetQaId}/helpful`, {
         method: 'POST',
         body: { voter_token: extraTokenRes.body.voter_token }
       });
+      if (res.status === 429) {
+        assert.strictEqual(res.body.code, 'VOTE_LIMIT_EXCEEDED');
+        hitLimit = true;
+        break;
+      }
     }
-
-    // Next anonymous vote on same question exceeds targeted limit and must return 429
-    const spamTokenRes = await request('/api/products/qa/voter-token');
-    const limitRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
-      method: 'POST',
-      body: { voter_token: spamTokenRes.body.voter_token }
-    });
-    assert.strictEqual(limitRes.status, 429, 'Excessive unauthenticated votes for same question must return 429');
-    assert.strictEqual(limitRes.body.code, 'VOTE_LIMIT_EXCEEDED');
+    assert.strictEqual(hitLimit, true, 'Excessive unauthenticated votes exceeding shared limit must return 429 VOTE_LIMIT_EXCEEDED');
 
     console.log('✅ PASS: [P2] Helpful-vote endpoint binds anonymous identity to server-issued token and blocks distinct tokens from same caller');
 

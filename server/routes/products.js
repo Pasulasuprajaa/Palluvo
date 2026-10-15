@@ -5,6 +5,7 @@ const router = express.Router();
 const db = require('../db/database');
 const { optionalAuth, JWT_SECRET } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
+const { anonymousVoteLimiter } = require('../middleware/rateLimit');
 const { reconcileExpiredReservations } = require('./payments');
 
 function getCallerIp(req) {
@@ -17,7 +18,6 @@ function getCallerIp(req) {
 }
 
 const BROWSER_COOKIE_NAME = 'pv_bid';
-const anonymousQuestionVoteTracker = new Map(); // key: `${ip}:${qaId}`, val: [timestamps]
 
 function signBrowserId(bid) {
   const hmac = crypto.createHmac('sha256', JWT_SECRET).update(`bid:${bid}`).digest('hex').slice(0, 32);
@@ -529,7 +529,7 @@ router.post('/:productId/qa', requireDurableStorage, (req, res) => {
 });
 
 // POST /api/products/qa/:id/helpful (Upvote helpfulness idempotently per voter)
-router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, (req, res) => {
+router.post('/qa/:id/helpful', optionalAuth, anonymousVoteLimiter, requireDurableStorage, (req, res) => {
   try {
     const qaId = parseInt(req.params.id, 10);
     if (isNaN(qaId)) {
@@ -550,21 +550,6 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, (req, res) =
       voterKey = `usr_${req.user.id}`;
       userId = req.user.id;
     } else {
-      // Targeted rate limit for unauthenticated anonymous helpful votes on this question from caller IP
-      const callerIp = getCallerIp(req);
-      const rateKey = `${callerIp}:${qaId}`;
-      const now = Date.now();
-      const windowMs = 15 * 60 * 1000;
-      const maxVotesPerQuestion = 5;
-
-      const recent = (anonymousQuestionVoteTracker.get(rateKey) || []).filter(ts => now - ts < windowMs);
-      if (recent.length >= maxVotesPerQuestion) {
-        return res.status(429).json({
-          error: 'Vote limit reached for this question from your network. Please try again later or sign in.',
-          code: 'VOTE_LIMIT_EXCEEDED'
-        });
-      }
-
       const rawToken = (req.body?.voter_token || req.headers['x-voter-token'] || '').trim();
       if (!rawToken) {
         return res.status(400).json({ error: 'Valid server-issued voter token or authentication is required.' });
@@ -628,14 +613,6 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, (req, res) =
 
     try {
       recordVote();
-      if (!req.user?.id) {
-        const callerIp = getCallerIp(req);
-        const rateKey = `${callerIp}:${qaId}`;
-        const now = Date.now();
-        const recent = (anonymousQuestionVoteTracker.get(rateKey) || []).filter(ts => now - ts < 15 * 60 * 1000);
-        recent.push(now);
-        anonymousQuestionVoteTracker.set(rateKey, recent);
-      }
     } catch (insertErr) {
       if (insertErr.code === 'SQLITE_CONSTRAINT' || insertErr.message.includes('UNIQUE')) {
         const currentItem = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(qaId);

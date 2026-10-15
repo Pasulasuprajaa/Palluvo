@@ -312,6 +312,23 @@ const apiLimiter = rateLimit({
   }
 });
 
+// Rate limiter for unauthenticated helpful votes to prevent bot flood / vote manipulation
+// Uses generous abuse threshold (25 votes / 15 min) to prevent locking out legitimate multi-user shared NATs
+const anonymousVoteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  store: createSharedRateLimitStore('qa_vote_anon', 15 * 60 * 1000),
+  keyGenerator: (req) => getNormalizedIp(req),
+  skip: (req) => Boolean(req.user?.id),
+  message: {
+    error: 'Too many helpful votes submitted from this network. Please try again later or sign in.',
+    code: 'VOTE_LIMIT_EXCEEDED'
+  }
+});
+
 class AccountRiskTracker {
   constructor(windowMs = 15 * 60 * 1000) {
     this.windowMs = windowMs;
@@ -384,6 +401,7 @@ module.exports = {
   targetedAuthLimiter,
   trackOrderLimiter,
   apiLimiter,
+  anonymousVoteLimiter,
   SharedRateLimitStore,
   getNormalizedIp,
   AccountRiskTracker,
