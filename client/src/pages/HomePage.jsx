@@ -102,7 +102,7 @@ export default function HomePage({ onNavigate }) {
   return (
     <div className="flex flex-col">
       {/* 1. HERO SECTION */}
-      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] min-h-[480px] sm:min-h-[620px] md:min-h-[85vh]">
+      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] min-h-[500px] sm:min-h-[580px] md:min-h-[82vh] lg:min-h-[86vh]">
         {/* Background Image with Crisp Portrait Framing (Clickable to Explore Sarees) */}
         <a
           href="/sarees"
@@ -122,35 +122,35 @@ export default function HomePage({ onNavigate }) {
               loading="eager"
               fetchPriority="high"
               decoding="async"
-              className="w-full h-full object-cover object-[center_top] sm:object-[center_10%] md:object-[right_center] lg:object-right opacity-100 transition-transform duration-1000 ease-out group-hover:scale-105"
+              className="w-full h-full object-cover object-[center_top] sm:object-[center_12%] md:object-[right_center] lg:object-[82%_center] opacity-100 transition-transform duration-1000 ease-out group-hover:scale-105"
             />
           </picture>
-          {/* Subtle Vignette Gradient to keep photograph bright and clear */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/50 via-40% to-transparent md:bg-gradient-to-r md:from-[#1F1A1C]/90 md:from-25% md:via-[#1F1A1C]/35 md:via-50% md:to-transparent pointer-events-none" />
+          {/* Subtle Vignette Gradient: High contrast for typography while keeping the bride's portrait vibrant and clear */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C] via-[#1F1A1C]/75 via-45% to-black/20 md:bg-gradient-to-r md:from-[#1F1A1C]/95 md:from-28% md:via-[#1F1A1C]/50 md:via-52% md:to-transparent pointer-events-none" />
         </a>
 
         {/* Hero Content with Seamless Luxury Editorial Styling */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-10 md:py-20 lg:py-24 w-full flex flex-col justify-end md:justify-center pointer-events-none">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 md:py-20 lg:py-24 w-full flex flex-col justify-end md:justify-center pointer-events-none">
           <div className="max-w-xl md:max-w-lg lg:max-w-xl xl:max-w-2xl pointer-events-auto">
             {/* Editorial Tag */}
-            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-[0.25em] text-[#E0C07F] mb-1.5 flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3 text-[#C5A059]" />
+            <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.22em] text-[#E0C07F] mb-2 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
               <span>Royal Heirloom Edit</span>
             </p>
 
             {/* Headline */}
-            <h1 className="font-serif text-xl sm:text-4xl md:text-5xl lg:text-6xl font-normal leading-tight tracking-wide text-[#FAF7F2] drop-shadow-md">
+            <h1 className="font-serif text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-normal leading-[1.14] tracking-wide text-[#FAF7F2] drop-shadow-sm">
               Every Drape, <br />
               <span className="italic text-[#E0C07F]">A Little Magic.</span>
             </h1>
 
-            {/* Compact Description */}
-            <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm md:text-base text-[#FAF7F2]/90 leading-relaxed font-sans max-w-lg drop-shadow-sm">
+            {/* Description */}
+            <p className="mt-2 sm:mt-2.5 text-xs sm:text-sm md:text-base text-[#FAF7F2]/90 leading-relaxed font-sans max-w-lg drop-shadow-xs">
               Authentic handloom sarees crafted in pure zari and raw silk by master artisans.
             </p>
 
             {/* Action Button */}
-            <div className="mt-3 sm:mt-6 flex items-center w-full sm:w-auto">
+            <div className="mt-3.5 sm:mt-6 flex items-center w-full sm:w-auto">
               <a
                 href="/sarees"
                 onClick={(e) => {
@@ -158,7 +158,7 @@ export default function HomePage({ onNavigate }) {
                   e.preventDefault();
                   onNavigate('shop');
                 }}
-                className="px-5 sm:px-8 py-2.5 sm:py-3 min-h-[44px] bg-gradient-to-r from-[#5B1425] to-[#7E1E34] hover:from-[#7E1E34] hover:to-[#5B1425] text-[#FAF7F2] font-bold text-xs sm:text-sm uppercase tracking-wider rounded-xl transition-all duration-300 shadow-lg hover:shadow-2xl flex items-center justify-center gap-2 border border-[#C5A059]/50 active:scale-95 cursor-pointer text-center"
+                className="px-6 sm:px-8 py-3 min-h-[44px] bg-gradient-to-r from-[#5B1425] to-[#7E1E34] hover:from-[#7E1E34] hover:to-[#5B1425] text-[#FAF7F2] font-bold text-xs sm:text-sm uppercase tracking-wider rounded-xl transition-all duration-300 shadow-md hover:shadow-xl flex items-center justify-center gap-2 border border-[#C5A059]/40 active:scale-98 cursor-pointer text-center"
               >
                 <span>Explore Sarees</span>
                 <ArrowRight className="w-4 h-4 text-[#C5A059] shrink-0" />
@@ -166,7 +166,7 @@ export default function HomePage({ onNavigate }) {
             </div>
 
             {/* Sleek Compact Trust Badges */}
-            <div className="mt-2.5 sm:mt-5 pt-2 sm:pt-3 border-t border-white/15 flex items-center justify-between sm:justify-start sm:gap-5 text-[10px] sm:text-xs text-[#E0C07F] font-medium">
+            <div className="mt-3 sm:mt-5 pt-2.5 sm:pt-3 border-t border-white/15 flex flex-wrap items-center justify-between sm:justify-start sm:gap-5 text-[10px] sm:text-xs text-[#E0C07F] font-medium">
               <span className="flex items-center gap-1">✦ Handcrafted Luxury</span>
               <span className="text-white/30">•</span>
               <span>Master Artisans</span>
@@ -177,28 +177,35 @@ export default function HomePage({ onNavigate }) {
         </div>
       </section>
 
-      {/* 2. CATEGORY SECTION (Horizontal Swipeable Carousel on Mobile) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 sm:py-14 w-full">
+      {/* 2. CATEGORY SECTION (Horizontal Swipeable Carousel with Clear Peek on Mobile) */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 sm:pt-10 sm:pb-14 w-full">
         <div className="mb-5 sm:mb-8">
+          <span className="text-[11px] sm:text-xs font-semibold text-[#5B1425] uppercase tracking-widest flex items-center gap-1.5 mb-1">
+            <Sparkles className="w-3 h-3 text-[#C5A059]" />
+            <span>Master Weaves</span>
+          </span>
           <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C]">
             Shop by Weave & Fabric
           </h2>
+          <p className="text-xs sm:text-sm text-[#6E6467] mt-1 max-w-xl">
+            From regal Banarasi silks to lightweight Chanderis, explore authentic weaving traditions perfected across generations.
+          </p>
         </div>
 
-        {/* Mobile Horizontal Carousel / Desktop 5-Col Grid */}
+        {/* Mobile Horizontal Carousel (with next-card peek) / Desktop 5-Col Grid */}
         {categoriesLoading ? (
           <div
             role="status"
             aria-live="polite"
             aria-busy="true"
-            className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2"
+            className="flex overflow-x-auto gap-3 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2"
           >
             <span className="sr-only">Loading weave categories...</span>
             <div className="contents" aria-hidden="true">
               {[...Array(5)].map((_, i) => (
                 <div
                   key={i}
-                  className="w-36 sm:w-44 md:w-auto shrink-0 aspect-[3/4] rounded-2xl bg-[#EAE2D7]/60 animate-pulse flex flex-col justify-end p-4 space-y-2 border border-[#EAE2D7]"
+                  className="w-[150px] xs:w-[165px] sm:w-[180px] md:w-auto shrink-0 aspect-[3/4] rounded-2xl bg-[#EAE2D7]/60 animate-pulse flex flex-col justify-end p-4 space-y-2 border border-[#EAE2D7]"
                 >
                   <div className="h-4 bg-[#D5C7B8]/60 rounded-md w-3/4 mx-auto" />
                   <div className="h-3 bg-[#D5C7B8]/40 rounded-md w-1/2 mx-auto" />
@@ -227,8 +234,8 @@ export default function HomePage({ onNavigate }) {
           </div>
         ) : (
           <div>
-            <div className="flex overflow-x-auto gap-3.5 sm:gap-4 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2">
-              {weaveCategories.map((cat, idx) => (
+            <div className="flex overflow-x-auto gap-3 sm:gap-4.5 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 md:grid md:grid-cols-5 md:gap-5 pb-2">
+              {weaveCategories.map((cat) => (
                 <a
                   href={`/shop?category=${encodeURIComponent(cat.slug)}`}
                   key={cat.id}
@@ -237,7 +244,7 @@ export default function HomePage({ onNavigate }) {
                     e.preventDefault();
                     onNavigate('shop', { category: cat.slug });
                   }}
-                  className="group relative w-36 sm:w-44 md:w-auto shrink-0 snap-item aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2 bg-[#3F0D19]/20 block"
+                  className="group relative w-[150px] xs:w-[165px] sm:w-[180px] md:w-auto shrink-0 snap-item aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer shadow-xs hover:shadow-xl transition-all duration-300 text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2 bg-[#3F0D19]/20 block"
                   aria-label={/sarees?$/i.test(cat.name.trim()) ? `Explore ${cat.name}` : `Explore ${cat.name} Sarees`}
                 >
                   <img
@@ -247,13 +254,13 @@ export default function HomePage({ onNavigate }) {
                     decoding="async"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent group-hover:from-[#5B1425]/90 transition-colors duration-300" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 via-45% to-transparent group-hover:from-[#5B1425]/90 transition-colors duration-300" />
                   
-                  <div className="absolute inset-x-2.5 sm:inset-x-3 bottom-3 sm:bottom-4 text-center text-white">
-                    <h3 className="font-serif text-sm sm:text-lg font-bold tracking-normal sm:tracking-wide leading-tight sm:leading-normal group-hover:text-[#E0C07F] transition line-clamp-2">
+                  <div className="absolute inset-x-2.5 sm:inset-x-3 bottom-3 sm:bottom-4 text-center text-white flex flex-col items-center justify-end">
+                    <h3 className="font-serif text-sm sm:text-base font-bold tracking-normal sm:tracking-wide leading-tight sm:leading-snug group-hover:text-[#E0C07F] transition line-clamp-2 min-h-[2.5rem] flex items-center justify-center">
                       {cat.name}
                     </h3>
-                    <div className="mt-1 text-[11px] sm:text-xs font-bold uppercase tracking-normal sm:tracking-wider text-[#C5A059] inline-flex items-center gap-0.5">
+                    <div className="mt-1 text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[#C5A059] inline-flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
                       <span>Explore</span>
                       <ChevronRight className="w-3 h-3" />
                     </div>
@@ -263,25 +270,30 @@ export default function HomePage({ onNavigate }) {
             </div>
 
             {/* Mobile Swipe Cue */}
-            <div className="flex md:hidden items-center justify-center gap-1 mt-2.5 text-[11px] text-[#6E6467] font-medium">
-              <span>Swipe to explore {weaveCategories.length} weave collections</span>
-              <ChevronRight className="w-3.5 h-3.5 text-[#C5A059]" />
+            <div className="flex md:hidden items-center justify-center mt-3 text-[11px] text-[#6E6467] font-medium">
+              <span className="px-3 py-1 bg-[#F4EFEB] rounded-full border border-[#EAE2D7]/80 inline-flex items-center gap-1.5 shadow-xs">
+                <span>Swipe to explore {weaveCategories.length} weave collections</span>
+                <ChevronRight className="w-3.5 h-3.5 text-[#C5A059]" />
+              </span>
             </div>
           </div>
         )}
       </section>
 
       {/* 3. FEATURED COLLECTIONS: CURATED FOR EVERY OCCASION */}
-      <section className="bg-[#F4EFEB] py-12 sm:py-16 border-y border-[#EAE2D7]">
+      <section className="bg-[#F4EFEB] py-8 sm:py-12 md:py-14 border-y border-[#EAE2D7]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-5 sm:mb-7 gap-2">
             <div>
-              <span className="text-xs font-semibold text-[#5B1425] uppercase tracking-widest">
-                Signature Stories
+              <span className="text-[11px] sm:text-xs font-semibold text-[#5B1425] uppercase tracking-widest flex items-center gap-1">
+                ✦ Signature Stories
               </span>
-              <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C] mt-1">
+              <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-bold text-[#1F1A1C] mt-1">
                 Curated for Every Occasion
               </h2>
+              <p className="text-xs sm:text-sm text-[#6E6467] mt-1 max-w-xl">
+                Heirloom weaves and modern drape stories handcrafted for weddings, festivals, and refined everyday luxury.
+              </p>
             </div>
             <a
               href="/sarees"
@@ -290,7 +302,7 @@ export default function HomePage({ onNavigate }) {
                 e.preventDefault();
                 onNavigate('shop');
               }}
-              className="mt-2 md:mt-0 text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] inline-flex items-center gap-1 group focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-lg min-h-[44px] px-2 py-1 cursor-pointer"
+              className="text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] inline-flex items-center gap-1 group rounded-lg min-h-[44px] px-2 py-1 cursor-pointer self-start md:self-auto"
             >
               <span>Explore All Sarees</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-[#C5A059]" />
@@ -307,10 +319,10 @@ export default function HomePage({ onNavigate }) {
                   e.preventDefault();
                   onNavigate('shop', col.filter);
                 }}
-                className="w-56 sm:w-full shrink-0 sm:shrink snap-item group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
+                className="w-[240px] xs:w-[260px] sm:w-full shrink-0 sm:shrink snap-item group relative bg-white rounded-2xl overflow-hidden border border-[#EAE2D7] shadow-xs hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col text-left focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
                 aria-label={`Explore ${col.title} Collection`}
               >
-                <div className="aspect-[3/4] w-full overflow-hidden bg-[#FAF7F2]">
+                <div className="aspect-[4/5] sm:aspect-[3/4] w-full overflow-hidden bg-[#FAF7F2]">
                   <img
                     src={col.image}
                     alt=""
@@ -330,11 +342,11 @@ export default function HomePage({ onNavigate }) {
                     </p>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-[#F4EFEB] flex items-center justify-between w-full">
+                  <div className="mt-3.5 pt-3 border-t border-[#F4EFEB] flex items-center justify-between w-full">
                     <span className="text-xs font-bold text-[#5B1425] group-hover:underline">
                       Explore Edition
                     </span>
-                    <div className="w-7 h-7 rounded-full bg-[#FAF7F2] flex items-center justify-center text-[#5B1425] group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] transition">
+                    <div className="w-8 h-8 rounded-full bg-[#FAF7F2] flex items-center justify-center text-[#5B1425] group-hover:bg-[#5B1425] group-hover:text-[#FAF7F2] transition shadow-xs">
                       <ArrowRight className="w-3.5 h-3.5" />
                     </div>
                   </div>
@@ -344,20 +356,28 @@ export default function HomePage({ onNavigate }) {
           </div>
 
           {/* Mobile Swipe Cue */}
-          <div className="flex sm:hidden items-center justify-center gap-1 mt-2.5 text-[11px] text-[#6E6467] font-medium">
-            <span>Swipe to explore 6 occasion edits</span>
-            <ChevronRight className="w-3.5 h-3.5 text-[#C5A059]" />
+          <div className="flex sm:hidden items-center justify-center mt-3 text-[11px] text-[#6E6467] font-medium">
+            <span className="px-3 py-1 bg-white rounded-full border border-[#EAE2D7]/80 inline-flex items-center gap-1.5 shadow-xs">
+              <span>Swipe to explore 6 occasion edits</span>
+              <ChevronRight className="w-3.5 h-3.5 text-[#C5A059]" />
+            </span>
           </div>
         </div>
       </section>
 
       {/* 4. BEST SELLERS / SPOTLIGHT SAREES */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 w-full">
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 md:py-14 w-full">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-5 sm:mb-7 gap-2">
           <div>
-            <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C]">
+            <span className="text-[11px] sm:text-xs font-semibold text-[#5B1425] uppercase tracking-widest flex items-center gap-1">
+              ✦ Customer Favorites
+            </span>
+            <h2 className="font-serif text-2xl sm:text-4xl font-bold text-[#1F1A1C] mt-1">
               Best Sellers of the Season
             </h2>
+            <p className="text-xs sm:text-sm text-[#6E6467] mt-1 max-w-xl">
+              The most coveted sarees chosen by connoisseurs across India and worldwide.
+            </p>
           </div>
           <a
             href="/shop?filter=best_seller"
@@ -366,7 +386,7 @@ export default function HomePage({ onNavigate }) {
               e.preventDefault();
               onNavigate('shop', { filter: 'best_seller' });
             }}
-            className="mt-2 md:mt-0 text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] inline-flex items-center gap-1 group focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none rounded-lg min-h-[44px] px-2 py-1 cursor-pointer"
+            className="text-xs font-bold uppercase tracking-wider text-[#5B1425] hover:text-[#7E1E34] inline-flex items-center gap-1 group rounded-lg min-h-[44px] px-2 py-1 cursor-pointer self-start md:self-auto"
           >
             <span>View All Best Sellers</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-[#C5A059]" />
@@ -385,7 +405,7 @@ export default function HomePage({ onNavigate }) {
               {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
-                  className="w-56 sm:w-auto shrink-0 snap-item bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden p-3 sm:p-4 space-y-3 shadow-xs"
+                  className="w-[240px] xs:w-[260px] sm:w-auto shrink-0 snap-item bg-white rounded-2xl border border-[#EAE2D7] overflow-hidden p-3 sm:p-4 space-y-3 shadow-xs"
                 >
                   <div className="aspect-[3/4] w-full rounded-xl bg-[#EAE2D7]/60 animate-pulse" />
                   <div className="space-y-2">
@@ -420,23 +440,25 @@ export default function HomePage({ onNavigate }) {
           <div>
             <div className="flex overflow-x-auto gap-3.5 sm:gap-6 no-scrollbar scroll-touch -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 pb-2">
               {bestSellers.map((prod) => (
-                <div key={prod.id} className="w-56 sm:w-auto shrink-0 snap-item flex">
+                <div key={prod.id} className="w-[240px] xs:w-[260px] sm:w-auto shrink-0 snap-item flex">
                   <ProductCard product={prod} onNavigate={onNavigate} />
                 </div>
               ))}
             </div>
 
             {/* Mobile Swipe Cue */}
-            <div className="flex sm:hidden items-center justify-center gap-1 mt-2.5 text-[11px] text-[#6E6467] font-medium">
-              <span>Swipe to explore {bestSellers.length} best seller sarees</span>
-              <ChevronRight className="w-3.5 h-3.5 text-[#C5A059]" />
+            <div className="flex sm:hidden items-center justify-center mt-3 text-[11px] text-[#6E6467] font-medium">
+              <span className="px-3 py-1 bg-[#F4EFEB] rounded-full border border-[#EAE2D7]/80 inline-flex items-center gap-1.5 shadow-xs">
+                <span>Swipe to explore {bestSellers.length} best seller sarees</span>
+                <ChevronRight className="w-3.5 h-3.5 text-[#C5A059]" />
+              </span>
             </div>
           </div>
         )}
       </section>
 
       {/* 5. EDITORIAL HERITAGE SHOWCASE BANNER (Entire Banner Clickable) */}
-      <section className="relative w-full overflow-hidden bg-[#FAF7F2] py-4 sm:py-8">
+      <section className="relative w-full overflow-hidden bg-[#FAF7F2] py-6 sm:py-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <a
             href="/shop?category=banarasi-sarees"
@@ -445,7 +467,7 @@ export default function HomePage({ onNavigate }) {
               e.preventDefault();
               onNavigate('shop', { category: 'banarasi-sarees' });
             }}
-            className="group relative block aspect-[4/5] sm:aspect-[21/9] w-full max-h-[560px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-lg cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
+            className="group relative block aspect-[4/5] sm:aspect-[16/8] md:aspect-[21/9] w-full max-h-[520px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-500 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none focus-visible:ring-offset-2"
             aria-label="Explore The Heritage Edit - Pure Weaves, Timeless Grace"
           >
             <img
@@ -453,23 +475,27 @@ export default function HomePage({ onNavigate }) {
               alt="Authentic handloom heritage sarees"
               loading="lazy"
               decoding="async"
-              className="w-full h-full object-cover object-[center_28%] transition-transform duration-700 group-hover:scale-105"
+              className="w-full h-full object-cover object-[center_30%] sm:object-[center_35%] md:object-[right_35%] lg:object-[80%_35%] transition-transform duration-700 group-hover:scale-105"
             />
-            {/* Subtle soft bottom vignette only */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C]/80 via-[#1F1A1C]/15 to-transparent pointer-events-none" />
+            {/* Carefully Balanced Gradient: Guarantees text readability without hiding the saree model */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C]/92 via-[#1F1A1C]/50 via-50% to-black/15 sm:bg-gradient-to-r sm:from-[#1F1A1C]/95 sm:from-32% sm:via-[#1F1A1C]/40 sm:to-transparent pointer-events-none" />
 
-            {/* Clean, Professional Editorial Bar */}
+            {/* Clean, Professional Editorial Content */}
             <div className="absolute inset-x-0 bottom-0 p-5 sm:p-8 md:p-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4 z-10 pointer-events-none">
-              <div>
-                <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-[#E0C07F] font-semibold mb-1">
-                  The Heritage Edit
+              <div className="max-w-lg">
+                <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-[#E0C07F] font-semibold mb-1 flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-[#C5A059]" />
+                  <span>The Heritage Edit</span>
                 </p>
-                <h2 className="font-serif text-xl sm:text-3xl text-[#FAF7F2] font-normal tracking-wide drop-shadow-sm">
+                <h2 className="font-serif text-xl sm:text-3xl lg:text-4xl text-[#FAF7F2] font-normal tracking-wide drop-shadow-sm">
                   Pure Weaves. Timeless Grace.
                 </h2>
+                <p className="text-xs sm:text-sm text-[#FAF7F2]/85 mt-1 hidden sm:block font-sans leading-relaxed">
+                  Immerse yourself in centuries of weaving heritage, where raw mulberry silk meets consecrated zari artistry.
+                </p>
               </div>
 
-              <div className="inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 bg-white/95 group-hover:bg-white text-[#1F1A1C] text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md group-hover:shadow-xl w-fit border border-white/40 group-active:scale-95">
+              <div className="inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 min-h-[44px] bg-white group-hover:bg-[#FAF7F2] text-[#1F1A1C] text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-md group-hover:shadow-xl w-fit border border-white/50 group-active:scale-95 shrink-0 pointer-events-auto">
                 <span>Explore Collection</span>
                 <ArrowRight className="w-3.5 h-3.5 text-[#5B1425] group-hover:translate-x-0.5 transition-transform" />
               </div>

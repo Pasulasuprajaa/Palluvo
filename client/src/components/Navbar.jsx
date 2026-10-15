@@ -590,7 +590,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
           <button
             onClick={() => handleNav('home')}
             aria-current={currentPage === 'home' ? 'page' : undefined}
-            className={`flex-1 flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
               currentPage === 'home' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
             }`}
           >
@@ -602,7 +602,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
           <button
             onClick={() => handleNav('shop')}
             aria-current={currentPage === 'shop' ? 'page' : undefined}
-            className={`flex-1 flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
               currentPage === 'shop' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
             }`}
           >
@@ -614,7 +614,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
           <button
             onClick={() => handleNav('wishlist')}
             aria-current={currentPage === 'wishlist' ? 'page' : undefined}
-            className={`flex-1 relative flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
+            className={`flex-1 min-h-[44px] relative flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
               currentPage === 'wishlist' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
             }`}
           >
@@ -632,7 +632,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
           {/* 4. Shopping Bag / Cart (Provided Bag Icon) */}
           <button
             onClick={() => setIsCartOpen(true)}
-            className="flex-1 relative flex flex-col items-center justify-center py-1 text-[10px] text-[#6E6467] hover:text-[#5B1425] transition-colors cursor-pointer"
+            className="flex-1 min-h-[44px] relative flex flex-col items-center justify-center py-1 text-[10px] text-[#6E6467] hover:text-[#5B1425] transition-colors cursor-pointer"
             aria-label="Shopping Bag"
           >
             <div className="relative">
@@ -656,7 +656,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               }
             }}
             aria-current={currentPage === 'account' ? 'page' : undefined}
-            className={`flex-1 flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
               currentPage === 'account' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
             }`}
           >

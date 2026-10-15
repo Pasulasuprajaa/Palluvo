@@ -1132,6 +1132,39 @@ async function runTests() {
     });
     assert.strictEqual(notFoundRes.status, 404, 'Non-existent question ID must return 404');
 
+    // 8m. [P2] Migrate legacy IP-derived voter tokens to distinct per-browser identities
+    const legacyIpDerivedId = 'a1b2c3d4e5f60718293a4b5c6d7e8f90'; // 32-hex legacy HMAC
+    const legacyToken = jwt.sign(
+      { voter_id: legacyIpDerivedId, voter_type: 'anonymous_qa_voter' },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    // Direct vote with un-migrated legacy token requests migration
+    const legacyVoteRes = await request(`/api/products/qa/${targetQaId}/helpful`, {
+      method: 'POST',
+      body: { voter_token: legacyToken }
+    });
+    assert.strictEqual(legacyVoteRes.status, 401, 'Legacy voter token must require migration');
+    assert.strictEqual(legacyVoteRes.body.code, 'TOKEN_LEGACY_MIGRATION', 'Response code must be TOKEN_LEGACY_MIGRATION');
+
+    // Two distinct browser renewals presenting legacy token get separate per-browser identities
+    const migRes1 = await request('/api/products/qa/voter-token', {
+      headers: { 'x-voter-token': legacyToken }
+    });
+    assert.strictEqual(migRes1.status, 200);
+    const decodedMig1 = jwt.verify(migRes1.body.voter_token, JWT_SECRET);
+    assert.notStrictEqual(decodedMig1.voter_id, legacyIpDerivedId, 'Renewal must not preserve legacy IP-derived voter ID');
+    assert.ok(decodedMig1.voter_id.startsWith('voter_'), 'Migrated voter ID must start with voter_ prefix');
+
+    const migRes2 = await request('/api/products/qa/voter-token', {
+      headers: { 'x-voter-token': legacyToken }
+    });
+    assert.strictEqual(migRes2.status, 200);
+    const decodedMig2 = jwt.verify(migRes2.body.voter_token, JWT_SECRET);
+    assert.notStrictEqual(decodedMig2.voter_id, legacyIpDerivedId, 'Renewal must not preserve legacy IP-derived voter ID');
+    assert.notStrictEqual(decodedMig2.voter_id, decodedMig1.voter_id, 'Two browsers migrating legacy token must receive distinct per-browser IDs');
+
     console.log('✅ PASS: [P2] Helpful-vote endpoint binds anonymous identity to server-issued token and blocks distinct tokens from same caller');
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');

@@ -16,6 +16,23 @@ function getCallerIp(req) {
   return req.socket?.remoteAddress || '127.0.0.1';
 }
 
+function isLegacyVoterId(voterId, req) {
+  if (!voterId || typeof voterId !== 'string') return true;
+  // Modern per-browser voter IDs start with 'voter_'
+  if (!voterId.startsWith('voter_')) return true;
+  // Legacy IP HMACs were 32-character hex strings
+  if (/^[0-9a-f]{32}$/i.test(voterId)) return true;
+  // If caller IP matches legacy HMAC, migrate to per-browser ID
+  if (req) {
+    try {
+      const ip = getCallerIp(req);
+      const ipHmac = crypto.createHmac('sha256', JWT_SECRET).update(`qa_voter_stable:${ip}`).digest('hex').slice(0, 32);
+      if (voterId === ipHmac || voterId === `voter_${ipHmac}`) return true;
+    } catch (e) {}
+  }
+  return false;
+}
+
 function issueVoterToken(req) {
   let voterId = null;
   const existingToken = (
@@ -29,7 +46,10 @@ function issueVoterToken(req) {
     try {
       const decoded = jwt.verify(existingToken, JWT_SECRET, { ignoreExpiration: true });
       if (decoded && decoded.voter_type === 'anonymous_qa_voter' && decoded.voter_id) {
-        voterId = decoded.voter_id;
+        // Migrate legacy IP-derived voter IDs to distinct per-browser IDs
+        if (!isLegacyVoterId(decoded.voter_id, req)) {
+          voterId = decoded.voter_id;
+        }
       }
     } catch (e) {}
   }
@@ -49,13 +69,16 @@ function issueVoterToken(req) {
   );
 }
 
-function verifyVoterToken(token) {
+function verifyVoterToken(token, req) {
   if (!token || typeof token !== 'string') {
     return { valid: false, error: 'MISSING' };
   }
   try {
     const decoded = jwt.verify(token.trim(), JWT_SECRET);
     if (decoded && decoded.voter_type === 'anonymous_qa_voter' && decoded.voter_id) {
+      if (isLegacyVoterId(decoded.voter_id, req)) {
+        return { valid: false, error: 'LEGACY_MIGRATION_REQUIRED' };
+      }
       return { valid: true, voter_id: decoded.voter_id };
     }
     return { valid: false, error: 'INVALID' };
@@ -472,12 +495,18 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, (req, res) =
         return res.status(400).json({ error: 'Valid server-issued voter token or authentication is required.' });
       }
 
-      const verified = verifyVoterToken(rawToken);
+      const verified = verifyVoterToken(rawToken, req);
       if (!verified.valid) {
         if (verified.error === 'EXPIRED') {
           return res.status(401).json({
             error: 'Voter token has expired. Please refresh your token.',
             code: 'TOKEN_EXPIRED'
+          });
+        }
+        if (verified.error === 'LEGACY_MIGRATION_REQUIRED') {
+          return res.status(401).json({
+            error: 'Legacy voter token requires migration to per-browser identity. Please refresh your token.',
+            code: 'TOKEN_LEGACY_MIGRATION'
           });
         }
         return res.status(400).json({

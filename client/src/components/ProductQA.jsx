@@ -10,6 +10,10 @@ function isTokenValid(token) {
     const rawPayload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     const decodedStr = typeof atob === 'function' ? atob(rawPayload) : Buffer.from(rawPayload, 'base64').toString('utf-8');
     const payload = JSON.parse(decodedStr);
+    // Discard legacy IP-derived IDs (must be per-browser 'voter_' format and not legacy 32-hex)
+    if (!payload.voter_id || typeof payload.voter_id !== 'string' || !payload.voter_id.startsWith('voter_') || /^[0-9a-f]{32}$/i.test(payload.voter_id)) {
+      return false;
+    }
     if (payload.exp && (payload.exp * 1000 <= Date.now() + 60000)) {
       return false; // Expired or expiring within 60s
     }
@@ -106,8 +110,8 @@ export default function ProductQA({ productId, initialQA = [] }) {
       });
       let data = await res.json();
 
-      // If token expired on server, auto-refresh and retry once
-      if (!res.ok && (data.code === 'TOKEN_EXPIRED' || (data.error && data.error.toLowerCase().includes('token')))) {
+      // If token expired on server or requires migration, auto-refresh and retry once
+      if (!res.ok && (data.code === 'TOKEN_EXPIRED' || data.code === 'TOKEN_LEGACY_MIGRATION' || (data.error && data.error.toLowerCase().includes('token')))) {
         voterToken = await getOrFetchVoterToken(true);
         if (voterToken) {
           headers['x-voter-token'] = voterToken;

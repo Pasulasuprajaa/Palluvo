@@ -40,7 +40,7 @@ export default function Footer({ onNavigate }) {
   };
 
   return (
-    <footer className="bg-[#1F1A1C] text-[#FAF7F2] border-t border-[#C5A059]/30 pt-12 sm:pt-16 pb-12">
+    <footer className="bg-[#1F1A1C] text-[#FAF7F2] border-t border-[#C5A059]/30 pt-12 sm:pt-16 pb-24 lg:pb-12 safe-area-pb">
       {/* Brand Pillars & Trust Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-10 sm:pb-14 border-b border-white/10">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 text-left">
