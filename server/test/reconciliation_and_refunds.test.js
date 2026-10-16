@@ -1458,31 +1458,7 @@ async function runTests() {
     const targetQaId4 = askFourthQARes.body.qa.id;
     assert.ok(targetQaId4, 'Target Q&A question 4 created');
 
-    // Repeated token issuance without cookie persistence:
-    // Repeatedly request tokens without storing or sending cookies, then attempt to vote
-    for (let i = 0; i < 3; i++) {
-      const tokenRes = await request('/api/products/qa/voter-token');
-      assert.strictEqual(tokenRes.status, 200);
-      assert.ok(tokenRes.body.voter_token);
-
-      // Attempt to vote without providing the session cookie
-      const voteWithoutCookieRes = await request(`/api/products/qa/${targetQaId4}/helpful`, {
-        method: 'POST',
-        body: { voter_token: tokenRes.body.voter_token }
-      });
-      assert.strictEqual(
-        voteWithoutCookieRes.status,
-        401,
-        'Anonymous vote submission without valid session cookie must be rejected with HTTP 401'
-      );
-      assert.strictEqual(voteWithoutCookieRes.body.code, 'COOKIE_REQUIRED');
-    }
-
-    // Question vote count must remain 0 after all rejected attempts
-    const qa4Before = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(targetQaId4);
-    assert.strictEqual(qa4Before.helpful_votes, 0, 'No votes should be counted without cookie persistence');
-
-    // Now issue a token WITH cookie persistence, and vote with cookie
+    // 1. Initial valid vote with cookie persistence
     const tokenWithCookieRes = await request('/api/products/qa/voter-token');
     const persistedCookieHeader = tokenWithCookieRes.headers['set-cookie']?.[0]?.split(';')[0];
     assert.ok(persistedCookieHeader, 'Set-Cookie header must be present on token issuance');
@@ -1496,7 +1472,48 @@ async function runTests() {
     assert.strictEqual(validVoteRes.body.already_voted, false);
     assert.strictEqual(validVoteRes.body.helpful_votes, 1);
 
-    // Replay with the same cookie session must be blocked
+    // 2. [P2] Regression: Caller rotates identities by repeatedly calling /qa/voter-token without cookies,
+    // retaining each newly issued cookie and submitting it with its matching token.
+    // Fresh-cookie rotation must be prevented from minting repeat votes on the same question.
+    for (let i = 0; i < 3; i++) {
+      const rotatedTokenRes = await request('/api/products/qa/voter-token');
+      assert.strictEqual(rotatedTokenRes.status, 200);
+      assert.ok(rotatedTokenRes.body.voter_token);
+      const rotatedCookieHeader = rotatedTokenRes.headers['set-cookie']?.[0]?.split(';')[0];
+      assert.ok(rotatedCookieHeader, 'Set-Cookie header must be present for rotated token');
+
+      const rotatedVoteRes = await request(`/api/products/qa/${targetQaId4}/helpful`, {
+        method: 'POST',
+        headers: { Cookie: rotatedCookieHeader },
+        body: { voter_token: rotatedTokenRes.body.voter_token }
+      });
+      assert.strictEqual(rotatedVoteRes.status, 200, 'Rotated identity submission must receive HTTP 200');
+      assert.strictEqual(
+        rotatedVoteRes.body.already_voted,
+        true,
+        'Rotated identity must be detected as already voted on the same question'
+      );
+      assert.strictEqual(
+        rotatedVoteRes.body.helpful_votes,
+        1,
+        'Helpful votes must not increment on fresh-cookie rotation'
+      );
+    }
+
+    // 3. Regression: Submission without session cookie must be rejected with 401 COOKIE_REQUIRED
+    const freshTokenRes = await request('/api/products/qa/voter-token');
+    const voteWithoutCookieRes = await request(`/api/products/qa/${targetQaId4}/helpful`, {
+      method: 'POST',
+      body: { voter_token: freshTokenRes.body.voter_token }
+    });
+    assert.strictEqual(
+      voteWithoutCookieRes.status,
+      401,
+      'Anonymous vote submission without valid session cookie must be rejected with HTTP 401'
+    );
+    assert.strictEqual(voteWithoutCookieRes.body.code, 'COOKIE_REQUIRED');
+
+    // 4. Replay with the original cookie session must also be blocked
     const replayVoteRes = await request(`/api/products/qa/${targetQaId4}/helpful`, {
       method: 'POST',
       headers: { Cookie: persistedCookieHeader },
@@ -1505,6 +1522,10 @@ async function runTests() {
     assert.strictEqual(replayVoteRes.status, 200);
     assert.strictEqual(replayVoteRes.body.already_voted, true);
     assert.strictEqual(replayVoteRes.body.helpful_votes, 1);
+
+    // Database verification: total helpful_votes must remain exactly 1
+    const qa4Final = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(targetQaId4);
+    assert.strictEqual(qa4Final.helpful_votes, 1, 'Helpful votes must remain exactly 1 after all identity rotation attempts');
 
     console.log('✅ PASS: [P2] Helpful-vote endpoint binds anonymous identity to server-issued token and blocks distinct tokens from same caller');
 

@@ -73,6 +73,11 @@ function isLegacyVoterId(voterId, req) {
   return false;
 }
 
+// Track questions voted anonymously per IP to prevent fresh-cookie identity rotation
+const ipVotedQuestions = new Map();
+// Track original browser keys that actually cast votes on questions to distinguish genuine session replays from rotated cookies
+const originalVotersByQa = new Map();
+
 function issueVoterToken(req, res) {
   let voterId = null;
   let browserId = getBrowserIdFromReq(req);
@@ -109,6 +114,22 @@ function issueVoterToken(req, res) {
   if (!voterId) {
     browserId = 'bid_' + crypto.randomUUID();
     voterId = 'voter_' + browserId;
+
+    // Link newly generated browser ID to any prior anonymous votes cast by this IP to prevent identity rotation
+    if (req) {
+      const clientIp = getNormalizedIp(req);
+      const previousQaIds = ipVotedQuestions.get(clientIp);
+      if (previousQaIds && previousQaIds.size > 0) {
+        for (const votedQaId of previousQaIds) {
+          try {
+            db.prepare('INSERT OR IGNORE INTO product_qa_votes (qa_id, voter_key, user_id) VALUES (?, ?, NULL)').run(
+              votedQaId,
+              'anon_voter_' + browserId
+            );
+          } catch (e) {}
+        }
+      }
+    }
   }
 
   // Set the stable server-managed session cookie on response
@@ -637,6 +658,39 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
     const placeholders = candidateKeys.map(() => '?').join(', ');
     const existingVote = db.prepare(`SELECT id FROM product_qa_votes WHERE qa_id = ? AND voter_key IN (${placeholders})`).get(qaId, ...candidateKeys);
     if (existingVote) {
+      // If this is an identity rotation attempt (fresh browser session minted after prior vote from same IP),
+      // charge rate-limit quota so unauthenticated rotation loops hit 429
+      const isOriginalSession = Boolean(browserKey && originalVotersByQa.get(qaId)?.has(browserKey));
+      if (!isOriginalSession && !req.user?.id) {
+        const allowed = await new Promise((resolve) => {
+          let settled = false;
+          const settle = (val) => {
+            if (!settled) {
+              settled = true;
+              res.removeListener('finish', onFinish);
+              res.removeListener('close', onClose);
+              resolve(val);
+            }
+          };
+          const onFinish = () => settle(false);
+          const onClose = () => settle(false);
+
+          res.once('finish', onFinish);
+          res.once('close', onClose);
+
+          anonymousVoteLimiter(req, res, (err) => {
+            if (err) {
+              if (!res.headersSent) {
+                res.status(err.status || 500).json({ error: err.message });
+              }
+              return settle(false);
+            }
+            settle(!res.headersSent);
+          });
+        });
+        if (!allowed) return;
+      }
+
       return res.json({
         success: true,
         helpful_votes: qaItem.helpful_votes,
@@ -719,6 +773,20 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
       throw insertErr;
     }
 
+    if (!req.user?.id) {
+      const clientIp = getNormalizedIp(req);
+      if (!ipVotedQuestions.has(clientIp)) {
+        ipVotedQuestions.set(clientIp, new Set());
+      }
+      ipVotedQuestions.get(clientIp).add(qaId);
+      if (browserKey) {
+        if (!originalVotersByQa.has(qaId)) {
+          originalVotersByQa.set(qaId, new Set());
+        }
+        originalVotersByQa.get(qaId).add(browserKey);
+      }
+    }
+
     const updated = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(qaId);
     res.json({
       success: true,
@@ -736,5 +804,9 @@ router.verifyVoterToken = verifyVoterToken;
 router.signBrowserId = signBrowserId;
 router.verifyBrowserId = verifyBrowserId;
 router._beforeVoteTransactionHook = null;
+router.resetIpVotedQuestions = () => {
+  ipVotedQuestions.clear();
+  originalVotersByQa.clear();
+};
 
 module.exports = router;
