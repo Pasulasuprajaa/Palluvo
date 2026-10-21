@@ -63,19 +63,14 @@ export default function QuickViewModal({ onNavigate }) {
               alt={quickViewProduct.name}
               className="w-full h-full object-cover"
             />
-            <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10 pointer-events-none items-start">
-              {quickViewProduct.is_best_seller === 1 && (
-                <span className="bg-gradient-to-r from-[#C6A15B] to-[#D4AF37] text-[#1F1A1C] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow flex items-center gap-1 border border-[#B38F48]/50">
-                  <span className="text-[10px] leading-none text-[#1F1A1C]">★</span>
+            {quickViewProduct.is_best_seller === 1 && (
+              <div className="absolute top-3 left-3 z-10 pointer-events-none">
+                <span className="bg-[#C5A059] text-[#1F1A1C] text-[9.5px] font-extrabold px-2.5 py-1 rounded-md uppercase tracking-wider shadow flex items-center gap-1 border border-[#B38F48]/40">
+                  <span className="text-[9.5px] leading-none text-[#1F1A1C]">★</span>
                   <span>BESTSELLER</span>
                 </span>
-              )}
-              {quickViewProduct.discount_percent > 0 && (
-                <span className="bg-[#5B1425] text-[#FAF7F2] text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow">
-                  {quickViewProduct.discount_percent}% OFF
-                </span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Thumbnails */}
@@ -150,14 +145,21 @@ export default function QuickViewModal({ onNavigate }) {
             </div>
 
             {/* Pricing */}
-            <div className="flex items-baseline gap-3 pt-1">
+            <div className="flex items-baseline gap-2.5 pt-1 flex-wrap">
               <span className="font-sans text-2xl font-extrabold text-[#5B1425] tracking-tight">
                 ₹{quickViewProduct.price?.toLocaleString('en-IN')}
               </span>
               {quickViewProduct.mrp && quickViewProduct.mrp > quickViewProduct.price && (
-                <span className="font-sans text-sm text-[#615559] line-through font-normal">
-                  ₹{quickViewProduct.mrp?.toLocaleString('en-IN')}
-                </span>
+                <>
+                  <span className="font-sans text-sm text-[#615559] line-through font-normal">
+                    ₹{quickViewProduct.mrp?.toLocaleString('en-IN')}
+                  </span>
+                  {quickViewProduct.discount_percent > 0 && (
+                    <span className="font-sans text-xs font-bold text-[#A22B43]">
+                      ({quickViewProduct.discount_percent}% OFF)
+                    </span>
+                  )}
+                </>
               )}
               <span className="text-xs text-green-800 font-semibold bg-green-50 px-2 py-0.5 rounded">
                 Inclusive of all taxes

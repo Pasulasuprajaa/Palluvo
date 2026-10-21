@@ -87,21 +87,16 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
           />
         </a>
 
-        {/* Single/Prioritized Badges Overlay */}
-        <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none flex flex-col gap-1 items-start">
-          {product.is_best_seller === 1 && (
-            <span className="bg-gradient-to-r from-[#C6A15B] to-[#D4AF37] text-[#1F1A1C] text-[8.5px] sm:text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1 border border-[#B38F48]/50">
+        {/* Single Prioritized Status Badge Overlay (Top Left) */}
+        <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
+          {product.is_best_seller === 1 ? (
+            <span className="bg-[#C5A059] text-[#1F1A1C] text-[9px] font-extrabold tracking-wider px-2 py-0.5 rounded-md uppercase shadow-sm flex items-center gap-1 border border-[#B38F48]/40">
               <span className="text-[9px] leading-none text-[#1F1A1C]">★</span>
               <span>BESTSELLER</span>
             </span>
-          )}
-          {product.discount_percent > 0 ? (
-            <span className="bg-[#5B1425] text-[#FAF7F2] text-[8.5px] sm:text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
-              {product.discount_percent}% OFF
-            </span>
-          ) : product.is_new_arrival === 1 && product.is_best_seller !== 1 ? (
-            <span className="bg-[#1F1A1C] text-[#FAF7F2] text-[8.5px] sm:text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
-              New
+          ) : product.is_new_arrival === 1 ? (
+            <span className="bg-[#1F1A1C]/90 backdrop-blur-xs text-[#FAF7F2] text-[9px] font-bold tracking-wider px-2 py-0.5 rounded-md uppercase shadow-xs">
+              NEW
             </span>
           ) : null}
         </div>
@@ -202,9 +197,16 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
                 ₹{product.price?.toLocaleString('en-IN')}
               </span>
               {product.mrp && product.mrp > product.price && (
-                <span className="font-sans text-xs text-[#615559] line-through font-normal">
-                  ₹{product.mrp?.toLocaleString('en-IN')}
-                </span>
+                <>
+                  <span className="font-sans text-xs text-[#615559] line-through font-normal">
+                    ₹{product.mrp?.toLocaleString('en-IN')}
+                  </span>
+                  {product.discount_percent > 0 && (
+                    <span className="font-sans text-xs font-bold text-[#A22B43] tracking-tight">
+                      ({product.discount_percent}% OFF)
+                    </span>
+                  )}
+                </>
               )}
             </div>
             <div className="text-[10px] text-emerald-700 font-medium mt-0.5">

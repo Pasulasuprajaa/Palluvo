@@ -344,16 +344,11 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
             </button>
 
             {/* Badges */}
-            <div className="absolute top-4 left-4 flex flex-col gap-2 z-10 pointer-events-none">
+            <div className="absolute top-4 left-4 flex flex-col gap-2 z-10 pointer-events-none items-start">
               {product.is_best_seller === 1 && (
-                <span className="bg-gradient-to-r from-[#C6A15B] to-[#D4AF37] text-[#1F1A1C] text-[11px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider shadow-md flex items-center gap-1.5 border border-[#B38F48]/50">
+                <span className="bg-[#C5A059] text-[#1F1A1C] text-[10px] sm:text-[11px] font-extrabold px-3 py-1 rounded-md uppercase tracking-wider shadow-md flex items-center gap-1.5 border border-[#B38F48]/50">
                   <Star className="w-3.5 h-3.5 fill-[#1F1A1C] text-[#1F1A1C]" />
                   <span>BESTSELLER</span>
-                </span>
-              )}
-              {product.discount_percent > 0 && (
-                <span className="bg-[#5B1425] text-white text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-md">
-                  {product.discount_percent}% OFF
                 </span>
               )}
               {isSilkMarkCertified ? (
