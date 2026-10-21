@@ -201,6 +201,61 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
         </div>
       </div>
 
+      {/* Quick Curated Collection Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-touch py-1">
+        <button
+          onClick={() => { setFilterTag(''); setSelectedCategory(''); }}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+            !filterTag && !selectedCategory
+              ? 'bg-[#5B1425] text-[#FAF7F2] shadow-xs'
+              : 'bg-white border border-[#EAE2D7] text-[#1F1A1C] hover:border-[#5B1425]'
+          }`}
+        >
+          All Sarees
+        </button>
+        <button
+          onClick={() => setFilterTag(filterTag === 'best_seller' ? '' : 'best_seller')}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
+            filterTag === 'best_seller'
+              ? 'bg-gradient-to-r from-[#C6A15B] to-[#D4AF37] text-[#1F1A1C] font-extrabold shadow-xs border border-[#B38F48]'
+              : 'bg-white border border-[#EAE2D7] text-[#1F1A1C] hover:border-[#C6A15B]'
+          }`}
+        >
+          <span className="text-amber-600 font-bold">★</span>
+          <span>Best Sellers</span>
+        </button>
+        <button
+          onClick={() => setFilterTag(filterTag === 'new_arrival' ? '' : 'new_arrival')}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+            filterTag === 'new_arrival'
+              ? 'bg-[#1F1A1C] text-[#FAF7F2] font-bold shadow-xs'
+              : 'bg-white border border-[#EAE2D7] text-[#1F1A1C] hover:border-[#1F1A1C]'
+          }`}
+        >
+          New Arrivals
+        </button>
+        <button
+          onClick={() => setSelectedCategory(selectedCategory === 'banarasi-sarees' ? '' : 'banarasi-sarees')}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+            selectedCategory === 'banarasi-sarees'
+              ? 'bg-[#5B1425] text-[#FAF7F2] font-bold shadow-xs'
+              : 'bg-white border border-[#EAE2D7] text-[#1F1A1C] hover:border-[#5B1425]'
+          }`}
+        >
+          Banarasi Silks
+        </button>
+        <button
+          onClick={() => setSelectedCategory(selectedCategory === 'kanjivaram-sarees' ? '' : 'kanjivaram-sarees')}
+          className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+            selectedCategory === 'kanjivaram-sarees'
+              ? 'bg-[#5B1425] text-[#FAF7F2] font-bold shadow-xs'
+              : 'bg-white border border-[#EAE2D7] text-[#1F1A1C] hover:border-[#5B1425]'
+          }`}
+        >
+          Kanjivaram
+        </button>
+      </div>
+
       {/* Active Filter Pills Bar */}
       {hasActiveFilters && (
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-1">

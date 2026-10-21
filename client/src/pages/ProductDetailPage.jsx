@@ -345,6 +345,12 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
 
             {/* Badges */}
             <div className="absolute top-4 left-4 flex flex-col gap-2 z-10 pointer-events-none">
+              {product.is_best_seller === 1 && (
+                <span className="bg-gradient-to-r from-[#C6A15B] to-[#D4AF37] text-[#1F1A1C] text-[11px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider shadow-md flex items-center gap-1.5 border border-[#B38F48]/50">
+                  <Star className="w-3.5 h-3.5 fill-[#1F1A1C] text-[#1F1A1C]" />
+                  <span>BESTSELLER</span>
+                </span>
+              )}
               {product.discount_percent > 0 && (
                 <span className="bg-[#5B1425] text-white text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-md">
                   {product.discount_percent}% OFF
@@ -377,9 +383,17 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
           {/* Header Title & Tagline */}
           <div className="space-y-2 border-b border-[#E8E1D5] pb-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-widest text-[#C5A059]">
-                {product.category_name || 'Heritage Collection'}
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold uppercase tracking-widest text-[#C5A059]">
+                  {product.category_name || 'Heritage Collection'}
+                </span>
+                {product.is_best_seller === 1 && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-[#C6A15B]/15 text-[#855A16] border border-[#C6A15B]/40 text-[10px] font-extrabold uppercase tracking-wider rounded-full shadow-2xs">
+                    <Star className="w-3 h-3 fill-[#855A16] text-[#855A16]" />
+                    <span>Bestseller</span>
+                  </span>
+                )}
+              </div>
 
               {/* Action Buttons: Wishlist & Compare */}
               <div className="flex items-center gap-2">

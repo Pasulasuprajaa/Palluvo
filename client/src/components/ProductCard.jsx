@@ -87,14 +87,20 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
           />
         </a>
 
-        {/* Single Prioritized Discount Badge */}
-        <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
+        {/* Single/Prioritized Badges Overlay */}
+        <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none flex flex-col gap-1 items-start">
+          {product.is_best_seller === 1 && (
+            <span className="bg-gradient-to-r from-[#C6A15B] to-[#D4AF37] text-[#1F1A1C] text-[8.5px] sm:text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm flex items-center gap-1 border border-[#B38F48]/50">
+              <span className="text-[9px] leading-none text-[#1F1A1C]">★</span>
+              <span>BESTSELLER</span>
+            </span>
+          )}
           {product.discount_percent > 0 ? (
-            <span className="bg-[#5B1425] text-[#FAF7F2] text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
+            <span className="bg-[#5B1425] text-[#FAF7F2] text-[8.5px] sm:text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
               {product.discount_percent}% OFF
             </span>
-          ) : product.is_new_arrival === 1 ? (
-            <span className="bg-[#1F1A1C] text-[#FAF7F2] text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
+          ) : product.is_new_arrival === 1 && product.is_best_seller !== 1 ? (
+            <span className="bg-[#1F1A1C] text-[#FAF7F2] text-[8.5px] sm:text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
               New
             </span>
           ) : null}

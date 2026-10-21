@@ -63,11 +63,19 @@ export default function QuickViewModal({ onNavigate }) {
               alt={quickViewProduct.name}
               className="w-full h-full object-cover"
             />
-            {quickViewProduct.discount_percent > 0 && (
-              <span className="absolute top-3 left-3 bg-[#5B1425] text-[#FAF7F2] text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow">
-                {quickViewProduct.discount_percent}% OFF
-              </span>
-            )}
+            <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10 pointer-events-none items-start">
+              {quickViewProduct.is_best_seller === 1 && (
+                <span className="bg-gradient-to-r from-[#C6A15B] to-[#D4AF37] text-[#1F1A1C] text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow flex items-center gap-1 border border-[#B38F48]/50">
+                  <span className="text-[10px] leading-none text-[#1F1A1C]">★</span>
+                  <span>BESTSELLER</span>
+                </span>
+              )}
+              {quickViewProduct.discount_percent > 0 && (
+                <span className="bg-[#5B1425] text-[#FAF7F2] text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shadow">
+                  {quickViewProduct.discount_percent}% OFF
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Thumbnails */}
