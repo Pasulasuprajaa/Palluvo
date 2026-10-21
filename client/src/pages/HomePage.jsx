@@ -103,8 +103,17 @@ export default function HomePage({ onNavigate }) {
     <div className="flex flex-col">
       {/* 1. HERO SECTION — Royal Bridal Campaign Editorial */}
       <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#251B19] text-[#FAF7F0] min-h-[520px] xs:min-h-[560px] sm:min-h-[620px] md:min-h-[82vh] lg:min-h-[86vh]">
-        {/* Background Image with Crisp Portrait Framing */}
-        <div className="absolute inset-0 z-0 overflow-hidden group">
+        {/* Background Image (Clickable to Explore Saree Collection) */}
+        <a
+          href="/sarees"
+          onClick={(e) => {
+            if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+            e.preventDefault();
+            onNavigate('shop');
+          }}
+          className="absolute inset-0 z-0 overflow-hidden group cursor-pointer block"
+          aria-label="Explore Royal Heirloom Saree Collection"
+        >
           <img
             src="/images/occasions/wedding_collection.jpg"
             alt="Royal Indian bride in magnificent gold and crimson handloom silk saree"
@@ -120,11 +129,11 @@ export default function HomePage({ onNavigate }) {
           <div className="absolute inset-0 bg-gradient-to-b from-[#251B19]/35 via-transparent via-20% to-transparent pointer-events-none md:hidden" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#251B19] via-[#251B19]/80 via-36% to-transparent md:hidden pointer-events-none" />
           <div className="hidden md:block absolute inset-0 bg-gradient-to-r from-[#251B19]/92 from-20% via-[#251B19]/50 via-50% to-transparent pointer-events-none" />
-        </div>
+        </a>
 
         {/* Hero Content with Luxury Fashion Editorial Layout */}
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 md:py-16 lg:py-20 w-full flex flex-col justify-end md:justify-center pointer-events-none">
-          <div className="max-w-xl lg:max-w-xl xl:max-w-2xl pointer-events-auto animate-hero-content">
+          <div className="max-w-xl lg:max-w-xl xl:max-w-2xl pointer-events-none animate-hero-content">
             
             {/* Main Headline */}
             <h1 className="font-serif text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-[58px] font-normal leading-[1.12] tracking-normal text-[#FAF7F0] drop-shadow-sm">
@@ -138,7 +147,7 @@ export default function HomePage({ onNavigate }) {
             </p>
 
             {/* CTAs: Primary & Secondary */}
-            <div className="mt-3.5 sm:mt-5 flex flex-row flex-wrap items-center gap-2.5 sm:gap-4 w-full sm:w-auto">
+            <div className="mt-3.5 sm:mt-5 flex flex-row flex-wrap items-center gap-2.5 sm:gap-4 w-full sm:w-auto pointer-events-auto">
               {/* Primary CTA */}
               <a
                 href="/sarees"
