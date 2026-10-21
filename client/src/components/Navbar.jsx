@@ -37,10 +37,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
       {/* Main Sticky Navbar */}
       <header className="sticky top-0 z-40 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#EAE2D7] shadow-xs">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-5 xl:px-8">
-          
+
           {/* Top Row */}
           <div className="flex items-center justify-between h-16 sm:h-20 gap-2 lg:gap-3 xl:gap-4">
-            
+
             {/* Left: Mobile Hamburger & Logo */}
             <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 shrink-0 mr-1 sm:mr-2 lg:mr-3 xl:mr-6">
               <button
@@ -81,11 +81,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               <button
                 onClick={() => handleNav('home')}
                 aria-current={currentPage === 'home' ? 'page' : undefined}
-                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
-                  currentPage === 'home'
+                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${currentPage === 'home'
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
                     : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
-                }`}
+                  }`}
               >
                 Home
               </button>
@@ -93,11 +92,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               <button
                 onClick={() => handleNav('shop')}
                 aria-current={isAllSareesActive ? 'page' : undefined}
-                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
-                  isAllSareesActive
+                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${isAllSareesActive
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
                     : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
-                }`}
+                  }`}
               >
                 All Sarees
               </button>
@@ -105,11 +103,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               <button
                 onClick={() => handleNav('shop', { filter: 'new_arrival' })}
                 aria-current={isNewArrivalActive ? 'page' : undefined}
-                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-1 cursor-pointer whitespace-nowrap shrink-0 ${
-                  isNewArrivalActive
+                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-1 cursor-pointer whitespace-nowrap shrink-0 ${isNewArrivalActive
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
                     : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
-                }`}
+                  }`}
               >
                 <span>New Arrivals</span>
                 <span className="bg-[#5B1425] text-[#FAF7F2] text-[8.5px] xl:text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0">New</span>
@@ -125,11 +122,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                   type="button"
                   onClick={() => setCollectionsDropdown((prev) => !prev)}
                   aria-current={isCollectionsActive ? 'page' : undefined}
-                  className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-0.5 xl:gap-1 cursor-pointer whitespace-nowrap shrink-0 ${
-                    isCollectionsActive
+                  className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-0.5 xl:gap-1 cursor-pointer whitespace-nowrap shrink-0 ${isCollectionsActive
                       ? 'border-[#5B1425] text-[#5B1425] font-bold'
                       : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
-                  }`}
+                    }`}
                   aria-expanded={collectionsDropdown}
                   aria-haspopup="true"
                 >
@@ -176,11 +172,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               <button
                 onClick={() => handleNav('shop', { filter: 'best_seller' })}
                 aria-current={isBestSellerActive ? 'page' : undefined}
-                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${
-                  isBestSellerActive
+                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 cursor-pointer whitespace-nowrap shrink-0 ${isBestSellerActive
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
                     : 'border-transparent text-[#1F1A1C] hover:text-[#5B1425]'
-                }`}
+                  }`}
               >
                 Best Sellers
               </button>
@@ -188,11 +183,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               <button
                 onClick={() => handleNav('offers')}
                 aria-current={isOffersActive ? 'page' : undefined}
-                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-1 cursor-pointer whitespace-nowrap shrink-0 ${
-                  isOffersActive
+                className={`h-full inline-flex items-center transition-colors px-1 lg:px-1.5 xl:px-2 border-b-2 gap-1 cursor-pointer whitespace-nowrap shrink-0 ${isOffersActive
                     ? 'border-[#5B1425] text-[#5B1425] font-bold'
                     : 'border-transparent text-[#6E6467] font-semibold hover:text-[#5B1425]'
-                }`}
+                  }`}
               >
                 <Sparkles className={`w-3.5 h-3.5 shrink-0 ${isOffersActive ? 'text-[#5B1425]' : 'text-[#C5A059]'}`} />
                 <span>Offers</span>
@@ -392,31 +386,34 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                 { label: 'Best Sellers', icon: Flame, action: () => handleNav('shop', { filter: 'best_seller' }), highlight: isBestSellerActive },
                 { label: 'Offers', icon: Tag, action: () => handleNav('offers'), highlight: currentPage === 'offers' },
                 { label: 'Track Order', icon: Truck, action: () => handleNav('track-order'), highlight: currentPage === 'track-order' },
-                { label: 'Contact Us', icon: MessageSquare, action: () => {
-                  setMobileMenuOpen(false);
-                  const prefersReducedMotion =
-                    typeof window !== 'undefined' &&
-                    window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-                  window.scrollTo({ top: document.body.scrollHeight, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
-                }},
-                { label: 'About PALLUVO', icon: Info, action: () => handleNav('about'), highlight: currentPage === 'about' },
-                { label: 'Account', icon: User, action: () => {
-                  setMobileMenuOpen(false);
-                  if (user) {
-                    handleNav('account');
-                  } else {
-                    onOpenAuth();
+                {
+                  label: 'Contact Us', icon: MessageSquare, action: () => {
+                    setMobileMenuOpen(false);
+                    const prefersReducedMotion =
+                      typeof window !== 'undefined' &&
+                      window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+                    window.scrollTo({ top: document.body.scrollHeight, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
                   }
-                }}
+                },
+                { label: 'About PALLUVO', icon: Info, action: () => handleNav('about'), highlight: currentPage === 'about' },
+                {
+                  label: 'Account', icon: User, action: () => {
+                    setMobileMenuOpen(false);
+                    if (user) {
+                      handleNav('account');
+                    } else {
+                      onOpenAuth();
+                    }
+                  }
+                }
               ].map((item, idx) => {
                 const ItemIcon = item.icon;
                 return (
                   <button
                     key={idx}
                     onClick={item.action}
-                    className={`w-full min-h-[44px] flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${
-                      item.highlight ? 'bg-[#5B1425] text-white font-bold shadow-xs' : 'text-[#1F1A1C] hover:bg-[#F4EFEB]'
-                    }`}
+                    className={`w-full min-h-[44px] flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${item.highlight ? 'bg-[#5B1425] text-white font-bold shadow-xs' : 'text-[#1F1A1C] hover:bg-[#F4EFEB]'
+                      }`}
                   >
                     <div className="flex items-center gap-3">
                       <ItemIcon className={`w-4 h-4 shrink-0 ${item.highlight ? 'text-[#FAF7F2]' : 'text-[#6E6467]'}`} />
@@ -451,11 +448,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                     <button
                       key={col.name}
                       onClick={() => handleNav('shop', col.filter)}
-                      className={`text-left min-h-[44px] flex items-center px-3 py-2 rounded-lg border transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${
-                        isActive
+                      className={`text-left min-h-[44px] flex items-center px-3 py-2 rounded-lg border transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${isActive
                           ? 'bg-[#5B1425] text-white border-[#5B1425] font-semibold shadow-2xs'
                           : 'bg-white border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425]'
-                      }`}
+                        }`}
                     >
                       {col.name}
                     </button>
@@ -483,11 +479,10 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                     <button
                       key={cat.slug}
                       onClick={() => handleNav('shop', { category: cat.slug })}
-                      className={`text-left min-h-[44px] flex items-center px-3 py-2 rounded-lg border transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${
-                        isActive
+                      className={`text-left min-h-[44px] flex items-center px-3 py-2 rounded-lg border transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#5B1425] focus-visible:outline-none ${isActive
                           ? 'bg-[#5B1425] text-white border-[#5B1425] font-semibold shadow-2xs'
                           : 'bg-white border-[#EAE2D7] text-[#1F1A1C] hover:text-[#5B1425] hover:border-[#5B1425]'
-                      }`}
+                        }`}
                     >
                       {cat.name}
                     </button>
@@ -536,7 +531,7 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
                 <div className="pt-2 border-t border-[#EAE2D7] space-y-2">
                   <div className="flex items-start gap-2 text-[11px] text-[#52484B] leading-relaxed px-0.5">
                     <MapPin className="w-3.5 h-3.5 text-[#C5A059] shrink-0 mt-0.5" />
-                    <span>Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</span>
+                    <span>Warangal, Telangana, India</span>
                   </div>
                   <a
                     href="https://maps.app.goo.gl/wkcLwsNgHp39z4pe7"
@@ -590,9 +585,8 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
           <button
             onClick={() => handleNav('home')}
             aria-current={currentPage === 'home' ? 'page' : undefined}
-            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
-              currentPage === 'home' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
-            }`}
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${currentPage === 'home' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
+              }`}
           >
             <Home className="w-5 h-5 mb-0.5" />
             <span>Home</span>
@@ -602,9 +596,8 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
           <button
             onClick={() => handleNav('shop')}
             aria-current={currentPage === 'shop' ? 'page' : undefined}
-            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
-              currentPage === 'shop' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
-            }`}
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${currentPage === 'shop' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
+              }`}
           >
             <Grid className="w-5 h-5 mb-0.5" />
             <span>Categories</span>
@@ -614,9 +607,8 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
           <button
             onClick={() => handleNav('wishlist')}
             aria-current={currentPage === 'wishlist' ? 'page' : undefined}
-            className={`flex-1 min-h-[44px] relative flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
-              currentPage === 'wishlist' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
-            }`}
+            className={`flex-1 min-h-[44px] relative flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${currentPage === 'wishlist' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
+              }`}
           >
             <div className="relative">
               <Heart className="w-5 h-5 mb-0.5" />
@@ -656,9 +648,8 @@ export default function Navbar({ onNavigate, currentPage, onOpenAuth, pageParams
               }
             }}
             aria-current={currentPage === 'account' ? 'page' : undefined}
-            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${
-              currentPage === 'account' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
-            }`}
+            className={`flex-1 min-h-[44px] flex flex-col items-center justify-center py-1 text-[10px] transition-colors cursor-pointer ${currentPage === 'account' ? 'text-[#5B1425] font-bold' : 'text-[#6E6467] hover:text-[#1F1A1C]'
+              }`}
           >
             <User className="w-5 h-5 mb-0.5" />
             <span>Account</span>

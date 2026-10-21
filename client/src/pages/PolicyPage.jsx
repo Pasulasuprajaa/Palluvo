@@ -317,7 +317,7 @@ export default function PolicyPage({ initialTab = 'privacy', onNavigate }) {
                 <div className="flex flex-col gap-2 pt-2 border-t border-white/10 text-xs text-[#FAF7F2]/85">
                   <div className="flex items-start gap-2 px-1">
                     <MapPin className="w-4 h-4 text-[#C5A059] shrink-0 mt-0.5" />
-                    <span>Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</span>
+                    <span>Warangal, Telangana, India</span>
                   </div>
                   <a
                     href="https://maps.app.goo.gl/wkcLwsNgHp39z4pe7"

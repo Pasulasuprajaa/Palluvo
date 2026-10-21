@@ -101,56 +101,45 @@ export default function HomePage({ onNavigate }) {
 
   return (
     <div className="flex flex-col">
-      {/* 1. HERO SECTION */}
-      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#1F1A1C] text-[#FAF7F2] min-h-[500px] sm:min-h-[580px] md:min-h-[82vh] lg:min-h-[86vh]">
-        {/* Background Image with Crisp Portrait Framing (Clickable to Explore Sarees) */}
-        <a
-          href="/sarees"
-          onClick={(e) => {
-            if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
-            e.preventDefault();
-            onNavigate('shop');
-          }}
-          className="absolute inset-0 z-0 block cursor-pointer group"
-          aria-label="Explore Royal Heirloom Sarees Collection"
-        >
-          <picture>
-            <source media="(max-width: 640px)" srcSet="/images/occasions/wedding_collection.jpg" />
-            <img
-              src="/images/occasions/wedding_collection.jpg"
-              alt="Royal Indian bride in magnificent gold and crimson handloom silk saree"
-              loading="eager"
-              fetchPriority="high"
-              decoding="async"
-              className="w-full h-full object-cover object-[center_top] sm:object-[center_12%] md:object-[right_center] lg:object-[82%_center] opacity-100 transition-transform duration-1000 ease-out group-hover:scale-105"
-            />
-          </picture>
-          {/* Subtle Vignette Gradient: Confines lower scrim to the bottom text area so the bride's portrait and saree remain luminous and clear */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#1F1A1C]/95 via-[#1F1A1C]/40 via-30% to-transparent md:bg-gradient-to-r md:from-[#1F1A1C]/95 md:from-28% md:via-[#1F1A1C]/50 md:via-52% md:to-transparent pointer-events-none" />
-        </a>
+      {/* 1. HERO SECTION — Royal Bridal Campaign Editorial */}
+      <section className="relative flex flex-col justify-end md:justify-center overflow-hidden bg-[#251B19] text-[#FAF7F0] min-h-[520px] xs:min-h-[560px] sm:min-h-[620px] md:min-h-[82vh] lg:min-h-[86vh]">
+        {/* Background Image with Crisp Portrait Framing */}
+        <div className="absolute inset-0 z-0 overflow-hidden group">
+          <img
+            src="/images/occasions/wedding_collection.jpg"
+            alt="Royal Indian bride in magnificent gold and crimson handloom silk saree"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+            className="w-full h-full object-cover object-[center_top] sm:object-[center_12%] md:object-[72%_center] lg:object-[76%_center] opacity-100 transition-transform duration-1000 ease-out group-hover:scale-[1.02]"
+          />
 
-        {/* Hero Content with Seamless Luxury Editorial Styling */}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 md:py-20 lg:py-24 w-full flex flex-col justify-end md:justify-center pointer-events-none">
-          <div className="max-w-xl md:max-w-lg lg:max-w-xl xl:max-w-2xl pointer-events-auto">
-            {/* Editorial Tag */}
-            <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.22em] text-[#E0C07F] mb-2 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
-              <span>Royal Heirloom Edit</span>
-            </p>
+          {/* Carefully Layered Luxury Scrim:
+              Mobile: Soft top vignette plus a smooth bottom scrim confined to the lower carpet/hem area so the bride's face, jewelry & upper saree remain radiant.
+              Desktop: Smooth horizontal gradient on the left half leaving the bride on the right completely clear & bright. */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#251B19]/35 via-transparent via-20% to-transparent pointer-events-none md:hidden" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#251B19] via-[#251B19]/80 via-36% to-transparent md:hidden pointer-events-none" />
+          <div className="hidden md:block absolute inset-0 bg-gradient-to-r from-[#251B19]/92 from-20% via-[#251B19]/50 via-50% to-transparent pointer-events-none" />
+        </div>
 
-            {/* Headline */}
-            <h1 className="font-serif text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-normal leading-[1.14] tracking-wide text-[#FAF7F2] drop-shadow-sm">
+        {/* Hero Content with Luxury Fashion Editorial Layout */}
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 md:py-16 lg:py-20 w-full flex flex-col justify-end md:justify-center pointer-events-none">
+          <div className="max-w-xl lg:max-w-xl xl:max-w-2xl pointer-events-auto animate-hero-content">
+            
+            {/* Main Headline */}
+            <h1 className="font-serif text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-[58px] font-normal leading-[1.12] tracking-normal text-[#FAF7F0] drop-shadow-sm">
               Every Drape, <br />
-              <span className="italic text-[#E0C07F]">A Little Magic.</span>
+              <span className="italic font-normal text-[#E8D9B5] font-serif">A Little Magic.</span>
             </h1>
 
             {/* Description */}
-            <p className="mt-2 sm:mt-2.5 text-xs sm:text-sm md:text-base text-[#FAF7F2]/90 leading-relaxed font-sans max-w-lg drop-shadow-xs">
-              Authentic handloom sarees crafted in pure zari and raw silk by master artisans.
+            <p className="mt-1.5 sm:mt-2.5 text-xs sm:text-sm md:text-base text-[#FAF7F0]/90 font-sans leading-relaxed max-w-lg drop-shadow-xs">
+              Discover timeless handloom sarees, woven in pure zari and raw silk by master artisans.
             </p>
 
-            {/* Action Button */}
-            <div className="mt-3.5 sm:mt-6 flex items-center w-full sm:w-auto">
+            {/* CTAs: Primary & Secondary */}
+            <div className="mt-3.5 sm:mt-5 flex flex-row flex-wrap items-center gap-2.5 sm:gap-4 w-full sm:w-auto">
+              {/* Primary CTA */}
               <a
                 href="/sarees"
                 onClick={(e) => {
@@ -158,20 +147,52 @@ export default function HomePage({ onNavigate }) {
                   e.preventDefault();
                   onNavigate('shop');
                 }}
-                className="px-6 sm:px-8 py-3 min-h-[44px] bg-gradient-to-r from-[#5B1425] to-[#7E1E34] hover:from-[#7E1E34] hover:to-[#5B1425] text-[#FAF7F2] font-bold text-xs sm:text-sm uppercase tracking-wider rounded-xl transition-all duration-300 shadow-md hover:shadow-xl flex items-center justify-center gap-2 border border-[#C5A059]/40 active:scale-98 cursor-pointer text-center"
+                className="group relative inline-flex items-center justify-center gap-2 px-5 sm:px-7 py-2.5 sm:py-3.5 min-h-[44px] bg-[#6F1428] hover:bg-[#8E1B35] text-[#FAF7F0] font-bold text-xs sm:text-sm uppercase tracking-wider rounded-xl border border-[#C6A15B]/50 hover:border-[#C6A15B] transition-all duration-300 shadow-[0_4px_16px_rgba(111,20,40,0.35)] hover:shadow-[0_6px_22px_rgba(111,20,40,0.55)] cursor-pointer text-center active:scale-[0.98]"
               >
-                <span>Explore Sarees</span>
-                <ArrowRight className="w-4 h-4 text-[#C5A059] shrink-0" />
+                <span>EXPLORE SAREES</span>
+                <ArrowRight className="w-4 h-4 text-[#C6A15B] shrink-0 transition-transform duration-300 group-hover:translate-x-1.5" />
+              </a>
+
+              {/* Secondary CTA */}
+              <a
+                href="#craft-section"
+                onClick={(e) => {
+                  e.preventDefault();
+                  const el = document.getElementById('craft-section');
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth' });
+                  } else {
+                    onNavigate('shop');
+                  }
+                }}
+                className="inline-flex items-center justify-center px-4 sm:px-6 py-2.5 sm:py-3.5 min-h-[44px] bg-[#251B19]/50 hover:bg-white/10 backdrop-blur-xs text-[#FAF7F0] hover:text-[#FAF7F0] font-semibold text-xs sm:text-sm uppercase tracking-wider rounded-xl border border-[#E8D9B5]/40 hover:border-[#C6A15B] transition-all duration-300 cursor-pointer text-center active:scale-[0.98]"
+              >
+                <span>DISCOVER OUR CRAFT</span>
               </a>
             </div>
 
-            {/* Sleek Compact Trust Badges */}
-            <div className="mt-3 sm:mt-5 pt-2.5 sm:pt-3 border-t border-white/15 flex flex-wrap items-center justify-between sm:justify-start sm:gap-5 text-[10px] sm:text-xs text-[#E0C07F] font-medium">
-              <span className="flex items-center gap-1">✦ Handcrafted Luxury</span>
-              <span className="text-white/30">•</span>
-              <span>Master Artisans</span>
-              <span className="text-white/30">•</span>
-              <span>Certified Silk Available</span>
+            {/* Polished Minimal Luxury-Style Trust Strip */}
+            <div className="mt-4 sm:mt-6 bg-[#1A1214]/65 backdrop-blur-md border border-[#E8D9B5]/25 rounded-2xl py-2.5 px-2 sm:py-3 sm:px-4 max-w-xl shadow-[0_4px_16px_rgba(0,0,0,0.25)]">
+              <div className="grid grid-cols-3 divide-x divide-[#E8D9B5]/20 text-center">
+                <div className="px-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5">
+                  <span className="text-[#C6A15B] text-xs leading-none">✦</span>
+                  <span className="text-[9.5px] xs:text-[10.5px] sm:text-xs font-medium text-[#FAF7F0] tracking-normal sm:tracking-wide">
+                    Authentic Handloom
+                  </span>
+                </div>
+                <div className="px-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5">
+                  <span className="text-[#C6A15B] text-xs leading-none">✦</span>
+                  <span className="text-[9.5px] xs:text-[10.5px] sm:text-xs font-medium text-[#FAF7F0] tracking-normal sm:tracking-wide">
+                    Master Artisans
+                  </span>
+                </div>
+                <div className="px-1 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5">
+                  <span className="text-[#C6A15B] text-xs leading-none">✦</span>
+                  <span className="text-[9.5px] xs:text-[10.5px] sm:text-xs font-medium text-[#FAF7F0] tracking-normal sm:tracking-wide">
+                    Pure Silk Collections
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -255,7 +276,7 @@ export default function HomePage({ onNavigate }) {
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 via-45% to-transparent group-hover:from-[#5B1425]/90 transition-colors duration-300" />
-                  
+
                   <div className="absolute inset-x-2.5 sm:inset-x-3 bottom-3 sm:bottom-4 text-center text-white flex flex-col items-center justify-end">
                     <h3 className="font-serif text-sm sm:text-base font-bold tracking-normal sm:tracking-wide leading-tight sm:leading-snug group-hover:text-[#E0C07F] transition line-clamp-2 min-h-[2.5rem] flex items-center justify-center">
                       {cat.name}

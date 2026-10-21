@@ -125,7 +125,7 @@ export default function Footer({ onNavigate }) {
             </div>
             <div className="text-xs text-[#FAF7F2]/80 flex items-center gap-1.5 pt-0.5">
               <MapPin className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-              <span>Flagship Store: Lavelle Road, Shanthala Nagar, Bengaluru, Karnataka 560001</span>
+              <span>Flagship Store: Warangal, Telangana, India</span>
             </div>
           </div>
 
@@ -452,7 +452,7 @@ export default function Footer({ onNavigate }) {
 
           <div className="text-xs text-[#FAF7F2]/70 flex items-center justify-center sm:justify-end gap-1.5 min-h-[44px]">
             <MapPin className="w-3.5 h-3.5 text-[#C5A059] shrink-0" />
-            <span>Bengaluru Master Vault & Fulfillment Hub</span>
+            <span>Warangal Master Vault & Fulfillment Hub</span>
           </div>
         </div>
       </div>
