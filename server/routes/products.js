@@ -7,6 +7,7 @@ const { optionalAuth, JWT_SECRET } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
 const { anonymousVoteLimiter, anonymousVoteStore, getNormalizedIp } = require('../middleware/rateLimit');
 const { reconcileExpiredReservations } = require('./payments');
+const { rotationLedger } = require('../services/rotationLedger');
 
 function getCallerIp(req) {
   if (req.ip) return req.ip;
@@ -73,12 +74,7 @@ function isLegacyVoterId(voterId, req) {
   return false;
 }
 
-// Track questions voted anonymously per IP to prevent fresh-cookie identity rotation
-const ipVotedQuestions = new Map();
-// Track original browser keys that actually cast votes on questions to distinguish genuine session replays from rotated cookies
-const originalVotersByQa = new Map();
-
-function issueVoterToken(req, res) {
+async function issueVoterToken(req, res) {
   let voterId = null;
   let browserId = getBrowserIdFromReq(req);
 
@@ -115,15 +111,15 @@ function issueVoterToken(req, res) {
     browserId = 'bid_' + crypto.randomUUID();
     voterId = 'voter_' + browserId;
 
-    // Link newly generated browser ID to any prior anonymous votes cast by this IP to prevent identity rotation
+    // Link newly generated browser ID to any prior anonymous votes cast by this IP in shared expiring storage
     if (req) {
       const clientIp = getNormalizedIp(req);
-      const previousQaIds = ipVotedQuestions.get(clientIp);
-      if (previousQaIds && previousQaIds.size > 0) {
-        for (const votedQaId of previousQaIds) {
+      const previousVotes = await rotationLedger.getVotedQuestionsForIp(clientIp);
+      if (previousVotes && previousVotes.length > 0) {
+        for (const vote of previousVotes) {
           try {
             db.prepare('INSERT OR IGNORE INTO product_qa_votes (qa_id, voter_key, user_id) VALUES (?, ?, NULL)').run(
-              votedQaId,
+              vote.qa_id,
               'anon_voter_' + browserId
             );
           } catch (e) {}
@@ -432,9 +428,9 @@ router.get('/search/suggestions', async (req, res) => {
 });
 
 // GET /api/products/qa/voter-token (Issue a signed, stable anonymous voter token bound to browser session)
-router.get('/qa/voter-token', (req, res) => {
+router.get('/qa/voter-token', async (req, res) => {
   try {
-    const token = issueVoterToken(req, res);
+    const token = await issueVoterToken(req, res);
     res.json({ success: true, voter_token: token });
   } catch (err) {
     res.status(500).json({ error: 'Failed to issue voter token.' });
@@ -531,10 +527,10 @@ router.get('/:slugOrId', async (req, res) => {
 });
 
 // GET /api/products/:productId/qa (Get Q&As for a product)
-router.get('/:productId/qa', (req, res) => {
+router.get('/:productId/qa', async (req, res) => {
   try {
     const qas = db.prepare('SELECT * FROM product_qa WHERE product_id = ? ORDER BY helpful_votes DESC, created_at DESC').all(req.params.productId);
-    const voterToken = issueVoterToken(req, res);
+    const voterToken = await issueVoterToken(req, res);
     res.json({ qa: qas, voter_token: voterToken });
   } catch (err) {
     console.error('QA fetch error:', err);
@@ -648,6 +644,7 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
     }
 
     const browserKey = (cookieBid && !req.user?.id) ? `anon_voter_${cookieBid}` : null;
+    const clientIp = !req.user?.id ? getNormalizedIp(req) : null;
 
     // Check if voter (or this browser session) has already voted on this question
     const candidateKeys = [voterKey];
@@ -660,7 +657,10 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
     if (existingVote) {
       // If this is an identity rotation attempt (fresh browser session minted after prior vote from same IP),
       // charge rate-limit quota so unauthenticated rotation loops hit 429
-      const isOriginalSession = Boolean(browserKey && originalVotersByQa.get(qaId)?.has(browserKey));
+      const isOriginalSession = Boolean(
+        browserKey &&
+        (!clientIp || await rotationLedger.isOriginalVoter(clientIp, qaId, browserKey))
+      );
       if (!isOriginalSession && !req.user?.id) {
         const allowed = await new Promise((resolve) => {
           let settled = false;
@@ -773,18 +773,8 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
       throw insertErr;
     }
 
-    if (!req.user?.id) {
-      const clientIp = getNormalizedIp(req);
-      if (!ipVotedQuestions.has(clientIp)) {
-        ipVotedQuestions.set(clientIp, new Set());
-      }
-      ipVotedQuestions.get(clientIp).add(qaId);
-      if (browserKey) {
-        if (!originalVotersByQa.has(qaId)) {
-          originalVotersByQa.set(qaId, new Set());
-        }
-        originalVotersByQa.get(qaId).add(browserKey);
-      }
+    if (!req.user?.id && clientIp) {
+      await rotationLedger.recordVote(clientIp, qaId, browserKey);
     }
 
     const updated = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(qaId);
@@ -803,10 +793,10 @@ router.issueVoterToken = issueVoterToken;
 router.verifyVoterToken = verifyVoterToken;
 router.signBrowserId = signBrowserId;
 router.verifyBrowserId = verifyBrowserId;
+router.rotationLedger = rotationLedger;
 router._beforeVoteTransactionHook = null;
-router.resetIpVotedQuestions = () => {
-  ipVotedQuestions.clear();
-  originalVotersByQa.clear();
+router.resetIpVotedQuestions = async () => {
+  await rotationLedger.clear();
 };
 
 module.exports = router;

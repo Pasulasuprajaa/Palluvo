@@ -1529,6 +1529,161 @@ async function runTests() {
 
     console.log('✅ PASS: [P2] Helpful-vote endpoint binds anonymous identity to server-issued token and blocks distinct tokens from same caller');
 
+    // 8u. [P2] Multi-instance serverless simulation:
+    // Deploy a second server instance (instance 2) sharing the persistent storage.
+    // Ensure that a vote cast on instance 1 is recognized when instance 2 issues a fresh cookie/token,
+    // and that the rotated token submission on instance 2 is rejected without incrementing helpful_votes.
+    const app2 = express();
+    app2.use(express.json());
+    app2.use('/api/products', productsRouter);
+    const server2 = http.createServer(app2);
+    await new Promise(resolve => server2.listen(0, resolve));
+    const port2 = server2.address().port;
+
+    async function requestInstance2(reqPath, options = {}) {
+      return new Promise((resolve, reject) => {
+        const fullUrl = `http://localhost:${port2}${reqPath}`;
+        const url = new URL(fullUrl);
+        const headers = Object.assign({}, options.headers || {});
+        if (options.body && !headers['Content-Type'] && !headers['content-type']) {
+          headers['Content-Type'] = 'application/json';
+        }
+        const req = http.request(url, {
+          method: options.method || 'GET',
+          headers
+        }, (res) => {
+          let data = '';
+          res.on('data', chunk => { data += chunk; });
+          res.on('end', () => {
+            let body = null;
+            try { body = JSON.parse(data); } catch (e) { body = data; }
+            resolve({ status: res.statusCode, headers: res.headers, body });
+          });
+        });
+        req.on('error', reject);
+        if (options.body) {
+          req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body));
+        }
+        req.end();
+      });
+    }
+
+    try {
+      // 1. Caller calls Instance 2 to issue fresh token without cookies
+      const crossInstanceTokenRes = await requestInstance2('/api/products/qa/voter-token');
+      assert.strictEqual(crossInstanceTokenRes.status, 200);
+      assert.ok(crossInstanceTokenRes.body.voter_token);
+      const crossCookieHeader = crossInstanceTokenRes.headers['set-cookie']?.[0]?.split(';')[0];
+      assert.ok(crossCookieHeader, 'Set-Cookie header must be present on instance 2');
+
+      // 2. Caller attempts to vote on targetQaId4 using the newly minted identity via Instance 2
+      const crossVoteRes = await requestInstance2(`/api/products/qa/${targetQaId4}/helpful`, {
+        method: 'POST',
+        headers: { Cookie: crossCookieHeader },
+        body: { voter_token: crossInstanceTokenRes.body.voter_token }
+      });
+      assert.strictEqual(crossVoteRes.status, 200);
+      assert.strictEqual(
+        crossVoteRes.body.already_voted,
+        true,
+        'Cross-instance rotated identity must be detected as already voted on targetQaId4'
+      );
+      assert.strictEqual(crossVoteRes.body.helpful_votes, 1, 'Helpful votes must remain 1 on cross-instance rotation');
+
+      // 3. Caller also attempts to vote with that token on Instance 1
+      const crossVoteOnInstance1 = await request(`/api/products/qa/${targetQaId4}/helpful`, {
+        method: 'POST',
+        headers: { Cookie: crossCookieHeader },
+        body: { voter_token: crossInstanceTokenRes.body.voter_token }
+      });
+      assert.strictEqual(crossVoteOnInstance1.status, 200);
+      assert.strictEqual(crossVoteOnInstance1.body.already_voted, true);
+      assert.strictEqual(crossVoteOnInstance1.body.helpful_votes, 1);
+
+      // Verify DB helpful votes count strictly remains 1
+      const qa4MultiInstance = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(targetQaId4);
+      assert.strictEqual(qa4MultiInstance.helpful_votes, 1, 'DB count must remain 1 after cross-instance rotation attempts');
+      console.log('✅ PASS: [P2] Cross-instance token issuance and voting prevents anonymous identity rotation');
+    } finally {
+      server2.close();
+    }
+
+    // 8v. [P2] Shared KV/Redis REST API integration and TTL cleanup
+    const { AnonymousVoteRotationLedger } = require('../services/rotationLedger');
+    let kvPipelineCommands = [];
+    const mockKvStore = new Map();
+    const mockKvFetch = async (url, opts) => {
+      const u = String(url);
+      if (u.includes('/pipeline')) {
+        const pipelineBody = JSON.parse(opts.body);
+        kvPipelineCommands.push(pipelineBody);
+        for (const cmd of pipelineBody) {
+          if (cmd[0] === 'SET') {
+            mockKvStore.set(cmd[1], cmd[2]);
+          }
+        }
+        return { ok: true, json: async () => [{ result: 'OK' }, { result: 1 }] };
+      }
+      if (u.includes('/GET/')) {
+        const key = decodeURIComponent(u.split('/GET/')[1]);
+        const val = mockKvStore.get(key) || null;
+        return { ok: true, json: async () => ({ result: val }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const originalGlobalFetch = global.fetch;
+    global.fetch = mockKvFetch;
+    try {
+      const kvLedger = new AnonymousVoteRotationLedger({
+        restUrl: 'https://mock-kv.upstash.io',
+        restToken: 'mock_token',
+        ttlMs: 50 // 50ms short TTL for testing expiry
+      });
+      assert.strictEqual(kvLedger.isShared, true, 'Ledger must detect shared KV configuration');
+
+      // Record vote via instance A in KV
+      await kvLedger.recordVote('198.51.100.1', 999, 'anon_voter_bid_kv_orig', 50);
+      assert.ok(kvPipelineCommands.length > 0, 'KV pipeline commands must be executed');
+      const lastPipeline = kvPipelineCommands[kvPipelineCommands.length - 1];
+      assert.strictEqual(lastPipeline[0][0], 'SET');
+      assert.strictEqual(lastPipeline[1][0], 'EXPIRE');
+
+      // Instance B reads from KV
+      const kvLedgerInstanceB = new AnonymousVoteRotationLedger({
+        restUrl: 'https://mock-kv.upstash.io',
+        restToken: 'mock_token',
+        ttlMs: 50
+      });
+      const votedQuestionsB = await kvLedgerInstanceB.getVotedQuestionsForIp('198.51.100.1');
+      assert.strictEqual(votedQuestionsB.length, 1);
+      assert.strictEqual(votedQuestionsB[0].qa_id, 999);
+      assert.strictEqual(votedQuestionsB[0].original_browser_key, 'anon_voter_bid_kv_orig');
+
+      // Test TTL expiry: wait 70ms for 50ms TTL to expire
+      await new Promise(resolve => setTimeout(resolve, 70));
+      const expiredQuestions = await kvLedgerInstanceB.getVotedQuestionsForIp('198.51.100.1');
+      assert.strictEqual(expiredQuestions.length, 0, 'Expired entries must be pruned and not returned');
+      console.log('✅ PASS: [P2] Shared KV/Redis rotation ledger correctly sets TTL and prunes expired records across instances');
+    } finally {
+      global.fetch = originalGlobalFetch;
+    }
+
+    // 8w. [P2] Database rotation ledger TTL pruning
+    const dbLedger = productsRouter.rotationLedger;
+    // Insert an entry with past expiration for targetQaId4
+    db.prepare(`
+      INSERT INTO anonymous_vote_rotation_ledger (client_ip, qa_id, original_browser_key, expires_at)
+      VALUES (?, ?, ?, ?)
+    `).run('203.0.113.50', targetQaId4, 'anon_voter_expired', Date.now() - 1000);
+
+    // Verify it is pruned and not returned
+    const prunedList = await dbLedger.getVotedQuestionsForIp('203.0.113.50');
+    assert.strictEqual(prunedList.length, 0, 'Expired DB entry must not be returned');
+    const remainingInDb = db.prepare('SELECT COUNT(*) as count FROM anonymous_vote_rotation_ledger WHERE client_ip = ?').get('203.0.113.50');
+    assert.strictEqual(remainingInDb.count, 0, 'Expired DB entry must be deleted by pruner');
+    console.log('✅ PASS: [P2] Database rotation ledger prunes expired entries on read to prevent warm instance accumulation');
+
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {
     if (server) {

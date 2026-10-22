@@ -440,6 +440,21 @@ function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_qa_votes_qa ON product_qa_votes(qa_id);
     CREATE INDEX IF NOT EXISTS idx_qa_votes_key ON product_qa_votes(voter_key);
+
+    -- Anonymous Vote Rotation Ledger (Shared durable expiring ledger for anonymous voting)
+    CREATE TABLE IF NOT EXISTS anonymous_vote_rotation_ledger (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_ip TEXT NOT NULL,
+      qa_id INTEGER NOT NULL,
+      original_browser_key TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(client_ip, qa_id),
+      FOREIGN KEY (qa_id) REFERENCES product_qa(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_rot_ledger_ip ON anonymous_vote_rotation_ledger(client_ip);
+    CREATE INDEX IF NOT EXISTS idx_rot_ledger_expiry ON anonymous_vote_rotation_ledger(expires_at);
   `);
 
   // Migration: Add return columns to orders if not exist
