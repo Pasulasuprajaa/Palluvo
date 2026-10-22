@@ -1,13 +1,45 @@
 const crypto = require('crypto');
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const router = express.Router();
-const db = require('../db/database');
+const defaultDb = require('../db/database');
 const { optionalAuth, JWT_SECRET } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
 const { anonymousVoteLimiter, anonymousVoteStore, getNormalizedIp } = require('../middleware/rateLimit');
 const { reconcileExpiredReservations } = require('./payments');
-const { rotationLedger } = require('../services/rotationLedger');
+const { rotationLedger: defaultRotationLedger } = require('../services/rotationLedger');
+
+function createProductsRouter(deps = {}) {
+  const router = express.Router();
+  let currentDb = deps.db || defaultDb;
+  let currentRotationLedger = deps.rotationLedger || defaultRotationLedger;
+
+  Object.defineProperty(router, 'db', {
+    get: () => currentDb,
+    set: (val) => { currentDb = val || defaultDb; },
+    configurable: true,
+    enumerable: true
+  });
+
+  Object.defineProperty(router, 'rotationLedger', {
+    get: () => currentRotationLedger,
+    set: (val) => { currentRotationLedger = val || defaultRotationLedger; },
+    configurable: true,
+    enumerable: true
+  });
+
+  const db = new Proxy({}, {
+    get: (target, prop) => {
+      const val = currentDb[prop];
+      return typeof val === 'function' ? val.bind(currentDb) : val;
+    }
+  });
+
+  const rotationLedger = new Proxy({}, {
+    get: (target, prop) => {
+      const val = currentRotationLedger[prop];
+      return typeof val === 'function' ? val.bind(currentRotationLedger) : val;
+    }
+  });
 
 function getCallerIp(req) {
   if (req.ip) return req.ip;
@@ -789,14 +821,20 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
   }
 });
 
-router.issueVoterToken = issueVoterToken;
-router.verifyVoterToken = verifyVoterToken;
-router.signBrowserId = signBrowserId;
-router.verifyBrowserId = verifyBrowserId;
-router.rotationLedger = rotationLedger;
-router._beforeVoteTransactionHook = null;
-router.resetIpVotedQuestions = async () => {
-  await rotationLedger.clear();
-};
+  router.issueVoterToken = issueVoterToken;
+  router.verifyVoterToken = verifyVoterToken;
+  router.signBrowserId = signBrowserId;
+  router.verifyBrowserId = verifyBrowserId;
+  router._beforeVoteTransactionHook = null;
+  router.resetIpVotedQuestions = async () => {
+    await currentRotationLedger.clear();
+  };
 
-module.exports = router;
+  return router;
+}
+
+const defaultProductsRouter = createProductsRouter({ db: defaultDb, rotationLedger: defaultRotationLedger });
+defaultProductsRouter.createProductsRouter = createProductsRouter;
+defaultProductsRouter.createRouter = createProductsRouter;
+
+module.exports = defaultProductsRouter;

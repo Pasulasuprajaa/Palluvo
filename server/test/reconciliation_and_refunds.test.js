@@ -1529,13 +1529,143 @@ async function runTests() {
 
     console.log('✅ PASS: [P2] Helpful-vote endpoint binds anonymous identity to server-issued token and blocks distinct tokens from same caller');
 
-    // 8u. [P2] Multi-instance serverless simulation:
-    // Deploy a second server instance (instance 2) sharing the persistent storage.
-    // Ensure that a vote cast on instance 1 is recognized when instance 2 issues a fresh cookie/token,
-    // and that the rotated token submission on instance 2 is rejected without incrementing helpful_votes.
+    // 8u. [P2] Multi-instance serverless simulation with isolated app instances:
+    // Instance 1 and Instance 2 run separate Express apps, separate routers, separate SQLite databases,
+    // and separate local in-memory stores, sharing ONLY the distributed KV store.
+    const { AnonymousVoteRotationLedger } = require('../services/rotationLedger');
+    const Database = require('better-sqlite3');
+    let kvPipelineCommands = [];
+    const mockKvStore = new Map();
+    const mockKvFetch = async (url, opts) => {
+      const u = String(url);
+      if (u.includes('/pipeline')) {
+        const pipelineBody = typeof opts.body === 'string' ? JSON.parse(opts.body) : opts.body;
+        kvPipelineCommands.push(pipelineBody);
+        const results = [];
+        for (const cmd of pipelineBody) {
+          const op = cmd[0];
+          if (op === 'HSET') {
+            const [, key, field, val] = cmd;
+            if (!mockKvStore.has(key)) mockKvStore.set(key, new Map());
+            mockKvStore.get(key).set(String(field), val);
+            results.push({ result: 1 });
+          } else if (op === 'EXPIRE') {
+            results.push({ result: 1 });
+          } else {
+            results.push({ result: 'OK' });
+          }
+        }
+        return { ok: true, json: async () => results };
+      }
+      if (u.includes('/HGETALL/')) {
+        const key = decodeURIComponent(u.split('/HGETALL/')[1]);
+        const map = mockKvStore.get(key);
+        const result = {};
+        if (map) {
+          for (const [f, v] of map.entries()) {
+            result[f] = v;
+          }
+        }
+        return { ok: true, json: async () => ({ result }) };
+      }
+      if (u.includes('/HGET/')) {
+        const parts = u.split('/HGET/')[1].split('/');
+        const key = decodeURIComponent(parts[0]);
+        const field = decodeURIComponent(parts[1]);
+        const map = mockKvStore.get(key);
+        const val = map ? (map.get(field) || null) : null;
+        return { ok: true, json: async () => ({ result: val }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    const originalGlobalFetch = global.fetch;
+    global.fetch = mockKvFetch;
+
+    // Instance 1: configure ledger to connect to the shared KV store
+    const instance1Ledger = new AnonymousVoteRotationLedger({
+      restUrl: 'https://mock-kv.upstash.io',
+      restToken: 'mock_token',
+      db
+    });
+    productsRouter.rotationLedger = instance1Ledger;
+
+    // Create an entirely isolated second database for Instance 2 (no shared tables or rows with Instance 1)
+    const isolatedDbDir = path.join(__dirname, `.test_db_inst2_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+    fs.mkdirSync(isolatedDbDir, { recursive: true });
+    const isolatedDbPath = path.join(isolatedDbDir, 'test_isolated_instance2.db');
+    const isolatedDb = new Database(isolatedDbPath);
+    isolatedDb.isDurable = true;
+    isolatedDb.pragma('foreign_keys = ON');
+
+    // Initialize required schema on isolated Instance 2 database
+    isolatedDb.exec(`
+      CREATE TABLE IF NOT EXISTS product_qa (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        user_id INTEGER,
+        user_name TEXT NOT NULL,
+        question TEXT NOT NULL,
+        answer TEXT,
+        answered_by TEXT DEFAULT NULL,
+        helpful_votes INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE IF NOT EXISTS product_qa_votes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        qa_id INTEGER NOT NULL,
+        voter_key TEXT NOT NULL,
+        user_id INTEGER DEFAULT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(qa_id, voter_key),
+        FOREIGN KEY (qa_id) REFERENCES product_qa(id) ON DELETE CASCADE
+      );
+      CREATE TABLE IF NOT EXISTS anonymous_vote_rotation_ledger (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_ip TEXT NOT NULL,
+        qa_id INTEGER NOT NULL,
+        original_browser_key TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(client_ip, qa_id),
+        FOREIGN KEY (qa_id) REFERENCES product_qa(id) ON DELETE CASCADE
+      );
+    `);
+    // Create target question 5 on Instance 1
+    const askFifthQARes = await request(`/api/products/${prodWithImgId}/qa`, {
+      method: 'POST',
+      body: {
+        name: 'Meera Nambiar',
+        question: 'Is the zari authentic gold tested?'
+      }
+    });
+    const targetQaId5 = askFifthQARes.body.qa.id;
+    assert.ok(targetQaId5, 'Target Q&A question 5 created');
+
+    // Seed target question on isolated database with initial count of 1
+    isolatedDb.prepare(`
+      INSERT INTO product_qa (id, product_id, user_name, question, helpful_votes)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(targetQaId5, prodWithImgId, 'Meera Nambiar', 'Is the zari authentic gold tested?', 1);
+
+    // Verify isolated database has ZERO votes and ZERO ledger records initially
+    assert.strictEqual(isolatedDb.prepare('SELECT COUNT(*) as c FROM product_qa_votes').get().c, 0);
+    assert.strictEqual(isolatedDb.prepare('SELECT COUNT(*) as c FROM anonymous_vote_rotation_ledger').get().c, 0);
+
+    // Instance 2: independent ledger with its own empty localStore and isolatedDb, sharing ONLY mockKv
+    const instance2Ledger = new AnonymousVoteRotationLedger({
+      restUrl: 'https://mock-kv.upstash.io',
+      restToken: 'mock_token',
+      db: isolatedDb
+    });
+    const isolatedProductsRouter = productsRouter.createRouter({
+      db: isolatedDb,
+      rotationLedger: instance2Ledger
+    });
+
     const app2 = express();
     app2.use(express.json());
-    app2.use('/api/products', productsRouter);
+    app2.use('/api/products', isolatedProductsRouter);
     const server2 = http.createServer(app2);
     await new Promise(resolve => server2.listen(0, resolve));
     const port2 = server2.address().port;
@@ -1569,15 +1699,37 @@ async function runTests() {
     }
 
     try {
-      // 1. Caller calls Instance 2 to issue fresh token without cookies
+      // Cast an initial vote on Instance 1 through the real API route.
+      // Because productsRouter.rotationLedger is connected to mockKv, this writes an atomic HSET into shared KV!
+      const inst1TokenRes = await request('/api/products/qa/voter-token');
+      assert.strictEqual(inst1TokenRes.status, 200);
+      const inst1CookieHeader = inst1TokenRes.headers['set-cookie']?.[0]?.split(';')[0];
+      assert.ok(inst1CookieHeader, 'Set-Cookie header must be present on instance 1');
+
+      const inst1VoteRes = await request(`/api/products/qa/${targetQaId5}/helpful`, {
+        method: 'POST',
+        headers: { Cookie: inst1CookieHeader },
+        body: { voter_token: inst1TokenRes.body.voter_token }
+      });
+      assert.strictEqual(inst1VoteRes.status, 200);
+      assert.strictEqual(inst1VoteRes.body.already_voted, false);
+      assert.strictEqual(inst1VoteRes.body.helpful_votes, 1);
+      assert.strictEqual(kvPipelineCommands.length > 0, true, 'Instance 1 must have written to shared KV pipeline');
+
+      // 1. Caller calls Instance 2 to issue fresh token without cookies.
+      // Instance 2's local memory is empty and isolatedDb has 0 votes, so it MUST read targetQaId5 from shared KV!
       const crossInstanceTokenRes = await requestInstance2('/api/products/qa/voter-token');
       assert.strictEqual(crossInstanceTokenRes.status, 200);
       assert.ok(crossInstanceTokenRes.body.voter_token);
       const crossCookieHeader = crossInstanceTokenRes.headers['set-cookie']?.[0]?.split(';')[0];
       assert.ok(crossCookieHeader, 'Set-Cookie header must be present on instance 2');
 
-      // 2. Caller attempts to vote on targetQaId4 using the newly minted identity via Instance 2
-      const crossVoteRes = await requestInstance2(`/api/products/qa/${targetQaId4}/helpful`, {
+      // Verify Instance 2 discovered the prior vote from shared KV and created the alias in its isolated database!
+      const aliasInIsolatedDb = isolatedDb.prepare('SELECT voter_key FROM product_qa_votes WHERE qa_id = ?').all(targetQaId5);
+      assert.strictEqual(aliasInIsolatedDb.length, 1, 'Instance 2 must have aliased newly minted browser ID into product_qa_votes via shared KV');
+
+      // 2. Caller attempts to vote on targetQaId5 using the newly minted identity via Instance 2
+      const crossVoteRes = await requestInstance2(`/api/products/qa/${targetQaId5}/helpful`, {
         method: 'POST',
         headers: { Cookie: crossCookieHeader },
         body: { voter_token: crossInstanceTokenRes.body.voter_token }
@@ -1586,85 +1738,92 @@ async function runTests() {
       assert.strictEqual(
         crossVoteRes.body.already_voted,
         true,
-        'Cross-instance rotated identity must be detected as already voted on targetQaId4'
+        'Cross-instance rotated identity must be detected as already voted on targetQaId5'
       );
       assert.strictEqual(crossVoteRes.body.helpful_votes, 1, 'Helpful votes must remain 1 on cross-instance rotation');
 
-      // 3. Caller also attempts to vote with that token on Instance 1
-      const crossVoteOnInstance1 = await request(`/api/products/qa/${targetQaId4}/helpful`, {
+      // 3. Caller also rotates identity on Instance 1 to test bidirectional rotation defense via shared KV
+      const inst1RotatedTokenRes = await request('/api/products/qa/voter-token');
+      assert.strictEqual(inst1RotatedTokenRes.status, 200);
+      assert.ok(inst1RotatedTokenRes.body.voter_token);
+      const inst1RotatedCookieHeader = inst1RotatedTokenRes.headers['set-cookie']?.[0]?.split(';')[0];
+      assert.ok(inst1RotatedCookieHeader, 'Set-Cookie header must be present on instance 1 rotated issuance');
+
+      const crossVoteOnInstance1 = await request(`/api/products/qa/${targetQaId5}/helpful`, {
         method: 'POST',
-        headers: { Cookie: crossCookieHeader },
-        body: { voter_token: crossInstanceTokenRes.body.voter_token }
+        headers: { Cookie: inst1RotatedCookieHeader },
+        body: { voter_token: inst1RotatedTokenRes.body.voter_token }
       });
       assert.strictEqual(crossVoteOnInstance1.status, 200);
       assert.strictEqual(crossVoteOnInstance1.body.already_voted, true);
       assert.strictEqual(crossVoteOnInstance1.body.helpful_votes, 1);
 
-      // Verify DB helpful votes count strictly remains 1
-      const qa4MultiInstance = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(targetQaId4);
-      assert.strictEqual(qa4MultiInstance.helpful_votes, 1, 'DB count must remain 1 after cross-instance rotation attempts');
-      console.log('✅ PASS: [P2] Cross-instance token issuance and voting prevents anonymous identity rotation');
+      // Verify DB helpful votes count strictly remains 1 across both instances
+      const qa5MultiInstance = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(targetQaId5);
+      assert.strictEqual(qa5MultiInstance.helpful_votes, 1, 'DB count must remain 1 after cross-instance rotation attempts');
+      const qa5Isolated = isolatedDb.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(targetQaId5);
+      assert.strictEqual(qa5Isolated.helpful_votes, 1, 'Isolated DB count must remain 1 after cross-instance rotation attempts');
+      console.log('✅ PASS: [P2] Cross-instance token issuance and voting prevents anonymous identity rotation with isolated DBs and KV as only shared state');
     } finally {
       server2.close();
+      try {
+        isolatedDb.close();
+        fs.rmSync(isolatedDbDir, { recursive: true, force: true });
+      } catch (e) {}
     }
 
-    // 8v. [P2] Shared KV/Redis REST API integration and TTL cleanup
-    const { AnonymousVoteRotationLedger } = require('../services/rotationLedger');
-    let kvPipelineCommands = [];
-    const mockKvStore = new Map();
-    const mockKvFetch = async (url, opts) => {
-      const u = String(url);
-      if (u.includes('/pipeline')) {
-        const pipelineBody = JSON.parse(opts.body);
-        kvPipelineCommands.push(pipelineBody);
-        for (const cmd of pipelineBody) {
-          if (cmd[0] === 'SET') {
-            mockKvStore.set(cmd[1], cmd[2]);
-          }
-        }
-        return { ok: true, json: async () => [{ result: 'OK' }, { result: 1 }] };
-      }
-      if (u.includes('/GET/')) {
-        const key = decodeURIComponent(u.split('/GET/')[1]);
-        const val = mockKvStore.get(key) || null;
-        return { ok: true, json: async () => ({ result: val }) };
-      }
-      return { ok: true, json: async () => ({}) };
-    };
-
-    const originalGlobalFetch = global.fetch;
-    global.fetch = mockKvFetch;
+    // 8v. [P2] Atomic Redis HSET operations, concurrent-write regression, and storage tier merging
     try {
-      const kvLedger = new AnonymousVoteRotationLedger({
-        restUrl: 'https://mock-kv.upstash.io',
-        restToken: 'mock_token',
-        ttlMs: 50 // 50ms short TTL for testing expiry
-      });
-      assert.strictEqual(kvLedger.isShared, true, 'Ledger must detect shared KV configuration');
-
-      // Record vote via instance A in KV
-      await kvLedger.recordVote('198.51.100.1', 999, 'anon_voter_bid_kv_orig', 50);
-      assert.ok(kvPipelineCommands.length > 0, 'KV pipeline commands must be executed');
-      const lastPipeline = kvPipelineCommands[kvPipelineCommands.length - 1];
-      assert.strictEqual(lastPipeline[0][0], 'SET');
-      assert.strictEqual(lastPipeline[1][0], 'EXPIRE');
-
-      // Instance B reads from KV
-      const kvLedgerInstanceB = new AnonymousVoteRotationLedger({
+      const kvLedgerA = new AnonymousVoteRotationLedger({
         restUrl: 'https://mock-kv.upstash.io',
         restToken: 'mock_token',
         ttlMs: 50
       });
-      const votedQuestionsB = await kvLedgerInstanceB.getVotedQuestionsForIp('198.51.100.1');
-      assert.strictEqual(votedQuestionsB.length, 1);
-      assert.strictEqual(votedQuestionsB[0].qa_id, 999);
-      assert.strictEqual(votedQuestionsB[0].original_browser_key, 'anon_voter_bid_kv_orig');
+      assert.strictEqual(kvLedgerA.isShared, true, 'Ledger must detect shared KV configuration');
+
+      // Concurrent-write regression:
+      // Fire concurrent recordVote calls for 3 distinct Q&A IDs from the exact same IP.
+      // Atomic HSET operations must ensure that all 3 fields are recorded without dropping any question.
+      const testIp = '198.51.100.99';
+      await Promise.all([
+        kvLedgerA.recordVote(testIp, 101, 'anon_voter_bid_101', 50),
+        kvLedgerA.recordVote(testIp, 102, 'anon_voter_bid_102', 50),
+        kvLedgerA.recordVote(testIp, 103, 'anon_voter_bid_103', 50)
+      ]);
+
+      // Read from independent ledger instance B connected to the same KV store
+      const kvLedgerB = new AnonymousVoteRotationLedger({
+        restUrl: 'https://mock-kv.upstash.io',
+        restToken: 'mock_token',
+        ttlMs: 50
+      });
+      const votedQuestionsConcurrent = await kvLedgerB.getVotedQuestionsForIp(testIp);
+      assert.strictEqual(votedQuestionsConcurrent.length, 3, 'All 3 concurrent votes must be preserved in shared KV without dropping any questions');
+      const votedQaIds = new Set(votedQuestionsConcurrent.map(v => v.qa_id));
+      assert.ok(votedQaIds.has(101) && votedQaIds.has(102) && votedQaIds.has(103), 'Every concurrent question ID must be present in the ledger');
+
+      // Test original voter identification for each concurrent record
+      assert.strictEqual(await kvLedgerB.isOriginalVoter(testIp, 101, 'anon_voter_bid_101'), true);
+      assert.strictEqual(await kvLedgerB.isOriginalVoter(testIp, 101, 'anon_voter_bid_rotated'), false);
+      assert.strictEqual(await kvLedgerB.isOriginalVoter(testIp, 102, 'anon_voter_bid_102'), true);
+
+      // Verify that getVotedQuestionsForIp merges KV records with SQLite rows
+      // Insert an additional Q&A association directly in SQLite for testIp
+      db.prepare(`
+        INSERT INTO anonymous_vote_rotation_ledger (client_ip, qa_id, original_browser_key, expires_at)
+        VALUES (?, ?, ?, ?)
+      `).run(testIp, targetQaId4, 'anon_voter_bid_sqlite', Date.now() + 50000);
+
+      const mergedVotes = await kvLedgerB.getVotedQuestionsForIp(testIp);
+      const mergedIds = new Set(mergedVotes.map(v => v.qa_id));
+      assert.ok(mergedIds.has(101) && mergedIds.has(102) && mergedIds.has(103) && mergedIds.has(targetQaId4), 'Storage tier merging must return union of KV and SQLite associations');
 
       // Test TTL expiry: wait 70ms for 50ms TTL to expire
       await new Promise(resolve => setTimeout(resolve, 70));
-      const expiredQuestions = await kvLedgerInstanceB.getVotedQuestionsForIp('198.51.100.1');
-      assert.strictEqual(expiredQuestions.length, 0, 'Expired entries must be pruned and not returned');
-      console.log('✅ PASS: [P2] Shared KV/Redis rotation ledger correctly sets TTL and prunes expired records across instances');
+      const expiredQuestions = await kvLedgerB.getVotedQuestionsForIp(testIp);
+      const expiredKvIds = expiredQuestions.filter(q => q.qa_id !== targetQaId4);
+      assert.strictEqual(expiredKvIds.length, 0, 'Expired KV entries must be pruned and not returned');
+      console.log('✅ PASS: [P2] Atomic Redis HSET operations prevent concurrent-write drops and merge storage tiers correctly');
     } finally {
       global.fetch = originalGlobalFetch;
     }
