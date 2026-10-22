@@ -44,38 +44,56 @@ class AnonymousVoteRotationLedger {
     return `palluvo:${this.prefix}:ip:${clientIp}`;
   }
 
-  async migrateLegacyStringKey(fullKey) {
+  async executePipeline(commands) {
+    const res = await fetch(`${this.restUrl}/pipeline`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.restToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(commands)
+    });
+    if (!res.ok) {
+      throw new Error(`Redis pipeline HTTP status ${res.status}`);
+    }
+    const data = await res.json();
+    if (!Array.isArray(data)) {
+      throw new Error('Invalid Redis pipeline response format');
+    }
+    for (const cmdRes of data) {
+      if (cmdRes?.error) {
+        throw new Error(`Redis pipeline command error: ${cmdRes.error}`);
+      }
+    }
+    return data;
+  }
+
+  async readLegacyStringEntries(sourceKey) {
     if (!this.isShared || !this.restUrl || !this.restToken) return new Map();
-    const migrated = new Map();
+    const entries = new Map();
     try {
-      const getRes = await fetch(`${this.restUrl}/GET/${encodeURIComponent(fullKey)}`, {
+      const getRes = await fetch(`${this.restUrl}/GET/${encodeURIComponent(sourceKey)}`, {
         headers: { Authorization: `Bearer ${this.restToken}` }
       });
-      if (getRes.ok) {
-        const getData = await getRes.json();
-        if (getData && typeof getData.result === 'string') {
-          try {
-            const parsed = JSON.parse(getData.result);
-            if (parsed && typeof parsed === 'object') {
-              const now = Date.now();
-              for (const [k, v] of Object.entries(parsed)) {
-                if (v && v.expiresAt > now) {
-                  migrated.set(Number(k), {
-                    originalBrowserKey: v.originalBrowserKey || '',
-                    expiresAt: v.expiresAt
-                  });
-                }
-              }
+      if (!getRes.ok) return entries;
+      const getData = await getRes.json();
+      if (getData?.error) return entries;
+      if (getData && typeof getData.result === 'string') {
+        const parsed = JSON.parse(getData.result);
+        if (parsed && typeof parsed === 'object') {
+          const now = Date.now();
+          for (const [k, v] of Object.entries(parsed)) {
+            if (v && v.expiresAt > now) {
+              entries.set(Number(k), {
+                originalBrowserKey: v.originalBrowserKey || '',
+                expiresAt: v.expiresAt
+              });
             }
-          } catch (e) {}
+          }
         }
       }
-      // Delete the legacy string key so it can be cleanly replaced as a Redis Hash
-      await fetch(`${this.restUrl}/DEL/${encodeURIComponent(fullKey)}`, {
-        headers: { Authorization: `Bearer ${this.restToken}` }
-      });
     } catch (e) {}
-    return migrated;
+    return entries;
   }
 
   pruneLocal() {
@@ -145,45 +163,19 @@ class AnonymousVoteRotationLedger {
         expiresAt
       });
 
-      const executePipeline = async (commands) => {
-        const res = await fetch(`${this.restUrl}/pipeline`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this.restToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(commands)
-        });
-        if (!res.ok) {
-          throw new Error(`Redis pipeline HTTP status ${res.status}`);
-        }
-        const data = await res.json();
-        if (!Array.isArray(data)) {
-          throw new Error('Invalid Redis pipeline response format');
-        }
-        return data;
-      };
+      // Check if an unmigrated legacy v1 string key exists
+      let legacyKeyToDelete = null;
+      const initialCommands = [];
 
-      const initialCommands = [
-        ['HSET', fullKey, String(numericQaId), payload],
-        ['EXPIRE', fullKey, windowSec]
-      ];
-
-      const results = await executePipeline(initialCommands);
-
-      // Validate each pipeline command response
-      const hsetError = results[0]?.error;
-      const expireError = results[1]?.error;
-
-      if (hsetError) {
-        if (typeof hsetError === 'string' && hsetError.includes('WRONGTYPE')) {
-          // Key currently holds a legacy string from prior releases.
-          // Migrate legacy string entries and write as Redis hash.
-          const legacyEntries = await this.migrateLegacyStringKey(fullKey);
-          const migrationCommands = [];
+      if (this.prefix.endsWith(':v2')) {
+        const legacyPrefix = this.prefix.replace(/:v2$/, '');
+        const legacyKey = `palluvo:${legacyPrefix}:ip:${clientIp}`;
+        const legacyEntries = await this.readLegacyStringEntries(legacyKey);
+        if (legacyEntries.size > 0) {
+          legacyKeyToDelete = legacyKey;
           for (const [qid, item] of legacyEntries.entries()) {
             if (qid !== numericQaId) {
-              migrationCommands.push([
+              initialCommands.push([
                 'HSET',
                 fullKey,
                 String(qid),
@@ -194,20 +186,65 @@ class AnonymousVoteRotationLedger {
               ]);
             }
           }
-          migrationCommands.push(['HSET', fullKey, String(numericQaId), payload]);
-          migrationCommands.push(['EXPIRE', fullKey, windowSec]);
+        }
+      }
 
-          const retryResults = await executePipeline(migrationCommands);
-          for (const cmdRes of retryResults) {
-            if (cmdRes?.error) {
-              throw new Error(`Redis pipeline command error after migration: ${cmdRes.error}`);
+      initialCommands.push(['HSET', fullKey, String(numericQaId), payload]);
+      initialCommands.push(['EXPIRE', fullKey, windowSec]);
+
+      // Execute pipeline
+      const res = await fetch(`${this.restUrl}/pipeline`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.restToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(initialCommands)
+      });
+      if (!res.ok) {
+        throw new Error(`Redis pipeline HTTP status ${res.status}`);
+      }
+      const data = await res.json();
+      if (!Array.isArray(data)) {
+        throw new Error('Invalid Redis pipeline response format');
+      }
+
+      // Check for command-level errors
+      const firstError = data.find(r => r?.error)?.error;
+      if (firstError) {
+        if (typeof firstError === 'string' && firstError.includes('WRONGTYPE')) {
+          // Key currently holds a legacy string in-place (e.g. prefix was configured without :v2)
+          const inPlaceEntries = await this.readLegacyStringEntries(fullKey);
+          const inPlaceCommands = [['DEL', fullKey]];
+          for (const [qid, item] of inPlaceEntries.entries()) {
+            if (qid !== numericQaId) {
+              inPlaceCommands.push([
+                'HSET',
+                fullKey,
+                String(qid),
+                JSON.stringify({
+                  originalBrowserKey: item.originalBrowserKey,
+                  expiresAt: item.expiresAt
+                })
+              ]);
             }
           }
+          inPlaceCommands.push(['HSET', fullKey, String(numericQaId), payload]);
+          inPlaceCommands.push(['EXPIRE', fullKey, windowSec]);
+
+          // Execute replacement pipeline and verify
+          await this.executePipeline(inPlaceCommands);
         } else {
-          throw new Error(`Redis HSET command error: ${hsetError}`);
+          throw new Error(`Redis HSET command error: ${firstError}`);
         }
-      } else if (expireError) {
-        throw new Error(`Redis EXPIRE command error: ${expireError}`);
+      }
+
+      // Destination v2 write is confirmed successful!
+      // Delete the legacy source key ONLY now that the destination write is verified.
+      if (legacyKeyToDelete) {
+        await fetch(`${this.restUrl}/DEL/${encodeURIComponent(legacyKeyToDelete)}`, {
+          headers: { Authorization: `Bearer ${this.restToken}` }
+        }).catch(() => {});
       }
     }
   }
@@ -229,11 +266,12 @@ class AnonymousVoteRotationLedger {
       const getData = await getRes.json();
       if (getData?.error) {
         if (typeof getData.error === 'string' && getData.error.includes('WRONGTYPE')) {
-          const legacyEntries = await this.migrateLegacyStringKey(fullKey);
-          if (legacyEntries.size > 0) {
-            const commands = [];
-            for (const [qid, item] of legacyEntries.entries()) {
-              commands.push([
+          // in-place legacy string key at fullKey
+          const inPlaceEntries = await this.readLegacyStringEntries(fullKey);
+          if (inPlaceEntries.size > 0) {
+            const inPlaceCommands = [['DEL', fullKey]];
+            for (const [qid, item] of inPlaceEntries.entries()) {
+              inPlaceCommands.push([
                 'HSET',
                 fullKey,
                 String(qid),
@@ -249,17 +287,10 @@ class AnonymousVoteRotationLedger {
             }
             const maxRemainingTtlSec = Math.max(
               1,
-              Math.ceil(Math.max(...Array.from(legacyEntries.values()).map(e => e.expiresAt - now)) / 1000)
+              Math.ceil(Math.max(...Array.from(inPlaceEntries.values()).map(e => e.expiresAt - now)) / 1000)
             );
-            commands.push(['EXPIRE', fullKey, maxRemainingTtlSec]);
-            await fetch(`${this.restUrl}/pipeline`, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${this.restToken}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(commands)
-            }).catch(() => {});
+            inPlaceCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec]);
+            await this.executePipeline(inPlaceCommands);
           }
         } else {
           throw new Error(`Redis HGETALL command error: ${getData.error}`);
@@ -288,29 +319,51 @@ class AnonymousVoteRotationLedger {
         }
       }
 
-      // Check unmigrated legacy v1 string key if using v2 namespace and not already migrated
+      // Check unmigrated legacy v1 string key if using v2 namespace
       if (this.prefix.endsWith(':v2')) {
         const legacyPrefix = this.prefix.replace(/:v2$/, '');
         const legacyKey = `palluvo:${legacyPrefix}:ip:${clientIp}`;
+        let legacyEntries = new Map();
         try {
-          const legacyCheckRes = await fetch(`${this.restUrl}/GET/${encodeURIComponent(legacyKey)}`, {
+          legacyEntries = await this.readLegacyStringEntries(legacyKey);
+        } catch (e) {}
+
+        if (legacyEntries.size > 0) {
+          const migrationCommands = [];
+          for (const [qid, item] of legacyEntries.entries()) {
+            migrationCommands.push([
+              'HSET',
+              fullKey,
+              String(qid),
+              JSON.stringify({
+                originalBrowserKey: item.originalBrowserKey,
+                expiresAt: item.expiresAt
+              })
+            ]);
+          }
+          const maxRemainingTtlSec = Math.max(
+            1,
+            Math.ceil(Math.max(...Array.from(legacyEntries.values()).map(e => e.expiresAt - now)) / 1000)
+          );
+          migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec]);
+
+          // CONFIRM destination write first! If pipeline fails, executePipeline throws and legacyKey is kept intact!
+          await this.executePipeline(migrationCommands);
+
+          // ONLY delete legacy source key after destination write is verified!
+          await fetch(`${this.restUrl}/DEL/${encodeURIComponent(legacyKey)}`, {
             headers: { Authorization: `Bearer ${this.restToken}` }
-          });
-          if (legacyCheckRes.ok) {
-            const legacyData = await legacyCheckRes.json();
-            if (legacyData && typeof legacyData.result === 'string') {
-              const legacyEntries = await this.migrateLegacyStringKey(legacyKey);
-              for (const [qid, item] of legacyEntries.entries()) {
-                if (!votesByQa.has(qid)) {
-                  votesByQa.set(qid, {
-                    qa_id: qid,
-                    original_browser_key: item.originalBrowserKey
-                  });
-                }
-              }
+          }).catch(() => {});
+
+          for (const [qid, item] of legacyEntries.entries()) {
+            if (!votesByQa.has(qid)) {
+              votesByQa.set(qid, {
+                qa_id: qid,
+                original_browser_key: item.originalBrowserKey
+              });
             }
           }
-        } catch (e) {}
+        }
       }
     }
 
@@ -373,8 +426,28 @@ class AnonymousVoteRotationLedger {
       const getData = await getRes.json();
       if (getData?.error) {
         if (typeof getData.error === 'string' && getData.error.includes('WRONGTYPE')) {
-          const legacyEntries = await this.migrateLegacyStringKey(fullKey);
-          const match = legacyEntries.get(numericQaId);
+          const inPlaceEntries = await this.readLegacyStringEntries(fullKey);
+          if (inPlaceEntries.size > 0) {
+            const inPlaceCommands = [['DEL', fullKey]];
+            for (const [qid, item] of inPlaceEntries.entries()) {
+              inPlaceCommands.push([
+                'HSET',
+                fullKey,
+                String(qid),
+                JSON.stringify({
+                  originalBrowserKey: item.originalBrowserKey,
+                  expiresAt: item.expiresAt
+                })
+              ]);
+            }
+            const maxRemainingTtlSec = Math.max(
+              1,
+              Math.ceil(Math.max(...Array.from(inPlaceEntries.values()).map(e => e.expiresAt - now)) / 1000)
+            );
+            inPlaceCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec]);
+            await this.executePipeline(inPlaceCommands);
+          }
+          const match = inPlaceEntries.get(numericQaId);
           if (match && match.expiresAt > now) {
             return {
               qa_id: numericQaId,
@@ -394,6 +467,51 @@ class AnonymousVoteRotationLedger {
             };
           }
         } catch (e) {}
+      }
+
+      // Check legacy v1 key if prefix ends with :v2 and no match in v2
+      if (this.prefix.endsWith(':v2')) {
+        const legacyPrefix = this.prefix.replace(/:v2$/, '');
+        const legacyKey = `palluvo:${legacyPrefix}:ip:${clientIp}`;
+        let legacyEntries = new Map();
+        try {
+          legacyEntries = await this.readLegacyStringEntries(legacyKey);
+        } catch (e) {}
+
+        if (legacyEntries.size > 0) {
+          const migrationCommands = [];
+          for (const [qid, item] of legacyEntries.entries()) {
+            migrationCommands.push([
+              'HSET',
+              fullKey,
+              String(qid),
+              JSON.stringify({
+                originalBrowserKey: item.originalBrowserKey,
+                expiresAt: item.expiresAt
+              })
+            ]);
+          }
+          const maxRemainingTtlSec = Math.max(
+            1,
+            Math.ceil(Math.max(...Array.from(legacyEntries.values()).map(e => e.expiresAt - now)) / 1000)
+          );
+          migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec]);
+
+          // Verify destination write before deleting source key
+          await this.executePipeline(migrationCommands);
+
+          await fetch(`${this.restUrl}/DEL/${encodeURIComponent(legacyKey)}`, {
+            headers: { Authorization: `Bearer ${this.restToken}` }
+          }).catch(() => {});
+
+          const match = legacyEntries.get(numericQaId);
+          if (match && match.expiresAt > now) {
+            return {
+              qa_id: numericQaId,
+              original_browser_key: match.originalBrowserKey
+            };
+          }
+        }
       }
     }
 

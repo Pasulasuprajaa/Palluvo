@@ -208,7 +208,7 @@ export default function HomePage({ onNavigate }) {
       </section>
 
       {/* 2. CATEGORY SECTION (Horizontal Swipeable Carousel with Clear Peek on Mobile) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 sm:pt-10 sm:pb-14 w-full">
+      <section id="craft-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8 sm:pt-10 sm:pb-14 w-full scroll-mt-20">
         <div className="mb-5 sm:mb-8">
           <span className="text-[11px] sm:text-xs font-semibold text-[#5B1425] uppercase tracking-widest flex items-center gap-1.5 mb-1">
             <Sparkles className="w-3 h-3 text-[#C5A059]" />

@@ -1886,6 +1886,10 @@ async function runTests() {
             }
           } else if (op === 'EXPIRE') {
             results.push({ result: 1 });
+          } else if (op === 'DEL') {
+            const [, key] = cmd;
+            migrationKvStore.delete(key);
+            results.push({ result: 1 });
           } else {
             results.push({ result: 'OK' });
           }
@@ -2033,6 +2037,59 @@ async function runTests() {
           false,
           'Independent reader confirms unpersisted vote was not recorded'
         );
+        // 4. Test failed migration pipeline preserves legacy source key and independent reader continues to see legacy votes
+        const failedMigIp = '198.51.100.222';
+        const failedMigLegacyKey = 'palluvo:qa_rot:ip:' + failedMigIp;
+        migrationKvStore.set(failedMigLegacyKey, JSON.stringify({
+          403: { originalBrowserKey: 'anon_voter_legacy_403', expiresAt: Date.now() + 60000 }
+        }));
+
+        failHsetCommands = true;
+        const failingMigrator = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+
+        let migrationFailed = false;
+        try {
+          await failingMigrator.getVotedQuestionsForIp(failedMigIp);
+        } catch (err) {
+          migrationFailed = true;
+          assert.ok(err.message.includes('Redis pipeline command error'), 'Migration must throw when pipeline command fails');
+        }
+        assert.strictEqual(migrationFailed, true, 'Migration must fail closed on destination pipeline failure');
+        assert.strictEqual(
+          migrationKvStore.has(failedMigLegacyKey),
+          true,
+          'Legacy source key MUST be preserved when destination v2 pipeline write fails'
+        );
+
+        // Independent instance reads from KV after destination write recovers
+        failHsetCommands = false;
+        const independentReaderAfterFailure = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+
+        const recoveredVotes = await independentReaderAfterFailure.getVotedQuestionsForIp(failedMigIp);
+        assert.strictEqual(recoveredVotes.length, 1, 'Independent reader recovers legacy question after previous failed migration');
+        assert.strictEqual(recoveredVotes[0].qa_id, 403);
+        assert.strictEqual(recoveredVotes[0].original_browser_key, 'anon_voter_legacy_403');
+
+        // Verify that after successful migration, the legacy key is cleanly deleted
+        assert.strictEqual(
+          migrationKvStore.has(failedMigLegacyKey),
+          false,
+          'Legacy source key must be deleted only after confirmed destination write'
+        );
+
+        // Independent reader checks identity rotation prevention
+        const isOriginal = await independentReaderAfterFailure.isOriginalVoter(failedMigIp, 403, 'anon_voter_legacy_403');
+        assert.strictEqual(isOriginal, true, 'Original voter recognized');
+        const isRotated = await independentReaderAfterFailure.isOriginalVoter(failedMigIp, 403, 'rotated_identity');
+        assert.strictEqual(isRotated, false, 'Rotated identity rejected');
       } finally {
         failingServer.close();
       }
