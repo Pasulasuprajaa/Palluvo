@@ -71,28 +71,30 @@ class AnonymousVoteRotationLedger {
   async readLegacyStringEntries(sourceKey) {
     if (!this.isShared || !this.restUrl || !this.restToken) return new Map();
     const entries = new Map();
-    try {
-      const getRes = await fetch(`${this.restUrl}/GET/${encodeURIComponent(sourceKey)}`, {
-        headers: { Authorization: `Bearer ${this.restToken}` }
-      });
-      if (!getRes.ok) return entries;
-      const getData = await getRes.json();
-      if (getData?.error) return entries;
-      if (getData && typeof getData.result === 'string') {
-        const parsed = JSON.parse(getData.result);
-        if (parsed && typeof parsed === 'object') {
-          const now = Date.now();
-          for (const [k, v] of Object.entries(parsed)) {
-            if (v && v.expiresAt > now) {
-              entries.set(Number(k), {
-                originalBrowserKey: v.originalBrowserKey || '',
-                expiresAt: v.expiresAt
-              });
-            }
+    const getRes = await fetch(`${this.restUrl}/GET/${encodeURIComponent(sourceKey)}`, {
+      headers: { Authorization: `Bearer ${this.restToken}` }
+    });
+    if (!getRes.ok) {
+      throw new Error(`Redis GET HTTP status ${getRes.status}`);
+    }
+    const getData = await getRes.json();
+    if (getData?.error) {
+      throw new Error(`Redis GET command error: ${getData.error}`);
+    }
+    if (getData && typeof getData.result === 'string') {
+      const parsed = JSON.parse(getData.result);
+      if (parsed && typeof parsed === 'object') {
+        const now = Date.now();
+        for (const [k, v] of Object.entries(parsed)) {
+          if (v && v.expiresAt > now) {
+            entries.set(Number(k), {
+              originalBrowserKey: v.originalBrowserKey || '',
+              expiresAt: v.expiresAt
+            });
           }
         }
       }
-    } catch (e) {}
+    }
     return entries;
   }
 
@@ -323,10 +325,7 @@ class AnonymousVoteRotationLedger {
       if (this.prefix.endsWith(':v2')) {
         const legacyPrefix = this.prefix.replace(/:v2$/, '');
         const legacyKey = `palluvo:${legacyPrefix}:ip:${clientIp}`;
-        let legacyEntries = new Map();
-        try {
-          legacyEntries = await this.readLegacyStringEntries(legacyKey);
-        } catch (e) {}
+        const legacyEntries = await this.readLegacyStringEntries(legacyKey);
 
         if (legacyEntries.size > 0) {
           const migrationCommands = [];
@@ -473,10 +472,7 @@ class AnonymousVoteRotationLedger {
       if (this.prefix.endsWith(':v2')) {
         const legacyPrefix = this.prefix.replace(/:v2$/, '');
         const legacyKey = `palluvo:${legacyPrefix}:ip:${clientIp}`;
-        let legacyEntries = new Map();
-        try {
-          legacyEntries = await this.readLegacyStringEntries(legacyKey);
-        } catch (e) {}
+        const legacyEntries = await this.readLegacyStringEntries(legacyKey);
 
         if (legacyEntries.size > 0) {
           const migrationCommands = [];

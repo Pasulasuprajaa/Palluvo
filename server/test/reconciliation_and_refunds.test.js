@@ -1856,6 +1856,7 @@ async function runTests() {
     }));
 
     let failHsetCommands = false;
+    let failGetCommands = false;
     global.fetch = async (url, opts) => {
       const u = String(url);
       if (u.includes('/pipeline')) {
@@ -1922,6 +1923,9 @@ async function runTests() {
         return { ok: true, json: async () => ({ result: val }) };
       }
       if (u.includes('/GET/')) {
+        if (failGetCommands) {
+          return { ok: false, status: 500, json: async () => ({ error: 'Internal Server Error' }) };
+        }
         const key = decodeURIComponent(u.split('/GET/')[1]);
         const val = migrationKvStore.get(key);
         return { ok: true, json: async () => ({ result: typeof val === 'string' ? val : null }) };
@@ -2090,6 +2094,77 @@ async function runTests() {
         assert.strictEqual(isOriginal, true, 'Original voter recognized');
         const isRotated = await independentReaderAfterFailure.isOriginalVoter(failedMigIp, 403, 'rotated_identity');
         assert.strictEqual(isRotated, false, 'Rotated identity rejected');
+
+        // 5. Test legacy GET read error fails closed with independent reader
+        const legacyErrIp = '198.51.100.233';
+        const legacyErrKey = 'palluvo:qa_rot:ip:' + legacyErrIp;
+        migrationKvStore.set(legacyErrKey, JSON.stringify({
+          404: { originalBrowserKey: 'anon_voter_legacy_404', expiresAt: Date.now() + 60000 }
+        }));
+
+        failGetCommands = true;
+        const failingGetReader = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+
+        // getVotedQuestionsForIp must throw instead of returning []
+        let getVotedQuestionsThrew = false;
+        try {
+          await failingGetReader.getVotedQuestionsForIp(legacyErrIp);
+        } catch (err) {
+          getVotedQuestionsThrew = true;
+          assert.ok(err.message.includes('Redis GET HTTP status 500'), 'Must propagate Redis GET HTTP status 500 error');
+        }
+        assert.strictEqual(getVotedQuestionsThrew, true, 'getVotedQuestionsForIp must fail closed when legacy GET fails');
+
+        // getVoteRecord must throw instead of returning null
+        let getVoteRecordThrew = false;
+        try {
+          await failingGetReader.getVoteRecord(legacyErrIp, 404);
+        } catch (err) {
+          getVoteRecordThrew = true;
+          assert.ok(err.message.includes('Redis GET HTTP status 500'), 'Must propagate Redis GET HTTP status 500 error');
+        }
+        assert.strictEqual(getVoteRecordThrew, true, 'getVoteRecord must fail closed when legacy GET fails');
+
+        // isOriginalVoter must throw instead of returning false (which would allow rotated identity)
+        let isOriginalVoterThrew = false;
+        try {
+          await failingGetReader.isOriginalVoter(legacyErrIp, 404, 'anon_voter_legacy_404');
+        } catch (err) {
+          isOriginalVoterThrew = true;
+          assert.ok(err.message.includes('Redis GET HTTP status 500'), 'isOriginalVoter must propagate GET failure');
+        }
+        assert.strictEqual(isOriginalVoterThrew, true, 'isOriginalVoter must fail closed on legacy GET failure');
+
+        // Source key must still be intact in migrationKvStore
+        assert.strictEqual(
+          migrationKvStore.has(legacyErrKey),
+          true,
+          'Legacy source key must remain preserved during GET error'
+        );
+
+        // Recover GET connectivity: independent reader recovers votes and prevents identity rotation
+        failGetCommands = false;
+        const recoveringGetReader = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+
+        const recoveredGetVotes = await recoveringGetReader.getVotedQuestionsForIp(legacyErrIp);
+        assert.strictEqual(recoveredGetVotes.length, 1, 'Independent reader recovers legacy votes after GET recovery');
+        assert.strictEqual(recoveredGetVotes[0].qa_id, 404);
+        assert.strictEqual(recoveredGetVotes[0].original_browser_key, 'anon_voter_legacy_404');
+
+        // Confirm legacy source key is deleted only after successful recovery and migration
+        assert.strictEqual(
+          migrationKvStore.has(legacyErrKey),
+          false,
+          'Legacy source key must be deleted only after successful recovery'
+        );
       } finally {
         failingServer.close();
       }
