@@ -21,7 +21,7 @@ const DEFAULT_TTL_MS = parseInt(process.env.QA_VOTE_ROTATION_TTL_MS, 10) || 24 *
  */
 class AnonymousVoteRotationLedger {
   constructor(options = {}) {
-    this.prefix = options.prefix || 'qa_rot';
+    this.prefix = options.prefix || 'qa_rot:v2';
     this.defaultTtlMs = options.ttlMs || DEFAULT_TTL_MS;
     this.localStore = new Map(); // clientIp -> Map(qaId -> { originalBrowserKey, expiresAt })
     this.db = options.db !== undefined ? options.db : db;
@@ -38,6 +38,44 @@ class AnonymousVoteRotationLedger {
       this.restToken = null;
       this.isShared = false;
     }
+  }
+
+  getKey(clientIp) {
+    return `palluvo:${this.prefix}:ip:${clientIp}`;
+  }
+
+  async migrateLegacyStringKey(fullKey) {
+    if (!this.isShared || !this.restUrl || !this.restToken) return new Map();
+    const migrated = new Map();
+    try {
+      const getRes = await fetch(`${this.restUrl}/GET/${encodeURIComponent(fullKey)}`, {
+        headers: { Authorization: `Bearer ${this.restToken}` }
+      });
+      if (getRes.ok) {
+        const getData = await getRes.json();
+        if (getData && typeof getData.result === 'string') {
+          try {
+            const parsed = JSON.parse(getData.result);
+            if (parsed && typeof parsed === 'object') {
+              const now = Date.now();
+              for (const [k, v] of Object.entries(parsed)) {
+                if (v && v.expiresAt > now) {
+                  migrated.set(Number(k), {
+                    originalBrowserKey: v.originalBrowserKey || '',
+                    expiresAt: v.expiresAt
+                  });
+                }
+              }
+            }
+          } catch (e) {}
+        }
+      }
+      // Delete the legacy string key so it can be cleanly replaced as a Redis Hash
+      await fetch(`${this.restUrl}/DEL/${encodeURIComponent(fullKey)}`, {
+        headers: { Authorization: `Bearer ${this.restToken}` }
+      });
+    } catch (e) {}
+    return migrated;
   }
 
   pruneLocal() {
@@ -101,27 +139,75 @@ class AnonymousVoteRotationLedger {
 
     // 3. Shared KV/Redis storage: atomic HSET per (IP, question) association with TTL
     if (this.isShared && this.restUrl && this.restToken) {
-      const fullKey = `palluvo:${this.prefix}:ip:${clientIp}`;
+      const fullKey = this.getKey(clientIp);
       const payload = JSON.stringify({
         originalBrowserKey: originalBrowserKey || '',
         expiresAt
       });
-      try {
-        await fetch(`${this.restUrl}/pipeline`, {
+
+      const executePipeline = async (commands) => {
+        const res = await fetch(`${this.restUrl}/pipeline`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${this.restToken}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify([
-            ['HSET', fullKey, String(numericQaId), payload],
-            ['EXPIRE', fullKey, windowSec]
-          ])
+          body: JSON.stringify(commands)
         });
-      } catch (err) {
-        if (isServerless && (!this.db || !this.db.isDurable)) {
-          console.warn('Rotation ledger KV update failed on serverless:', err.message);
+        if (!res.ok) {
+          throw new Error(`Redis pipeline HTTP status ${res.status}`);
         }
+        const data = await res.json();
+        if (!Array.isArray(data)) {
+          throw new Error('Invalid Redis pipeline response format');
+        }
+        return data;
+      };
+
+      const initialCommands = [
+        ['HSET', fullKey, String(numericQaId), payload],
+        ['EXPIRE', fullKey, windowSec]
+      ];
+
+      const results = await executePipeline(initialCommands);
+
+      // Validate each pipeline command response
+      const hsetError = results[0]?.error;
+      const expireError = results[1]?.error;
+
+      if (hsetError) {
+        if (typeof hsetError === 'string' && hsetError.includes('WRONGTYPE')) {
+          // Key currently holds a legacy string from prior releases.
+          // Migrate legacy string entries and write as Redis hash.
+          const legacyEntries = await this.migrateLegacyStringKey(fullKey);
+          const migrationCommands = [];
+          for (const [qid, item] of legacyEntries.entries()) {
+            if (qid !== numericQaId) {
+              migrationCommands.push([
+                'HSET',
+                fullKey,
+                String(qid),
+                JSON.stringify({
+                  originalBrowserKey: item.originalBrowserKey,
+                  expiresAt: item.expiresAt
+                })
+              ]);
+            }
+          }
+          migrationCommands.push(['HSET', fullKey, String(numericQaId), payload]);
+          migrationCommands.push(['EXPIRE', fullKey, windowSec]);
+
+          const retryResults = await executePipeline(migrationCommands);
+          for (const cmdRes of retryResults) {
+            if (cmdRes?.error) {
+              throw new Error(`Redis pipeline command error after migration: ${cmdRes.error}`);
+            }
+          }
+        } else {
+          throw new Error(`Redis HSET command error: ${hsetError}`);
+        }
+      } else if (expireError) {
+        throw new Error(`Redis EXPIRE command error: ${expireError}`);
       }
     }
   }
@@ -133,39 +219,98 @@ class AnonymousVoteRotationLedger {
 
     // 1. Shared KV/Redis (atomic HGETALL)
     if (this.isShared && this.restUrl && this.restToken) {
-      const fullKey = `palluvo:${this.prefix}:ip:${clientIp}`;
-      try {
-        const getRes = await fetch(`${this.restUrl}/HGETALL/${encodeURIComponent(fullKey)}`, {
-          headers: { Authorization: `Bearer ${this.restToken}` }
-        });
-        if (getRes.ok) {
-          const getData = await getRes.json();
-          let entries = [];
-          if (Array.isArray(getData.result)) {
-            for (let i = 0; i < getData.result.length; i += 2) {
-              entries.push([getData.result[i], getData.result[i + 1]]);
+      const fullKey = this.getKey(clientIp);
+      const getRes = await fetch(`${this.restUrl}/HGETALL/${encodeURIComponent(fullKey)}`, {
+        headers: { Authorization: `Bearer ${this.restToken}` }
+      });
+      if (!getRes.ok) {
+        throw new Error(`Redis HGETALL HTTP status ${getRes.status}`);
+      }
+      const getData = await getRes.json();
+      if (getData?.error) {
+        if (typeof getData.error === 'string' && getData.error.includes('WRONGTYPE')) {
+          const legacyEntries = await this.migrateLegacyStringKey(fullKey);
+          if (legacyEntries.size > 0) {
+            const commands = [];
+            for (const [qid, item] of legacyEntries.entries()) {
+              commands.push([
+                'HSET',
+                fullKey,
+                String(qid),
+                JSON.stringify({
+                  originalBrowserKey: item.originalBrowserKey,
+                  expiresAt: item.expiresAt
+                })
+              ]);
+              votesByQa.set(qid, {
+                qa_id: qid,
+                original_browser_key: item.originalBrowserKey
+              });
             }
-          } else if (getData.result && typeof getData.result === 'object') {
-            entries = Object.entries(getData.result);
+            const maxRemainingTtlSec = Math.max(
+              1,
+              Math.ceil(Math.max(...Array.from(legacyEntries.values()).map(e => e.expiresAt - now)) / 1000)
+            );
+            commands.push(['EXPIRE', fullKey, maxRemainingTtlSec]);
+            await fetch(`${this.restUrl}/pipeline`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${this.restToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(commands)
+            }).catch(() => {});
           }
+        } else {
+          throw new Error(`Redis HGETALL command error: ${getData.error}`);
+        }
+      } else {
+        let entries = [];
+        if (Array.isArray(getData.result)) {
+          for (let i = 0; i < getData.result.length; i += 2) {
+            entries.push([getData.result[i], getData.result[i + 1]]);
+          }
+        } else if (getData.result && typeof getData.result === 'object') {
+          entries = Object.entries(getData.result);
+        }
 
-          for (const [k, v] of entries) {
-            try {
-              const parsed = typeof v === 'string' ? JSON.parse(v) : v;
-              if (parsed && parsed.expiresAt > now) {
-                const qid = Number(k);
-                votesByQa.set(qid, {
-                  qa_id: qid,
-                  original_browser_key: parsed.originalBrowserKey
-                });
+        for (const [k, v] of entries) {
+          try {
+            const parsed = typeof v === 'string' ? JSON.parse(v) : v;
+            if (parsed && parsed.expiresAt > now) {
+              const qid = Number(k);
+              votesByQa.set(qid, {
+                qa_id: qid,
+                original_browser_key: parsed.originalBrowserKey
+              });
+            }
+          } catch (e) {}
+        }
+      }
+
+      // Check unmigrated legacy v1 string key if using v2 namespace and not already migrated
+      if (this.prefix.endsWith(':v2')) {
+        const legacyPrefix = this.prefix.replace(/:v2$/, '');
+        const legacyKey = `palluvo:${legacyPrefix}:ip:${clientIp}`;
+        try {
+          const legacyCheckRes = await fetch(`${this.restUrl}/GET/${encodeURIComponent(legacyKey)}`, {
+            headers: { Authorization: `Bearer ${this.restToken}` }
+          });
+          if (legacyCheckRes.ok) {
+            const legacyData = await legacyCheckRes.json();
+            if (legacyData && typeof legacyData.result === 'string') {
+              const legacyEntries = await this.migrateLegacyStringKey(legacyKey);
+              for (const [qid, item] of legacyEntries.entries()) {
+                if (!votesByQa.has(qid)) {
+                  votesByQa.set(qid, {
+                    qa_id: qid,
+                    original_browser_key: item.originalBrowserKey
+                  });
+                }
               }
-            } catch (e) {}
+            }
           }
-        }
-      } catch (err) {
-        if (isServerless && (!this.db || !this.db.isDurable)) {
-          console.warn('Rotation ledger KV get failed on serverless:', err.message);
-        }
+        } catch (e) {}
       }
     }
 
@@ -218,26 +363,38 @@ class AnonymousVoteRotationLedger {
 
     // 1. Shared KV/Redis (atomic HGET)
     if (this.isShared && this.restUrl && this.restToken) {
-      const fullKey = `palluvo:${this.prefix}:ip:${clientIp}`;
-      try {
-        const getRes = await fetch(`${this.restUrl}/HGET/${encodeURIComponent(fullKey)}/${encodeURIComponent(String(numericQaId))}`, {
-          headers: { Authorization: `Bearer ${this.restToken}` }
-        });
-        if (getRes.ok) {
-          const getData = await getRes.json();
-          if (getData && getData.result) {
-            try {
-              const parsed = typeof getData.result === 'string' ? JSON.parse(getData.result) : getData.result;
-              if (parsed && parsed.expiresAt > now) {
-                return {
-                  qa_id: numericQaId,
-                  original_browser_key: parsed.originalBrowserKey
-                };
-              }
-            } catch (e) {}
+      const fullKey = this.getKey(clientIp);
+      const getRes = await fetch(`${this.restUrl}/HGET/${encodeURIComponent(fullKey)}/${encodeURIComponent(String(numericQaId))}`, {
+        headers: { Authorization: `Bearer ${this.restToken}` }
+      });
+      if (!getRes.ok) {
+        throw new Error(`Redis HGET HTTP status ${getRes.status}`);
+      }
+      const getData = await getRes.json();
+      if (getData?.error) {
+        if (typeof getData.error === 'string' && getData.error.includes('WRONGTYPE')) {
+          const legacyEntries = await this.migrateLegacyStringKey(fullKey);
+          const match = legacyEntries.get(numericQaId);
+          if (match && match.expiresAt > now) {
+            return {
+              qa_id: numericQaId,
+              original_browser_key: match.originalBrowserKey
+            };
           }
+        } else {
+          throw new Error(`Redis HGET command error: ${getData.error}`);
         }
-      } catch (e) {}
+      } else if (getData && getData.result) {
+        try {
+          const parsed = typeof getData.result === 'string' ? JSON.parse(getData.result) : getData.result;
+          if (parsed && parsed.expiresAt > now) {
+            return {
+              qa_id: numericQaId,
+              original_browser_key: parsed.originalBrowserKey
+            };
+          }
+        } catch (e) {}
+      }
     }
 
     // 2. Persistent SQLite DB storage

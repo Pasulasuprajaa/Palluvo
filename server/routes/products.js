@@ -806,7 +806,19 @@ router.post('/qa/:id/helpful', optionalAuth, requireDurableStorage, async (req, 
     }
 
     if (!req.user?.id && clientIp) {
-      await rotationLedger.recordVote(clientIp, qaId, browserKey);
+      try {
+        await rotationLedger.recordVote(clientIp, qaId, browserKey);
+      } catch (ledgerErr) {
+        // Shared persistence failed: fail closed and rollback the local SQLite vote
+        try {
+          db.prepare('DELETE FROM product_qa_votes WHERE qa_id = ? AND voter_key = ?').run(qaId, voterKey);
+          if (browserKey && browserKey !== voterKey) {
+            db.prepare('DELETE FROM product_qa_votes WHERE qa_id = ? AND voter_key = ?').run(qaId, browserKey);
+          }
+          db.prepare('UPDATE product_qa SET helpful_votes = MAX(0, helpful_votes - 1) WHERE id = ?').run(qaId);
+        } catch (rollbackErr) {}
+        throw ledgerErr;
+      }
     }
 
     const updated = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(qaId);

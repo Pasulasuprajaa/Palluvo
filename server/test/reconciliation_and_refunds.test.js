@@ -1588,6 +1588,7 @@ async function runTests() {
       restToken: 'mock_token',
       db
     });
+    const originalLedgerBefore8u = productsRouter.rotationLedger;
     productsRouter.rotationLedger = instance1Ledger;
 
     // Create an entirely isolated second database for Instance 2 (no shared tables or rows with Instance 1)
@@ -1766,6 +1767,7 @@ async function runTests() {
       console.log('✅ PASS: [P2] Cross-instance token issuance and voting prevents anonymous identity rotation with isolated DBs and KV as only shared state');
     } finally {
       server2.close();
+      productsRouter.rotationLedger = originalLedgerBefore8u;
       try {
         isolatedDb.close();
         fs.rmSync(isolatedDbDir, { recursive: true, force: true });
@@ -1829,7 +1831,7 @@ async function runTests() {
     }
 
     // 8w. [P2] Database rotation ledger TTL pruning
-    const dbLedger = productsRouter.rotationLedger;
+    const dbLedger = new AnonymousVoteRotationLedger({ db });
     // Insert an entry with past expiration for targetQaId4
     db.prepare(`
       INSERT INTO anonymous_vote_rotation_ledger (client_ip, qa_id, original_browser_key, expires_at)
@@ -1842,6 +1844,203 @@ async function runTests() {
     const remainingInDb = db.prepare('SELECT COUNT(*) as count FROM anonymous_vote_rotation_ledger WHERE client_ip = ?').get('203.0.113.50');
     assert.strictEqual(remainingInDb.count, 0, 'Expired DB entry must be deleted by pruner');
     console.log('✅ PASS: [P2] Database rotation ledger prunes expired entries on read to prevent warm instance accumulation');
+
+    // 8x. [P2] Regression: Errored HSET pipeline commands fail closed, and legacy string keys are migrated with an independent reader
+    const regressionFetch = global.fetch;
+    const migrationKvStore = new Map();
+    // Pre-populate a legacy string key holding Q&A 401
+    const legacyIp = '198.51.100.77';
+    const legacyKey = 'palluvo:qa_rot:ip:' + legacyIp;
+    migrationKvStore.set(legacyKey, JSON.stringify({
+      401: { originalBrowserKey: 'anon_voter_legacy_401', expiresAt: Date.now() + 60000 }
+    }));
+
+    let failHsetCommands = false;
+    global.fetch = async (url, opts) => {
+      const u = String(url);
+      if (u.includes('/pipeline')) {
+        const pipelineBody = typeof opts.body === 'string' ? JSON.parse(opts.body) : opts.body;
+        if (failHsetCommands) {
+          // Return command-level error on HSET
+          const results = pipelineBody.map(cmd => {
+            if (cmd[0] === 'HSET') {
+              return { error: 'ERR simulated pipeline HSET failure' };
+            }
+            return { result: 1 };
+          });
+          return { ok: true, json: async () => results };
+        }
+        const results = [];
+        for (const cmd of pipelineBody) {
+          const op = cmd[0];
+          if (op === 'HSET') {
+            const [, key, field, val] = cmd;
+            const existingVal = migrationKvStore.get(key);
+            if (typeof existingVal === 'string') {
+              // Target key currently holds a Redis string!
+              results.push({ error: 'WRONGTYPE Operation against a key holding the wrong kind of value' });
+            } else {
+              if (!migrationKvStore.has(key)) migrationKvStore.set(key, new Map());
+              migrationKvStore.get(key).set(String(field), val);
+              results.push({ result: 1 });
+            }
+          } else if (op === 'EXPIRE') {
+            results.push({ result: 1 });
+          } else {
+            results.push({ result: 'OK' });
+          }
+        }
+        return { ok: true, json: async () => results };
+      }
+      if (u.includes('/HGETALL/')) {
+        const key = decodeURIComponent(u.split('/HGETALL/')[1]);
+        const map = migrationKvStore.get(key);
+        if (typeof map === 'string') {
+          return { ok: true, json: async () => ({ error: 'WRONGTYPE Operation against a key holding the wrong kind of value' }) };
+        }
+        const result = {};
+        if (map instanceof Map) {
+          for (const [f, v] of map.entries()) {
+            result[f] = v;
+          }
+        }
+        return { ok: true, json: async () => ({ result }) };
+      }
+      if (u.includes('/HGET/')) {
+        const parts = u.split('/HGET/')[1].split('/');
+        const key = decodeURIComponent(parts[0]);
+        const field = decodeURIComponent(parts[1]);
+        const map = migrationKvStore.get(key);
+        if (typeof map === 'string') {
+          return { ok: true, json: async () => ({ error: 'WRONGTYPE Operation against a key holding the wrong kind of value' }) };
+        }
+        const val = (map instanceof Map) ? (map.get(field) || null) : null;
+        return { ok: true, json: async () => ({ result: val }) };
+      }
+      if (u.includes('/GET/')) {
+        const key = decodeURIComponent(u.split('/GET/')[1]);
+        const val = migrationKvStore.get(key);
+        return { ok: true, json: async () => ({ result: typeof val === 'string' ? val : null }) };
+      }
+      if (u.includes('/DEL/')) {
+        const key = decodeURIComponent(u.split('/DEL/')[1]);
+        migrationKvStore.delete(key);
+        return { ok: true, json: async () => ({ result: 1 }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    };
+
+    try {
+      // 1. Test WRONGTYPE string key migration with an independent reader
+      const kvLedgerWriter = new AnonymousVoteRotationLedger({
+        restUrl: 'https://mock-kv.upstash.io',
+        restToken: 'mock_token',
+        prefix: 'qa_rot'
+      });
+      // recordVote on question 402 against an IP holding a legacy string key
+      await kvLedgerWriter.recordVote(legacyIp, 402, 'anon_voter_new_402', 60000);
+
+      // Independent reader instance connects to the same KV store
+      const kvLedgerIndependentReader = new AnonymousVoteRotationLedger({
+        restUrl: 'https://mock-kv.upstash.io',
+        restToken: 'mock_token',
+        prefix: 'qa_rot'
+      });
+      const readerVotes = await kvLedgerIndependentReader.getVotedQuestionsForIp(legacyIp);
+      const readerQaIds = new Set(readerVotes.map(v => v.qa_id));
+      assert.strictEqual(readerVotes.length, 2, 'Independent reader must find both legacy migrated question and new question');
+      assert.ok(readerQaIds.has(401), 'Migrated legacy question 401 must be preserved in Redis hash');
+      assert.ok(readerQaIds.has(402), 'Newly voted question 402 must be preserved in Redis hash');
+      assert.strictEqual(await kvLedgerIndependentReader.isOriginalVoter(legacyIp, 401, 'anon_voter_legacy_401'), true);
+      assert.strictEqual(await kvLedgerIndependentReader.isOriginalVoter(legacyIp, 402, 'anon_voter_new_402'), true);
+
+      // 2. Test Errored HSET & Fail-Closed Behavior
+      failHsetCommands = true;
+      const errorIp = '198.51.100.88';
+      let recordVoteThrew = false;
+      try {
+        await kvLedgerWriter.recordVote(errorIp, 501, 'anon_voter_fail', 60000);
+      } catch (err) {
+        recordVoteThrew = true;
+        assert.ok(err.message.includes('Redis HSET command error'), 'Must throw Redis HSET command error');
+      }
+      assert.strictEqual(recordVoteThrew, true, 'recordVote must fail closed and throw on pipeline command error');
+
+      // 3. Test HTTP route fail-closed and rollback when HSET pipeline fails
+      const errorQaRes = await request(`/api/products/${prodWithImgId}/qa`, {
+        method: 'POST',
+        body: {
+          name: 'Priya Iyer',
+          question: 'Does the pallu feature real silver zari?'
+        }
+      });
+      const errorQaId = errorQaRes.body.qa.id;
+      assert.ok(errorQaId, 'Test question for fail-closed created');
+
+      // Create an isolated router using the failing ledger
+      const failingRouter = productsRouter.createRouter({
+        db,
+        rotationLedger: kvLedgerWriter
+      });
+      const failingApp = express();
+      failingApp.use(express.json());
+      failingApp.use('/api/products', failingRouter);
+      const failingServer = http.createServer(failingApp);
+      await new Promise(resolve => failingServer.listen(0, resolve));
+      const failingPort = failingServer.address().port;
+
+      try {
+        const tokenRes = await new Promise((resolve, reject) => {
+          http.get(`http://localhost:${failingPort}/api/products/qa/voter-token`, res => {
+            let data = '';
+            res.on('data', chunk => { data += chunk; });
+            res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: JSON.parse(data) }));
+          }).on('error', reject);
+        });
+        const cookie = tokenRes.headers['set-cookie']?.[0]?.split(';')[0];
+
+        // Attempt helpful vote while HSET pipeline fails
+        const voteRes = await new Promise((resolve, reject) => {
+          const req = http.request(`http://localhost:${failingPort}/api/products/qa/${errorQaId}/helpful`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Cookie: cookie
+            }
+          }, res => {
+            let data = '';
+            res.on('data', chunk => { data += chunk; });
+            res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(data) }));
+          });
+          req.on('error', reject);
+          req.write(JSON.stringify({ voter_token: tokenRes.body.voter_token }));
+          req.end();
+        });
+
+        assert.strictEqual(voteRes.status, 500, 'Helpful vote endpoint must fail closed with HTTP 500 when shared persistence fails');
+
+        // Verify SQLite database rolled back vote and helpful_votes remained 0
+        const qaRow = db.prepare('SELECT helpful_votes FROM product_qa WHERE id = ?').get(errorQaId);
+        assert.strictEqual(qaRow.helpful_votes, 0, 'helpful_votes must remain 0 after pipeline failure rollback');
+        const voteRows = db.prepare('SELECT COUNT(*) as count FROM product_qa_votes WHERE qa_id = ?').get(errorQaId);
+        assert.strictEqual(voteRows.count, 0, 'No vote row must persist in SQLite when shared persistence fails');
+
+        // Independent reader confirms NO record was stored in KV
+        failHsetCommands = false;
+        const votesFromIndependentReader = await kvLedgerIndependentReader.getVotedQuestionsForIp('127.0.0.1');
+        assert.strictEqual(
+          votesFromIndependentReader.some(v => v.qa_id === errorQaId),
+          false,
+          'Independent reader confirms unpersisted vote was not recorded'
+        );
+      } finally {
+        failingServer.close();
+      }
+
+      console.log('✅ PASS: [P2] Redis pipeline errors fail closed, roll back unpersisted votes, and migrate legacy string keys');
+    } finally {
+      global.fetch = regressionFetch;
+    }
 
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {
