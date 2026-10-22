@@ -1855,6 +1855,7 @@ async function runTests() {
       401: { originalBrowserKey: 'anon_voter_legacy_401', expiresAt: Date.now() + 60000 }
     }));
 
+    const keyTtls = new Map();
     let failHsetCommands = false;
     let failGetCommands = false;
     global.fetch = async (url, opts) => {
@@ -1886,11 +1887,36 @@ async function runTests() {
               results.push({ result: 1 });
             }
           } else if (op === 'EXPIRE') {
-            results.push({ result: 1 });
+            const [, key, ttlStr, condition] = cmd;
+            const ttl = Number(ttlStr);
+            const currentTtl = keyTtls.get(key);
+            if (condition === 'NX') {
+              if (currentTtl === undefined) {
+                keyTtls.set(key, ttl);
+                results.push({ result: 1 });
+              } else {
+                results.push({ result: 0 });
+              }
+            } else if (condition === 'GT') {
+              if (currentTtl !== undefined && ttl > currentTtl) {
+                keyTtls.set(key, ttl);
+                results.push({ result: 1 });
+              } else {
+                results.push({ result: 0 });
+              }
+            } else {
+              keyTtls.set(key, ttl);
+              results.push({ result: 1 });
+            }
           } else if (op === 'DEL') {
             const [, key] = cmd;
             migrationKvStore.delete(key);
+            keyTtls.delete(key);
             results.push({ result: 1 });
+          } else if (op === 'TTL') {
+            const [, key] = cmd;
+            const ttl = keyTtls.get(key);
+            results.push({ result: ttl !== undefined ? ttl : -2 });
           } else {
             results.push({ result: 'OK' });
           }
@@ -1930,9 +1956,25 @@ async function runTests() {
         const val = migrationKvStore.get(key);
         return { ok: true, json: async () => ({ result: typeof val === 'string' ? val : null }) };
       }
+      if (u.includes('/TTL/')) {
+        const key = decodeURIComponent(u.split('/TTL/')[1]);
+        const ttl = keyTtls.get(key);
+        return { ok: true, json: async () => ({ result: ttl !== undefined ? ttl : -2 }) };
+      }
       if (u.includes('/DEL/')) {
         const key = decodeURIComponent(u.split('/DEL/')[1]);
         migrationKvStore.delete(key);
+        keyTtls.delete(key);
+        return { ok: true, json: async () => ({ result: 1 }) };
+      }
+      if (u.includes('/HDEL/')) {
+        const parts = u.split('/HDEL/')[1].split('/');
+        const key = decodeURIComponent(parts[0]);
+        const field = decodeURIComponent(parts[1]);
+        const map = migrationKvStore.get(key);
+        if (map instanceof Map) {
+          map.delete(field);
+        }
         return { ok: true, json: async () => ({ result: 1 }) };
       }
       return { ok: true, json: async () => ({}) };
@@ -1999,7 +2041,7 @@ async function runTests() {
 
       try {
         const tokenRes = await new Promise((resolve, reject) => {
-          http.get(`http://localhost:${failingPort}/api/products/qa/voter-token`, res => {
+          http.get(`http://127.0.0.1:${failingPort}/api/products/qa/voter-token`, res => {
             let data = '';
             res.on('data', chunk => { data += chunk; });
             res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: JSON.parse(data) }));
@@ -2009,7 +2051,7 @@ async function runTests() {
 
         // Attempt helpful vote while HSET pipeline fails
         const voteRes = await new Promise((resolve, reject) => {
-          const req = http.request(`http://localhost:${failingPort}/api/products/qa/${errorQaId}/helpful`, {
+          const req = http.request(`http://127.0.0.1:${failingPort}/api/products/qa/${errorQaId}/helpful`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -2033,13 +2075,51 @@ async function runTests() {
         const voteRows = db.prepare('SELECT COUNT(*) as count FROM product_qa_votes WHERE qa_id = ?').get(errorQaId);
         assert.strictEqual(voteRows.count, 0, 'No vote row must persist in SQLite when shared persistence fails');
 
-        // Independent reader confirms NO record was stored in KV
+        // Verify rotation ledger rollback in local memory and SQLite table
+        const ledgerLocalEntries = kvLedgerWriter.localStore.get('127.0.0.1');
+        assert.strictEqual(ledgerLocalEntries?.has(errorQaId) || false, false, 'Failed vote must not remain in localStore');
+        const ledgerDbRow = db.prepare('SELECT COUNT(*) as count FROM anonymous_vote_rotation_ledger WHERE qa_id = ?').get(errorQaId);
+        assert.strictEqual(ledgerDbRow.count, 0, 'Failed vote must not remain in anonymous_vote_rotation_ledger table');
+
+        // Fail-then-retry & token renewal:
+        // 1. Token renewal succeeds without prior vote suppression
+        const renewedTokenRes = await new Promise((resolve, reject) => {
+          http.get(`http://127.0.0.1:${failingPort}/api/products/qa/voter-token`, {
+            headers: { Cookie: cookie }
+          }, res => {
+            let data = '';
+            res.on('data', chunk => { data += chunk; });
+            res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(data) }));
+          }).on('error', reject);
+        });
+        assert.strictEqual(renewedTokenRes.status, 200, 'Token renewal must succeed');
+
+        // 2. Recover shared persistence and retry vote
         failHsetCommands = false;
+        const retryVoteRes = await new Promise((resolve, reject) => {
+          const req = http.request(`http://127.0.0.1:${failingPort}/api/products/qa/${errorQaId}/helpful`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Cookie: cookie
+            }
+          }, res => {
+            let data = '';
+            res.on('data', chunk => { data += chunk; });
+            res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(data) }));
+          });
+          req.on('error', reject);
+          req.write(JSON.stringify({ voter_token: renewedTokenRes.body.voter_token }));
+          req.end();
+        });
+        assert.strictEqual(retryVoteRes.status, 200, 'Retry vote after recovery must succeed with HTTP 200');
+        assert.strictEqual(retryVoteRes.body.helpful_votes, 1, 'helpful_votes must increment to 1 on retry');
+
         const votesFromIndependentReader = await kvLedgerIndependentReader.getVotedQuestionsForIp('127.0.0.1');
         assert.strictEqual(
           votesFromIndependentReader.some(v => v.qa_id === errorQaId),
-          false,
-          'Independent reader confirms unpersisted vote was not recorded'
+          true,
+          'Independent reader confirms vote was recorded after recovery'
         );
         // 4. Test failed migration pipeline preserves legacy source key and independent reader continues to see legacy votes
         const failedMigIp = '198.51.100.222';
@@ -2164,6 +2244,67 @@ async function runTests() {
           migrationKvStore.has(legacyErrKey),
           false,
           'Legacy source key must be deleted only after successful recovery'
+        );
+
+        // 6. Test concurrent reader/writer TTL preservation on v2 hash migration
+        const concIp = '198.51.100.244';
+        const concLegacyKey = 'palluvo:qa_rot:ip:' + concIp;
+        const concV2Key = 'palluvo:qa_rot:v2:ip:' + concIp;
+        // Pre-populate legacy key with 45s remaining TTL
+        migrationKvStore.set(concLegacyKey, JSON.stringify({
+          405: { originalBrowserKey: 'anon_voter_legacy_405', expiresAt: Date.now() + 45000 }
+        }));
+        keyTtls.set(concLegacyKey, 45);
+
+        // Instance B writes a fresh vote with 24-hour TTL (86400s) to the v2 hash
+        const concWriter = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+        await concWriter.recordVote(concIp, 406, 'anon_voter_fresh_406', 86400000);
+        assert.strictEqual(keyTtls.get(concV2Key), 86400, 'Fresh vote sets 86400s TTL on v2 hash');
+
+        // Instance A (reader) triggers lazy migration on getVotedQuestionsForIp
+        const concReader = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+        const concVotes = await concReader.getVotedQuestionsForIp(concIp);
+        const concQaIds = new Set(concVotes.map(v => v.qa_id));
+        assert.ok(concQaIds.has(405), 'Migrated legacy question 405 present');
+        assert.ok(concQaIds.has(406), 'Fresh question 406 present');
+
+        // Verify that the v2 hash TTL was NOT shortened from 86400 to 45!
+        assert.strictEqual(
+          keyTtls.get(concV2Key),
+          86400,
+          'Lazy migration MUST NOT shorten existing v2 destination TTL from stale legacy snapshot'
+        );
+
+        // Analogous path: test concurrent write and getVoteRecord migration path
+        const concIp2 = '198.51.100.245';
+        const concLegacyKey2 = 'palluvo:qa_rot:ip:' + concIp2;
+        const concV2Key2 = 'palluvo:qa_rot:v2:ip:' + concIp2;
+        migrationKvStore.set(concLegacyKey2, JSON.stringify({
+          407: { originalBrowserKey: 'anon_voter_legacy_407', expiresAt: Date.now() + 30000 }
+        }));
+        keyTtls.set(concLegacyKey2, 30);
+
+        await concWriter.recordVote(concIp2, 408, 'anon_voter_fresh_408', 86400000);
+        assert.strictEqual(keyTtls.get(concV2Key2), 86400);
+
+        // Reader calls getVoteRecord on legacy question
+        const record407 = await concReader.getVoteRecord(concIp2, 407);
+        assert.strictEqual(record407.qa_id, 407);
+        assert.strictEqual(record407.original_browser_key, 'anon_voter_legacy_407');
+
+        // Verify v2 hash TTL was not shortened to 30s
+        assert.strictEqual(
+          keyTtls.get(concV2Key2),
+          86400,
+          'getVoteRecord migration MUST NOT shorten existing v2 destination TTL'
         );
       } finally {
         failingServer.close();

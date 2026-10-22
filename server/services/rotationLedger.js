@@ -126,38 +126,41 @@ class AnonymousVoteRotationLedger {
     this.pruneDb();
   }
 
+  async rollbackVote(clientIp, qaId) {
+    if (!clientIp || !qaId) return;
+    const numericQaId = Number(qaId);
+    this.pruneLocal();
+    const localMap = this.localStore.get(clientIp);
+    if (localMap) {
+      localMap.delete(numericQaId);
+      if (localMap.size === 0) {
+        this.localStore.delete(clientIp);
+      }
+    }
+    try {
+      const activeDb = this.db;
+      if (activeDb && typeof activeDb.prepare === 'function') {
+        activeDb.prepare('DELETE FROM anonymous_vote_rotation_ledger WHERE client_ip = ? AND qa_id = ?').run(clientIp, numericQaId);
+      }
+    } catch (e) {}
+    if (this.isShared && this.restUrl && this.restToken) {
+      try {
+        const fullKey = this.getKey(clientIp);
+        await fetch(`${this.restUrl}/HDEL/${encodeURIComponent(fullKey)}/${encodeURIComponent(String(numericQaId))}`, {
+          headers: { Authorization: `Bearer ${this.restToken}` }
+        }).catch(() => {});
+      } catch (e) {}
+    }
+  }
+
   async recordVote(clientIp, qaId, originalBrowserKey, ttlMs = this.defaultTtlMs) {
     if (!clientIp || !qaId) return;
     const numericQaId = Number(qaId);
     const expiresAt = Date.now() + ttlMs;
     const windowSec = Math.max(1, Math.ceil(ttlMs / 1000));
 
-    // 1. In-memory local fallback (with automatic prune)
-    this.pruneLocal();
-    if (!this.localStore.has(clientIp)) {
-      this.localStore.set(clientIp, new Map());
-    }
-    this.localStore.get(clientIp).set(numericQaId, {
-      originalBrowserKey: originalBrowserKey || '',
-      expiresAt
-    });
-
-    // 2. Persistent SQLite DB storage
-    try {
-      const activeDb = this.db;
-      if (activeDb && typeof activeDb.prepare === 'function') {
-        this.pruneDb();
-        activeDb.prepare(`
-          INSERT INTO anonymous_vote_rotation_ledger (client_ip, qa_id, original_browser_key, expires_at)
-          VALUES (?, ?, ?, ?)
-          ON CONFLICT(client_ip, qa_id) DO UPDATE SET
-            original_browser_key = excluded.original_browser_key,
-            expires_at = excluded.expires_at
-        `).run(clientIp, numericQaId, originalBrowserKey || '', expiresAt);
-      }
-    } catch (e) {}
-
-    // 3. Shared KV/Redis storage: atomic HSET per (IP, question) association with TTL
+    // 1. Shared KV/Redis storage: atomic HSET per (IP, question) association with TTL
+    // Must succeed BEFORE committing to process-local Map or SQLite ledger to prevent dirty read states on failure
     if (this.isShared && this.restUrl && this.restToken) {
       const fullKey = this.getKey(clientIp);
       const payload = JSON.stringify({
@@ -249,6 +252,31 @@ class AnonymousVoteRotationLedger {
         }).catch(() => {});
       }
     }
+
+    // 2. In-memory local fallback (commit ONLY after shared storage succeeds)
+    this.pruneLocal();
+    if (!this.localStore.has(clientIp)) {
+      this.localStore.set(clientIp, new Map());
+    }
+    this.localStore.get(clientIp).set(numericQaId, {
+      originalBrowserKey: originalBrowserKey || '',
+      expiresAt
+    });
+
+    // 3. Persistent SQLite DB storage (commit ONLY after shared storage succeeds)
+    try {
+      const activeDb = this.db;
+      if (activeDb && typeof activeDb.prepare === 'function') {
+        this.pruneDb();
+        activeDb.prepare(`
+          INSERT INTO anonymous_vote_rotation_ledger (client_ip, qa_id, original_browser_key, expires_at)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(client_ip, qa_id) DO UPDATE SET
+            original_browser_key = excluded.original_browser_key,
+            expires_at = excluded.expires_at
+        `).run(clientIp, numericQaId, originalBrowserKey || '', expiresAt);
+      }
+    } catch (e) {}
   }
 
   async getVotedQuestionsForIp(clientIp) {
@@ -291,7 +319,8 @@ class AnonymousVoteRotationLedger {
               1,
               Math.ceil(Math.max(...Array.from(inPlaceEntries.values()).map(e => e.expiresAt - now)) / 1000)
             );
-            inPlaceCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec]);
+            inPlaceCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'NX']);
+            inPlaceCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'GT']);
             await this.executePipeline(inPlaceCommands);
           }
         } else {
@@ -307,6 +336,7 @@ class AnonymousVoteRotationLedger {
           entries = Object.entries(getData.result);
         }
 
+        const existingExpires = [];
         for (const [k, v] of entries) {
           try {
             const parsed = typeof v === 'string' ? JSON.parse(v) : v;
@@ -316,6 +346,7 @@ class AnonymousVoteRotationLedger {
                 qa_id: qid,
                 original_browser_key: parsed.originalBrowserKey
               });
+              existingExpires.push(parsed.expiresAt);
             }
           } catch (e) {}
         }
@@ -340,11 +371,16 @@ class AnonymousVoteRotationLedger {
               })
             ]);
           }
+          const allExpires = [
+            ...Array.from(legacyEntries.values()).map(e => e.expiresAt)
+          ];
           const maxRemainingTtlSec = Math.max(
             1,
-            Math.ceil(Math.max(...Array.from(legacyEntries.values()).map(e => e.expiresAt - now)) / 1000)
+            Math.ceil(Math.max(...allExpires.map(e => e - now)) / 1000)
           );
-          migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec]);
+          // Atomically preserve destination TTL without shortening from stale legacy snapshot
+          migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'NX']);
+          migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'GT']);
 
           // CONFIRM destination write first! If pipeline fails, executePipeline throws and legacyKey is kept intact!
           await this.executePipeline(migrationCommands);
@@ -443,7 +479,8 @@ class AnonymousVoteRotationLedger {
               1,
               Math.ceil(Math.max(...Array.from(inPlaceEntries.values()).map(e => e.expiresAt - now)) / 1000)
             );
-            inPlaceCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec]);
+            inPlaceCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'NX']);
+            inPlaceCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'GT']);
             await this.executePipeline(inPlaceCommands);
           }
           const match = inPlaceEntries.get(numericQaId);
@@ -491,7 +528,9 @@ class AnonymousVoteRotationLedger {
             1,
             Math.ceil(Math.max(...Array.from(legacyEntries.values()).map(e => e.expiresAt - now)) / 1000)
           );
-          migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec]);
+          // Atomically preserve destination TTL without shortening from stale legacy snapshot
+          migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'NX']);
+          migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'GT']);
 
           // Verify destination write before deleting source key
           await this.executePipeline(migrationCommands);
