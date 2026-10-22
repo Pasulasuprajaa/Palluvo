@@ -146,9 +146,8 @@ export default function HomePage({ onNavigate }) {
               Discover timeless handloom sarees, woven in pure zari and raw silk by master artisans.
             </p>
 
-            {/* CTAs: Primary & Secondary */}
-            <div className="mt-3.5 sm:mt-5 flex flex-row flex-wrap items-center gap-2.5 sm:gap-4 w-full sm:w-auto pointer-events-auto">
-              {/* Primary CTA */}
+            {/* Primary Luxury CTA */}
+            <div className="mt-3.5 sm:mt-5 flex items-center w-full sm:w-auto pointer-events-auto">
               <a
                 href="/sarees"
                 onClick={(e) => {
@@ -156,27 +155,10 @@ export default function HomePage({ onNavigate }) {
                   e.preventDefault();
                   onNavigate('shop');
                 }}
-                className="group relative inline-flex items-center justify-center gap-2 px-5 sm:px-7 py-2.5 sm:py-3.5 min-h-[44px] bg-[#6F1428] hover:bg-[#8E1B35] text-[#FAF7F0] font-bold text-xs sm:text-sm uppercase tracking-wider rounded-xl border border-[#C6A15B]/50 hover:border-[#C6A15B] transition-all duration-300 shadow-[0_4px_16px_rgba(111,20,40,0.35)] hover:shadow-[0_6px_22px_rgba(111,20,40,0.55)] cursor-pointer text-center active:scale-[0.98]"
+                className="group relative inline-flex items-center justify-center gap-2.5 px-6 sm:px-8 py-3 sm:py-3.5 min-h-[46px] bg-gradient-to-r from-[#6F1428] via-[#7F1830] to-[#5B1020] hover:from-[#821831] hover:to-[#6F1428] text-[#FAF7F0] font-bold text-xs sm:text-sm uppercase tracking-wider rounded-xl border border-[#C6A15B]/60 hover:border-[#F3E5AB] transition-all duration-300 shadow-[0_4px_20px_rgba(111,20,40,0.45),0_0_12px_rgba(198,161,91,0.2)] hover:shadow-[0_6px_26px_rgba(111,20,40,0.65),0_0_18px_rgba(198,161,91,0.35)] cursor-pointer text-center active:scale-[0.98]"
               >
                 <span>EXPLORE SAREES</span>
                 <ArrowRight className="w-4 h-4 text-[#C6A15B] shrink-0 transition-transform duration-300 group-hover:translate-x-1.5" />
-              </a>
-
-              {/* Secondary CTA */}
-              <a
-                href="#craft-section"
-                onClick={(e) => {
-                  e.preventDefault();
-                  const el = document.getElementById('craft-section');
-                  if (el) {
-                    el.scrollIntoView({ behavior: 'smooth' });
-                  } else {
-                    onNavigate('shop');
-                  }
-                }}
-                className="inline-flex items-center justify-center px-4 sm:px-6 py-2.5 sm:py-3.5 min-h-[44px] bg-[#251B19]/50 hover:bg-white/10 backdrop-blur-xs text-[#FAF7F0] hover:text-[#FAF7F0] font-semibold text-xs sm:text-sm uppercase tracking-wider rounded-xl border border-[#E8D9B5]/40 hover:border-[#C6A15B] transition-all duration-300 cursor-pointer text-center active:scale-[0.98]"
-              >
-                <span>DISCOVER OUR CRAFT</span>
               </a>
             </div>
 
