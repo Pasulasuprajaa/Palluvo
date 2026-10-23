@@ -3066,7 +3066,36 @@ async function runTests() {
       assert.strictEqual(pin79Res.body.state, null, 'Multi-state prefix 79 must keep state null');
       assert.strictEqual(pin79Res.body.location, 'North Eastern States');
 
-      console.log('✅ PASS: [P2] PIN serviceability rejects invalid PINs, normalizes schema for UI, resolves exact mixed PINs, and keeps mixed prefixes unknown');
+      // 7. Exact PIN 160017 (Chandigarh GPO) must return Chandigarh UT, not Punjab
+      const pin160Res = await request('/api/pincode/check/160017');
+      assert.strictEqual(pin160Res.status, 200);
+      assert.strictEqual(pin160Res.body.valid, true);
+      assert.strictEqual(pin160Res.body.verified, true);
+      assert.strictEqual(pin160Res.body.serviceable, true);
+      assert.strictEqual(pin160Res.body.city, 'Chandigarh');
+      assert.strictEqual(pin160Res.body.state, 'Chandigarh', 'PIN 160017 must return Chandigarh UT instead of Punjab');
+      assert.strictEqual(pin160Res.body.location, 'Chandigarh');
+
+      // 8. Mixed prefix 26 (Rohilkhand & Kumaon) handling
+      // Unlisted PIN 263001 (Nainital) under mixed prefix 26 must keep state unknown (null)
+      // instead of falsely attributing to Uttar Pradesh
+      const pin263Res = await request('/api/pincode/check/263001');
+      assert.strictEqual(pin263Res.status, 200);
+      assert.strictEqual(pin263Res.body.valid, true);
+      assert.strictEqual(pin263Res.body.verified, false);
+      assert.strictEqual(pin263Res.body.serviceable, false);
+      assert.strictEqual(pin263Res.body.is_estimate, true);
+      assert.strictEqual(pin263Res.body.state, null, 'Unlisted PIN 263001 under mixed prefix 26 must not assign Uttar Pradesh');
+      assert.strictEqual(pin263Res.body.location, 'Rohilkhand & Kumaon');
+
+      // Unlisted PIN under mixed prefix 16 must keep state unknown (null)
+      const pin160000Res = await request('/api/pincode/check/160000');
+      assert.strictEqual(pin160000Res.status, 200);
+      assert.strictEqual(pin160000Res.body.valid, true);
+      assert.strictEqual(pin160000Res.body.is_estimate, true);
+      assert.strictEqual(pin160000Res.body.state, null, 'Unlisted PIN under prefix 16 must keep state null');
+
+      console.log('✅ PASS: [P2] PIN serviceability rejects invalid PINs, normalizes schema for UI, resolves exact mixed PINs (Chandigarh UT), and keeps mixed prefixes (24, 26, 16, 79) unknown');
     } finally {
       global.fetch = regressionFetch;
     }

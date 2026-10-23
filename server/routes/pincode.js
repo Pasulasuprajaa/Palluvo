@@ -102,7 +102,7 @@ const VERIFIED_DELIVERY_OFFICES = {
   '682016': { city: 'Kochi', state: 'Kerala', days: '2-3 Business Days', hub: 'Ernakulam South Hub', codAvailable: true, expressAvailable: true },
   '226001': { city: 'Lucknow', state: 'Uttar Pradesh', days: '2-3 Business Days', hub: 'Lucknow Central Hub', codAvailable: true, expressAvailable: true },
   '221001': { city: 'Varanasi', state: 'Uttar Pradesh', days: '2-3 Business Days', hub: 'Varanasi Silk Hub', codAvailable: true, expressAvailable: true },
-  '160017': { city: 'Chandigarh', state: 'Punjab', days: '2-3 Business Days', hub: 'Chandigarh Central Hub', codAvailable: true, expressAvailable: true },
+  '160017': { city: 'Chandigarh', state: 'Chandigarh', days: '2-3 Business Days', hub: 'Chandigarh Central Hub', codAvailable: true, expressAvailable: true },
   '452001': { city: 'Indore', state: 'Madhya Pradesh', days: '2-3 Business Days', hub: 'Indore Central Hub', codAvailable: true, expressAvailable: true },
   '751001': { city: 'Bhubaneswar', state: 'Odisha', days: '3-4 Business Days', hub: 'Bhubaneswar Central Hub', codAvailable: true, expressAvailable: true },
   '800001': { city: 'Patna', state: 'Bihar', days: '3-4 Business Days', hub: 'Patna Central Hub', codAvailable: true, expressAvailable: true },
@@ -116,7 +116,8 @@ const POSTAL_CIRCLES = {
   '13': { region: 'Haryana Circle', state: 'Haryana' },
   '14': { region: 'Punjab Circle', state: 'Punjab' },
   '15': { region: 'Punjab Circle', state: 'Punjab' },
-  '16': { region: 'Chandigarh & Punjab', state: 'Punjab' },
+  // Mixed prefix: 16 covers both Chandigarh (Union Territory) and Punjab Circle
+  '16': { region: 'Chandigarh & Punjab', state: null },
   '17': { region: 'Himachal Pradesh Circle', state: 'Himachal Pradesh' },
   '18': { region: 'Jammu & Kashmir Circle', state: 'Jammu and Kashmir' },
   '19': { region: 'Jammu & Kashmir Circle', state: 'Jammu and Kashmir' },
@@ -128,7 +129,9 @@ const POSTAL_CIRCLES = {
   // State is kept unknown (null) unless resolved from an exact-PIN source
   '24': { region: 'Uttarakhand & Western UP', state: null },
   '25': { region: 'Western Uttar Pradesh', state: 'Uttar Pradesh' },
-  '26': { region: 'Rohilkhand & Kumaon', state: 'Uttar Pradesh' },
+  // Mixed-state prefix: 26 covers both Rohilkhand (Bareilly, Pilibhit in UP) and Kumaon (Nainital, Almora in Uttarakhand)
+  // State is kept unknown (null) unless resolved from an exact-PIN source
+  '26': { region: 'Rohilkhand & Kumaon', state: null },
   '27': { region: 'Eastern Uttar Pradesh', state: 'Uttar Pradesh' },
   '28': { region: 'Bundelkhand & Agra', state: 'Uttar Pradesh' },
   '30': { region: 'Rajasthan Circle', state: 'Rajasthan' },
@@ -204,7 +207,7 @@ router.get('/check/:pincode', (req, res) => {
   if (verifiedOffice) {
     const city = verifiedOffice.city;
     const state = verifiedOffice.state;
-    const location = `${city}, ${state}`;
+    const location = city && state && city !== state ? `${city}, ${state}` : (city || state);
     const days = verifiedOffice.days;
 
     return res.json({
