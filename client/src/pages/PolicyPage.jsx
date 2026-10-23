@@ -102,7 +102,7 @@ export default function PolicyPage({ initialTab = 'privacy', onNavigate }) {
                 <div className="space-y-4">
                   <h3 className="font-serif text-lg font-bold text-[#1F1A1C]">3. Data Protection & Confidentiality</h3>
                   <p>
-                    PALLUVO employs 256-bit SSL encryption across all browsing sessions and API endpoints. We never sell, rent, or trade your personal information to third-party advertisers. Data is shared exclusively with verified logistics partners (such as BlueDart, Delhivery, and DHL Express) solely for dispatch fulfillment.
+                    PALLUVO employs 256-bit SSL encryption across all browsing sessions and API endpoints. We never sell, rent, or trade your personal information to third-party advertisers. Data is shared exclusively with verified logistics partners (such as BlueDart, Delhivery, and Xpressbees) solely for dispatch fulfillment.
                   </p>
                 </div>
 
@@ -172,7 +172,7 @@ export default function PolicyPage({ initialTab = 'privacy', onNavigate }) {
                 <div className="space-y-4">
                   <h3 className="font-serif text-lg font-bold text-[#1F1A1C]">1. Complimentary Insured Shipping</h3>
                   <p>
-                    We offer complimentary insured express shipping across all major Indian pincodes on orders above ₹2,500. Every saree is packed in our signature rigid burgundy keepsake box with breathable muslin fabric wrapping to safeguard silk and zari luster.
+                    We offer complimentary insured express shipping across all major Indian pincodes on orders of ₹1,999 or more (a standard delivery fee of ₹150 applies to orders below ₹1,999). Every saree is packed in our signature rigid burgundy keepsake box with breathable muslin fabric wrapping to safeguard silk and zari luster.
                   </p>
                 </div>
 
@@ -197,11 +197,6 @@ export default function PolicyPage({ initialTab = 'privacy', onNavigate }) {
                           <td className="p-3 font-medium">Tier II & Tier III Cities</td>
                           <td className="p-3">4 - 6 Business Days</td>
                           <td className="p-3">Delhivery / Xpressbees</td>
-                        </tr>
-                        <tr>
-                          <td className="p-3 font-medium">International Destinations (US, UK, UAE, Singapore, Australia)</td>
-                          <td className="p-3">6 - 9 Business Days</td>
-                          <td className="p-3">DHL Express / FedEx Priority</td>
                         </tr>
                       </tbody>
                     </table>
