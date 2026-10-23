@@ -28,6 +28,7 @@ const ordersRouter = require('../routes/orders');
 const adminRouter = require('../routes/admin');
 const reviewsRouter = require('../routes/reviews');
 const productsRouter = require('../routes/products');
+const pincodeRouter = require('../routes/pincode');
 const { getMetaForRoute, injectMetaTags } = require('../services/seoRenderer');
 const { reconcilePendingRefunds, reconcileExpiredReservations } = paymentsRouter;
 const {
@@ -54,6 +55,7 @@ async function runTests() {
     app.use('/api/admin', adminRouter);
     app.use('/api/reviews', reviewsRouter);
     app.use('/api/products', productsRouter);
+    app.use('/api/pincode', pincodeRouter);
     app.get('/api/render', (req, res, next) => {
       if (req.query.path !== undefined && typeof req.query.path !== 'string') {
         return res.status(400).json({
@@ -2938,6 +2940,73 @@ async function runTests() {
       }
 
       console.log('✅ PASS: [P2] Redis pipeline errors fail closed, roll back unpersisted votes, and migrate legacy string keys');
+
+      // --- Testing [P2] PIN Code Serviceability & Schema Alignment ---
+      console.log('\n--- Testing [P2] PIN Code Serviceability & Schema Alignment ---');
+
+      // 1. PIN 000000 and invalid formats must return HTTP 400 and reject unserviceable / non-existent PINs
+      const pin0Res = await request('/api/pincode/check/000000');
+      assert.strictEqual(pin0Res.status, 400, 'PIN 000000 must be rejected with HTTP 400');
+      assert.strictEqual(pin0Res.body.valid, false, 'PIN 000000 valid must be false');
+      assert.strictEqual(pin0Res.body.serviceable, false, 'PIN 000000 serviceable must be false');
+      assert.ok(pin0Res.body.error, 'Must provide an error message for 000000');
+
+      const pinShortRes = await request('/api/pincode/check/5600');
+      assert.strictEqual(pinShortRes.status, 400, 'Short PIN must be rejected with HTTP 400');
+
+      const pinAlphaRes = await request('/api/pincode/check/abcdef');
+      assert.strictEqual(pinAlphaRes.status, 400, 'Non-digit PIN must be rejected with HTTP 400');
+
+      const pinInvalidCircleRes = await request('/api/pincode/check/999999');
+      assert.strictEqual(pinInvalidCircleRes.status, 400, 'Non-existent postal circle 999999 must return HTTP 400');
+
+      // 2. Authoritative verified express hub (e.g. 560001 Bengaluru) must return normalized schema matching UI
+      const pin560Res = await request('/api/pincode/check/560001');
+      assert.strictEqual(pin560Res.status, 200, 'Verified PIN must return HTTP 200');
+      assert.strictEqual(pin560Res.body.valid, true);
+      assert.strictEqual(pin560Res.body.serviceable, true);
+      assert.strictEqual(pin560Res.body.verified, true);
+      assert.strictEqual(pin560Res.body.is_estimate, false);
+
+      // Verify that all fields accessed by the frontend UI exist and are populated
+      assert.strictEqual(pin560Res.body.city, 'Bengaluru', 'city field must be non-empty for UI');
+      assert.strictEqual(pin560Res.body.state, 'Karnataka', 'state field must be non-empty for UI');
+      assert.strictEqual(pin560Res.body.location, 'Bengaluru, Karnataka', 'location field must match city, state');
+      assert.strictEqual(pin560Res.body.estimated_delivery, '1-2 Business Days', 'estimated_delivery must be populated for UI');
+      assert.strictEqual(pin560Res.body.estimatedDays, '1-2 Business Days', 'estimatedDays must match estimated_delivery');
+      assert.strictEqual(pin560Res.body.deliveryDate, 'Delivery in 1-2 Business Days');
+      assert.strictEqual(pin560Res.body.codAvailable, true, 'Verified hub must confirm COD availability');
+      assert.strictEqual(pin560Res.body.expressAvailable, true);
+
+      // Verify frontend template expressions resolve cleanly without empty values:
+      const renderedLocation = pin560Res.body.city && pin560Res.body.state
+        ? `${pin560Res.body.city}, ${pin560Res.body.state}`
+        : (pin560Res.body.location || pin560Res.body.city);
+      const renderedDelivery = pin560Res.body.estimated_delivery || pin560Res.body.deliveryDate || pin560Res.body.estimatedDays;
+      assert.strictEqual(renderedLocation, 'Bengaluru, Karnataka', 'Rendered location string must be non-empty and accurate');
+      assert.strictEqual(renderedDelivery, '1-2 Business Days', 'Rendered delivery string must be non-empty and accurate');
+
+      // 3. Flagship center Warangal (506001)
+      const pin506Res = await request('/api/pincode/check/506001');
+      assert.strictEqual(pin506Res.status, 200);
+      assert.strictEqual(pin506Res.body.city, 'Warangal');
+      assert.strictEqual(pin506Res.body.state, 'Telangana');
+      assert.strictEqual(pin506Res.body.verified, true);
+      assert.strictEqual(pin506Res.body.codAvailable, true);
+
+      // 4. Regional postal circle estimate (171001 Himachal Pradesh - unverified hub)
+      const pin171Res = await request('/api/pincode/check/171001');
+      assert.strictEqual(pin171Res.status, 200, 'Valid circle must return HTTP 200');
+      assert.strictEqual(pin171Res.body.valid, true);
+      assert.strictEqual(pin171Res.body.serviceable, true);
+      assert.strictEqual(pin171Res.body.verified, false, 'Non-verified hub must NOT be marked verified');
+      assert.strictEqual(pin171Res.body.is_estimate, true, 'Non-verified hub must be marked is_estimate');
+      assert.strictEqual(pin171Res.body.codAvailable, false, 'Non-verified hub must NOT assert COD availability');
+      assert.strictEqual(pin171Res.body.expressAvailable, false, 'Non-verified hub must NOT assert express availability');
+      assert.ok(pin171Res.body.estimated_delivery, 'Must provide estimated_delivery');
+      assert.ok(pin171Res.body.state, 'Must provide state');
+
+      console.log('✅ PASS: [P2] PIN serviceability rejects invalid PINs, normalizes schema for UI, and distinguishes verified hubs from estimates');
     } finally {
       global.fetch = regressionFetch;
     }

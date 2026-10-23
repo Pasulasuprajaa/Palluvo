@@ -192,13 +192,16 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
       setCheckingPin(true);
       const res = await fetch(`/api/pincode/check/${pincode}`);
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data.valid && data.serviceable !== false) {
         setPincodeResult(data);
       } else {
+        setPincodeResult(null);
         showToast(data.error || 'Pincode not serviceable', 'error');
       }
     } catch (err) {
       console.error(err);
+      setPincodeResult(null);
+      showToast('Failed to check pincode', 'error');
     } finally {
       setCheckingPin(false);
     }
@@ -663,15 +666,27 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
             </form>
 
             {pincodeResult && (
-              <div className="mt-2 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
-                <div className="flex items-center gap-1 font-bold">
-                  <Check className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Delivery available in {pincodeResult.city}, {pincodeResult.state}</span>
+              pincodeResult.is_estimate ? (
+                <div className="mt-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
+                  <div className="flex items-center gap-1 font-bold text-amber-900">
+                    <Clock className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Estimated delivery for {pincodeResult.city && pincodeResult.state ? `${pincodeResult.city}, ${pincodeResult.state}` : (pincodeResult.location || pincodeResult.city || 'your area')}</span>
+                  </div>
+                  <div className="text-[11px] text-amber-800">
+                    Estimated Timeline: <strong>{pincodeResult.estimated_delivery || pincodeResult.deliveryDate || pincodeResult.estimatedDays}</strong> | Final availability confirmed at checkout
+                  </div>
                 </div>
-                <div className="text-[11px] text-emerald-800">
-                  Estimated Delivery: <strong>{pincodeResult.estimated_delivery}</strong> | Cash on Delivery: <strong>Available</strong>
+              ) : (
+                <div className="mt-2 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+                  <div className="flex items-center gap-1 font-bold">
+                    <Check className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Delivery available in {pincodeResult.city && pincodeResult.state ? `${pincodeResult.city}, ${pincodeResult.state}` : (pincodeResult.location || pincodeResult.city || 'your area')}</span>
+                  </div>
+                  <div className="text-[11px] text-emerald-800">
+                    Estimated Delivery: <strong>{pincodeResult.estimated_delivery || pincodeResult.deliveryDate || pincodeResult.estimatedDays}</strong> | Cash on Delivery: <strong>{pincodeResult.codAvailable ? 'Available' : 'Unavailable'}</strong>
+                  </div>
                 </div>
-              </div>
+              )
             )}
           </div>
 
