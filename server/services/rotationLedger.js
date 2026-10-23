@@ -211,6 +211,47 @@ class AnonymousVoteRotationLedger {
     return snapshot.entries;
   }
 
+  async readV2HashEntries(fullKey) {
+    if (!this.isShared || !this.restUrl || !this.restToken) {
+      return new Map();
+    }
+    const entries = new Map();
+    const getRes = await fetch(`${this.restUrl}/HGETALL/${encodeURIComponent(fullKey)}`, {
+      headers: { Authorization: `Bearer ${this.restToken}` }
+    });
+    if (!getRes.ok) {
+      throw new Error(`Redis HGETALL HTTP status ${getRes.status}`);
+    }
+    const getData = await getRes.json();
+    if (getData?.error) {
+      if (typeof getData.error === 'string' && getData.error.includes('WRONGTYPE')) {
+        return entries;
+      }
+      throw new Error(`Redis HGETALL command error: ${getData.error}`);
+    }
+    let rawEntries = [];
+    if (Array.isArray(getData.result)) {
+      for (let i = 0; i < getData.result.length; i += 2) {
+        rawEntries.push([getData.result[i], getData.result[i + 1]]);
+      }
+    } else if (getData.result && typeof getData.result === 'object') {
+      rawEntries = Object.entries(getData.result);
+    }
+    const now = Date.now();
+    for (const [k, v] of rawEntries) {
+      try {
+        const parsed = typeof v === 'string' ? JSON.parse(v) : v;
+        if (parsed && parsed.expiresAt > now) {
+          entries.set(Number(k), {
+            originalBrowserKey: parsed.originalBrowserKey || '',
+            expiresAt: parsed.expiresAt
+          });
+        }
+      } catch (e) {}
+    }
+    return entries;
+  }
+
   async migrateLegacyKey(clientIp, fullKey, options = {}) {
     const migratedVotes = new Map();
     if (!this.isShared || !this.restUrl || !this.restToken || !this.prefix.endsWith(':v2')) {
@@ -227,6 +268,7 @@ class AnonymousVoteRotationLedger {
     let retries = 0;
     const maxRetries = options.maxRetries !== undefined ? options.maxRetries : 5;
     let migrationComplete = false;
+    let pendingCadSnapshot = null;
 
     while (retries <= maxRetries) {
       const now = Date.now();
@@ -269,6 +311,16 @@ class AnonymousVoteRotationLedger {
         }
       }
 
+      const skippedEntryPresent = Boolean(options.skipQaId && snapshot.entries.has(options.skipQaId));
+      if (skippedEntryPresent) {
+        // A legacy vote for skipQaId exists and was skipped from migration.
+        // DO NOT delete the legacy source key yet! If the subsequent write for skipQaId fails,
+        // the source key must remain intact so the original vote association is not lost.
+        pendingCadSnapshot = snapshot.rawString;
+        migrationComplete = true;
+        break;
+      }
+
       // Atomic Compare-And-Delete against the observed source snapshot
       const cadResult = await this.executeCompareAndDelete(legacyKey, snapshot.rawString);
       if (cadResult === 1) {
@@ -285,7 +337,16 @@ class AnonymousVoteRotationLedger {
         // are migrated before deletion
         snapshot = await this.readLegacyStringSnapshot(legacyKey);
         if (!snapshot.rawString) {
-          // Source key was deleted by another instance
+          // Source key was deleted by another instance.
+          // Refresh from the destination v2 hash so entries migrated concurrently by the other
+          // instance after our initial read are merged and returned.
+          const refreshedEntries = await this.readV2HashEntries(fullKey);
+          for (const [qid, item] of refreshedEntries.entries()) {
+            migratedVotes.set(qid, {
+              qa_id: qid,
+              original_browser_key: item.originalBrowserKey
+            });
+          }
           migrationComplete = true;
           break;
         }
@@ -296,7 +357,7 @@ class AnonymousVoteRotationLedger {
       throw new Error(`Legacy migration retry limit exceeded (${maxRetries}) due to concurrent legacy updates`);
     }
 
-    return { migratedVotes };
+    return { migratedVotes, pendingCadSnapshot, legacyKey };
   }
 
   pruneLocal() {
@@ -369,9 +430,10 @@ class AnonymousVoteRotationLedger {
         expiresAt
       });
 
+      let pendingMigration = null;
       // Check if an unmigrated legacy v1 string key exists
       if (this.prefix.endsWith(':v2')) {
-        await this.migrateLegacyKey(clientIp, fullKey, { skipQaId: numericQaId });
+        pendingMigration = await this.migrateLegacyKey(clientIp, fullKey, { skipQaId: numericQaId });
       }
 
       const initialCommands = [
@@ -427,6 +489,17 @@ class AnonymousVoteRotationLedger {
       }
 
       // Destination v2 write is confirmed successful!
+      // Safely delete the legacy source key now that the replacement write is durable
+      if (pendingMigration?.pendingCadSnapshot) {
+        const cadResult = await this.executeCompareAndDelete(
+          pendingMigration.legacyKey,
+          pendingMigration.pendingCadSnapshot
+        ).catch(() => 0);
+        if (cadResult === 0) {
+          // Source key was concurrently modified during the write; complete migration of remaining entries
+          await this.migrateLegacyKey(clientIp, fullKey).catch(() => {});
+        }
+      }
     }
 
     // 2. In-memory local fallback (commit ONLY after shared storage succeeds)
@@ -532,9 +605,7 @@ class AnonymousVoteRotationLedger {
       if (this.prefix.endsWith(':v2')) {
         const { migratedVotes } = await this.migrateLegacyKey(clientIp, fullKey);
         for (const [qid, vote] of migratedVotes.entries()) {
-          if (!votesByQa.has(qid)) {
-            votesByQa.set(qid, vote);
-          }
+          votesByQa.set(qid, vote);
         }
       }
     }

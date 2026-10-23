@@ -2786,6 +2786,153 @@ async function runTests() {
 
         // The legacy source key MUST NOT be deleted (remains intact for future retry without losing votes)
         assert.strictEqual(migrationKvStore.has(retryLimitLegacyKey), true, 'Source key must remain intact when migration fails closed');
+
+        // 12. [P2] Regression: Refresh v2 hash when another migrator deletes legacy source
+        // When another instance migrates qid 702 into v2 and deletes the legacy source while this instance
+        // is migrating qid 701, this instance loses Compare-And-Delete, discovers the deleted source,
+        // and refreshes the v2 hash so both qid 701 and qid 702 are included and returned.
+        const twoMigIp = '198.51.100.251';
+        const twoMigLegacyKey = 'palluvo:qa_rot:ip:' + twoMigIp;
+        const twoMigV2Key = 'palluvo:qa_rot:v2:ip:' + twoMigIp;
+
+        // Legacy key initially contains question 701
+        migrationKvStore.set(twoMigLegacyKey, JSON.stringify({
+          701: { originalBrowserKey: 'anon_voter_legacy_701', expiresAt: Date.now() + 60000 }
+        }));
+        keyTtls.set(twoMigLegacyKey, 60);
+
+        const migratorA = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+
+        // Interleaving hook: Before migratorA runs Compare-And-Delete on the legacy key,
+        // migratorB concurrently writes qid 702 to the v2 hash and deletes the legacy source key!
+        let migratorBHookRan = false;
+        migratorA._beforeCompareAndDeleteHook = async (key) => {
+          if (key === twoMigLegacyKey && !migratorBHookRan) {
+            migratorBHookRan = true;
+            // migratorB sets question 702 in v2 hash
+            if (!migrationKvStore.has(twoMigV2Key)) {
+              migrationKvStore.set(twoMigV2Key, new Map());
+            }
+            const v2Map = migrationKvStore.get(twoMigV2Key);
+            v2Map.set('702', JSON.stringify({
+              originalBrowserKey: 'anon_voter_legacy_702',
+              expiresAt: Date.now() + 60000
+            }));
+            // migratorB successfully deletes the legacy source key
+            migrationKvStore.delete(twoMigLegacyKey);
+            keyTtls.delete(twoMigLegacyKey);
+          }
+        };
+
+        const twoMigVotes = await migratorA.getVotedQuestionsForIp(twoMigIp);
+        assert.strictEqual(migratorBHookRan, true, 'Migrator B hook must execute during CAD verification window');
+        assert.strictEqual(twoMigVotes.length, 2, 'getVotedQuestionsForIp must refresh v2 hash and return both 701 and 702');
+        const twoMigQaIds = new Set(twoMigVotes.map(v => v.qa_id));
+        assert.ok(twoMigQaIds.has(701), 'Question 701 must be present');
+        assert.ok(twoMigQaIds.has(702), 'Concurrently migrated question 702 must be present from refreshed v2 hash');
+
+        const vote701 = twoMigVotes.find(v => v.qa_id === 701);
+        const vote702 = twoMigVotes.find(v => v.qa_id === 702);
+        assert.strictEqual(vote701.original_browser_key, 'anon_voter_legacy_701');
+        assert.strictEqual(vote702.original_browser_key, 'anon_voter_legacy_702');
+
+        // Both questions exist in the v2 hash
+        const twoMigV2Store = migrationKvStore.get(twoMigV2Key);
+        assert.ok(twoMigV2Store instanceof Map, 'Destination v2 hash must exist');
+        assert.ok(twoMigV2Store.has('701'), 'Question 701 must be in v2 hash');
+        assert.ok(twoMigV2Store.has('702'), 'Question 702 must be in v2 hash');
+
+        // Legacy source remains deleted
+        assert.strictEqual(migrationKvStore.has(twoMigLegacyKey), false, 'Legacy source key must be deleted');
+
+        // Both original voters are recognized
+        assert.strictEqual(await migratorA.isOriginalVoter(twoMigIp, 701, 'anon_voter_legacy_701'), true);
+        assert.strictEqual(await migratorA.isOriginalVoter(twoMigIp, 702, 'anon_voter_legacy_702'), true);
+        assert.strictEqual(await migratorA.isOriginalVoter(twoMigIp, 702, 'rotated_intruder'), false);
+
+        // 13. [P2] Regression: Preserve skipped legacy vote until the replacement write succeeds
+        // If an active legacy vote exists for qid 703 and recordVote(703) fails during the v2 HSET pipeline write,
+        // the skipped legacy entry must NOT be deleted, and remains fully recoverable after rollbackVote().
+        const skipFailIp = '198.51.100.252';
+        const skipFailLegacyKey = 'palluvo:qa_rot:ip:' + skipFailIp;
+        const skipFailV2Key = 'palluvo:qa_rot:v2:ip:' + skipFailIp;
+
+        // Active legacy vote for question 703 exists in source key
+        migrationKvStore.set(skipFailLegacyKey, JSON.stringify({
+          703: { originalBrowserKey: 'anon_voter_legacy_703', expiresAt: Date.now() + 60000 }
+        }));
+        keyTtls.set(skipFailLegacyKey, 60);
+
+        const skipLedger = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+
+        // Simulate HSET failure during recordVote
+        failHsetCommands = true;
+        let skipWriteFailed = false;
+        try {
+          await skipLedger.recordVote(skipFailIp, 703, 'anon_voter_replacement_703', 60000);
+        } catch (err) {
+          skipWriteFailed = true;
+          assert.ok(err.message.includes('Redis HSET command error'), 'Must fail with Redis HSET command error');
+        }
+        assert.strictEqual(skipWriteFailed, true, 'recordVote must throw when HSET fails');
+
+        // Route calls rollbackVote on failure
+        await skipLedger.rollbackVote(skipFailIp, 703);
+
+        // Crucial verification: The legacy source key MUST NOT be deleted!
+        // Both source and destination must NOT be empty! The source key remains intact with question 703.
+        assert.strictEqual(migrationKvStore.has(skipFailLegacyKey), true, 'Legacy source key MUST be preserved when replacement write fails');
+        const preservedLegacy = JSON.parse(migrationKvStore.get(skipFailLegacyKey) || '{}');
+        assert.ok(preservedLegacy[703], 'Question 703 must remain in preserved legacy source key');
+        assert.strictEqual(preservedLegacy[703].originalBrowserKey, 'anon_voter_legacy_703');
+
+        // Destination v2 hash does not have question 703
+        const skipFailV2Store = migrationKvStore.get(skipFailV2Key);
+        assert.strictEqual(skipFailV2Store?.has('703') || false, false, 'v2 hash must not contain unconfirmed 703 write');
+
+        // Identity rotation prevention remains 100% active!
+        failHsetCommands = false;
+        const skipRecoveredVotes = await skipLedger.getVotedQuestionsForIp(skipFailIp);
+        assert.strictEqual(skipRecoveredVotes.length, 1, 'Legacy vote 703 must be recovered by getVotedQuestionsForIp');
+        assert.strictEqual(skipRecoveredVotes[0].qa_id, 703);
+        assert.strictEqual(skipRecoveredVotes[0].original_browser_key, 'anon_voter_legacy_703');
+
+        assert.strictEqual(await skipLedger.isOriginalVoter(skipFailIp, 703, 'anon_voter_legacy_703'), true);
+        assert.strictEqual(await skipLedger.isOriginalVoter(skipFailIp, 703, 'rotated_intruder'), false);
+
+        // Now verify the successful replacement write path:
+        // When HSET succeeds, the destination v2 hash gets the replacement vote and the legacy key is deleted
+        const skipSuccessIp = '198.51.100.253';
+        const skipSuccessLegacyKey = 'palluvo:qa_rot:ip:' + skipSuccessIp;
+        const skipSuccessV2Key = 'palluvo:qa_rot:v2:ip:' + skipSuccessIp;
+
+        migrationKvStore.set(skipSuccessLegacyKey, JSON.stringify({
+          704: { originalBrowserKey: 'anon_voter_legacy_704', expiresAt: Date.now() + 60000 }
+        }));
+        keyTtls.set(skipSuccessLegacyKey, 60);
+
+        await skipLedger.recordVote(skipSuccessIp, 704, 'anon_voter_replacement_704', 60000);
+
+        // Destination v2 hash has the replacement voter key
+        const successV2Map = migrationKvStore.get(skipSuccessV2Key);
+        assert.ok(successV2Map instanceof Map, 'Destination v2 hash must exist');
+        assert.ok(successV2Map.has('704'), 'Question 704 must exist in v2 hash');
+        const parsed704 = JSON.parse(successV2Map.get('704'));
+        assert.strictEqual(parsed704.originalBrowserKey, 'anon_voter_replacement_704');
+
+        // Legacy key is deleted after confirmed replacement write
+        assert.strictEqual(migrationKvStore.has(skipSuccessLegacyKey), false, 'Legacy source key must be deleted after successful replacement write');
+
+        assert.strictEqual(await skipLedger.isOriginalVoter(skipSuccessIp, 704, 'anon_voter_replacement_704'), true);
+        assert.strictEqual(await skipLedger.isOriginalVoter(skipSuccessIp, 704, 'rotated_intruder'), false);
       } finally {
         failingServer.close();
       }
