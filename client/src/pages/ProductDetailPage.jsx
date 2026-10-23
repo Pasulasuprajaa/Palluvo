@@ -192,7 +192,7 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
       setCheckingPin(true);
       const res = await fetch(`/api/pincode/check/${pincode}`);
       const data = await res.json();
-      if (res.ok && data.valid && data.serviceable !== false) {
+      if (res.ok && data.valid) {
         setPincodeResult(data);
       } else {
         setPincodeResult(null);

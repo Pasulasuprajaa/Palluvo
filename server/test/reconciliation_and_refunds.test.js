@@ -2998,7 +2998,7 @@ async function runTests() {
       const pin171Res = await request('/api/pincode/check/171001');
       assert.strictEqual(pin171Res.status, 200, 'Valid circle must return HTTP 200');
       assert.strictEqual(pin171Res.body.valid, true);
-      assert.strictEqual(pin171Res.body.serviceable, true);
+      assert.strictEqual(pin171Res.body.serviceable, false, 'Non-verified circle must NOT claim confirmed serviceability');
       assert.strictEqual(pin171Res.body.verified, false, 'Non-verified hub must NOT be marked verified');
       assert.strictEqual(pin171Res.body.is_estimate, true, 'Non-verified hub must be marked is_estimate');
       assert.strictEqual(pin171Res.body.codAvailable, false, 'Non-verified hub must NOT assert COD availability');
@@ -3006,7 +3006,29 @@ async function runTests() {
       assert.ok(pin171Res.body.estimated_delivery, 'Must provide estimated_delivery');
       assert.ok(pin171Res.body.state, 'Must provide state');
 
-      console.log('✅ PASS: [P2] PIN serviceability rejects invalid PINs, normalizes schema for UI, and distinguishes verified hubs from estimates');
+      // 5. Unlisted six-digit PIN values sharing a configured prefix (e.g. 560000 and 560999 sharing prefix '56')
+      // Must NOT be marked as verified hubs, must be treated as estimates, and must NOT claim confirmed serviceability, COD, or express availability
+      const pin560000Res = await request('/api/pincode/check/560000');
+      assert.strictEqual(pin560000Res.status, 200, '560000 must return HTTP 200');
+      assert.strictEqual(pin560000Res.body.valid, true);
+      assert.strictEqual(pin560000Res.body.verified, false, '560000 must NOT be marked verified');
+      assert.strictEqual(pin560000Res.body.serviceable, false, '560000 must NOT claim confirmed serviceability');
+      assert.strictEqual(pin560000Res.body.is_estimate, true, '560000 must be marked as estimate');
+      assert.strictEqual(pin560000Res.body.codAvailable, false, '560000 must NOT assert COD availability');
+      assert.strictEqual(pin560000Res.body.expressAvailable, false, '560000 must NOT assert express availability');
+      assert.ok(pin560000Res.body.estimated_delivery, 'Must provide estimated_delivery');
+
+      const pin560999Res = await request('/api/pincode/check/560999');
+      assert.strictEqual(pin560999Res.status, 200, '560999 must return HTTP 200');
+      assert.strictEqual(pin560999Res.body.valid, true);
+      assert.strictEqual(pin560999Res.body.verified, false, '560999 must NOT be marked verified');
+      assert.strictEqual(pin560999Res.body.serviceable, false, '560999 must NOT claim confirmed serviceability');
+      assert.strictEqual(pin560999Res.body.is_estimate, true, '560999 must be marked as estimate');
+      assert.strictEqual(pin560999Res.body.codAvailable, false, '560999 must NOT assert COD availability');
+      assert.strictEqual(pin560999Res.body.expressAvailable, false, '560999 must NOT assert express availability');
+      assert.ok(pin560999Res.body.estimated_delivery, 'Must provide estimated_delivery');
+
+      console.log('✅ PASS: [P2] PIN serviceability rejects invalid PINs, normalizes schema for UI, and distinguishes verified hubs from prefix estimates');
     } finally {
       global.fetch = regressionFetch;
     }

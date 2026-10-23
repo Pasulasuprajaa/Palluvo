@@ -1,74 +1,105 @@
 const express = require('express');
 const router = express.Router();
 
-// Authoritative verified express delivery hubs (Tier-1, Tier-2 & flagship brand hubs)
-const VERIFIED_HUBS = {
-  // Karnataka (Bengaluru hub & key cities)
-  '560': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Bengaluru Express Hub', codAvailable: true, expressAvailable: true },
-  '570': { city: 'Mysuru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Mysuru Hub', codAvailable: true, expressAvailable: true },
-  '575': { city: 'Mangaluru', state: 'Karnataka', days: '2-3 Business Days', hub: 'Mangaluru Hub', codAvailable: true, expressAvailable: true },
-  '580': { city: 'Hubballi', state: 'Karnataka', days: '2-3 Business Days', hub: 'Hubballi Hub', codAvailable: true, expressAvailable: true },
+// Authoritative verified delivery offices with confirmed courier capabilities & COD availability
+const VERIFIED_DELIVERY_OFFICES = {
+  // Bengaluru
+  '560001': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Bengaluru GPO / Central Hub', codAvailable: true, expressAvailable: true },
+  '560002': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Bengaluru City Market Hub', codAvailable: true, expressAvailable: true },
+  '560003': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Malleswaram Hub', codAvailable: true, expressAvailable: true },
+  '560004': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Basavanagudi Hub', codAvailable: true, expressAvailable: true },
+  '560008': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'HAL Air Cargo Hub', codAvailable: true, expressAvailable: true },
+  '560011': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Jayanagar Hub', codAvailable: true, expressAvailable: true },
+  '560025': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Richmond Town Hub', codAvailable: true, expressAvailable: true },
+  '560034': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Koramangala Hub', codAvailable: true, expressAvailable: true },
+  '560037': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Marathahalli Hub', codAvailable: true, expressAvailable: true },
+  '560038': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Indiranagar Hub', codAvailable: true, expressAvailable: true },
+  '560066': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Whitefield Tech Hub', codAvailable: true, expressAvailable: true },
+  '560068': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Electronic City Hub', codAvailable: true, expressAvailable: true },
+  '560076': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'BTM Layout Hub', codAvailable: true, expressAvailable: true },
+  '560100': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Electronic City Phase 1 Hub', codAvailable: true, expressAvailable: true },
+  '560102': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'HSR Layout Hub', codAvailable: true, expressAvailable: true },
+  '560103': { city: 'Bengaluru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Bellandur Hub', codAvailable: true, expressAvailable: true },
 
-  // Telangana & Andhra Pradesh (Hyderabad & Warangal flagship)
-  '500': { city: 'Hyderabad', state: 'Telangana', days: '1-2 Business Days', hub: 'Hyderabad Air Hub', codAvailable: true, expressAvailable: true },
-  '506': { city: 'Warangal', state: 'Telangana', days: '1-2 Business Days', hub: 'Warangal Flagship Center', codAvailable: true, expressAvailable: true },
-  '505': { city: 'Karimnagar', state: 'Telangana', days: '2-3 Business Days', hub: 'Karimnagar Hub', codAvailable: true, expressAvailable: true },
-  '520': { city: 'Vijayawada', state: 'Andhra Pradesh', days: '2-3 Business Days', hub: 'Vijayawada Hub', codAvailable: true, expressAvailable: true },
-  '530': { city: 'Visakhapatnam', state: 'Andhra Pradesh', days: '2-3 Business Days', hub: 'Vizag Hub', codAvailable: true, expressAvailable: true },
-  '517': { city: 'Tirupati', state: 'Andhra Pradesh', days: '2-3 Business Days', hub: 'Tirupati Hub', codAvailable: true, expressAvailable: true },
-  '522': { city: 'Guntur', state: 'Andhra Pradesh', days: '2-3 Business Days', hub: 'Guntur Hub', codAvailable: true, expressAvailable: true },
+  // Karnataka key cities
+  '570001': { city: 'Mysuru', state: 'Karnataka', days: '1-2 Business Days', hub: 'Mysuru Central Hub', codAvailable: true, expressAvailable: true },
+  '575001': { city: 'Mangaluru', state: 'Karnataka', days: '2-3 Business Days', hub: 'Mangaluru Port Hub', codAvailable: true, expressAvailable: true },
+  '580001': { city: 'Hubballi', state: 'Karnataka', days: '2-3 Business Days', hub: 'Hubballi Hub', codAvailable: true, expressAvailable: true },
 
-  // Maharashtra & Goa
-  '400': { city: 'Mumbai', state: 'Maharashtra', days: '1-2 Business Days', hub: 'Mumbai Central Cargo Hub', codAvailable: true, expressAvailable: true },
-  '411': { city: 'Pune', state: 'Maharashtra', days: '1-2 Business Days', hub: 'Pune Express Hub', codAvailable: true, expressAvailable: true },
-  '440': { city: 'Nagpur', state: 'Maharashtra', days: '2-3 Business Days', hub: 'Nagpur Air Hub', codAvailable: true, expressAvailable: true },
-  '422': { city: 'Nashik', state: 'Maharashtra', days: '2-3 Business Days', hub: 'Nashik Hub', codAvailable: true, expressAvailable: true },
-  '403': { city: 'Goa', state: 'Goa', days: '2-3 Business Days', hub: 'Goa Express Hub', codAvailable: true, expressAvailable: true },
+  // Hyderabad
+  '500001': { city: 'Hyderabad', state: 'Telangana', days: '1-2 Business Days', hub: 'Hyderabad GPO Hub', codAvailable: true, expressAvailable: true },
+  '500003': { city: 'Secunderabad', state: 'Telangana', days: '1-2 Business Days', hub: 'Secunderabad Hub', codAvailable: true, expressAvailable: true },
+  '500016': { city: 'Hyderabad', state: 'Telangana', days: '1-2 Business Days', hub: 'Begumpet Hub', codAvailable: true, expressAvailable: true },
+  '500032': { city: 'Hyderabad', state: 'Telangana', days: '1-2 Business Days', hub: 'Gachibowli Tech Hub', codAvailable: true, expressAvailable: true },
+  '500033': { city: 'Hyderabad', state: 'Telangana', days: '1-2 Business Days', hub: 'Jubilee Hills Hub', codAvailable: true, expressAvailable: true },
+  '500034': { city: 'Hyderabad', state: 'Telangana', days: '1-2 Business Days', hub: 'Banjara Hills Hub', codAvailable: true, expressAvailable: true },
+  '500081': { city: 'Hyderabad', state: 'Telangana', days: '1-2 Business Days', hub: 'Madhapur / Hitec City Hub', codAvailable: true, expressAvailable: true },
+  '500082': { city: 'Hyderabad', state: 'Telangana', days: '1-2 Business Days', hub: 'Somajiguda Hub', codAvailable: true, expressAvailable: true },
+  '500084': { city: 'Hyderabad', state: 'Telangana', days: '1-2 Business Days', hub: 'Kondapur Hub', codAvailable: true, expressAvailable: true },
+
+  // Warangal (Palluvo Flagship Hub)
+  '506001': { city: 'Warangal', state: 'Telangana', days: '1-2 Business Days', hub: 'Warangal Flagship Center', codAvailable: true, expressAvailable: true },
+  '506002': { city: 'Hanamkonda', state: 'Telangana', days: '1-2 Business Days', hub: 'Hanamkonda Central Hub', codAvailable: true, expressAvailable: true },
+  '506003': { city: 'Kazipet', state: 'Telangana', days: '1-2 Business Days', hub: 'Kazipet Railway Junction Hub', codAvailable: true, expressAvailable: true },
+  '506004': { city: 'Warangal', state: 'Telangana', days: '1-2 Business Days', hub: 'NIT Warangal Campus Hub', codAvailable: true, expressAvailable: true },
+
+  // Andhra Pradesh key cities
+  '520001': { city: 'Vijayawada', state: 'Andhra Pradesh', days: '2-3 Business Days', hub: 'Vijayawada Central Hub', codAvailable: true, expressAvailable: true },
+  '530001': { city: 'Visakhapatnam', state: 'Andhra Pradesh', days: '2-3 Business Days', hub: 'Vizag Central Port Hub', codAvailable: true, expressAvailable: true },
+  '517501': { city: 'Tirupati', state: 'Andhra Pradesh', days: '2-3 Business Days', hub: 'Tirupati City Hub', codAvailable: true, expressAvailable: true },
+  '522001': { city: 'Guntur', state: 'Andhra Pradesh', days: '2-3 Business Days', hub: 'Guntur Central Hub', codAvailable: true, expressAvailable: true },
+
+  // Mumbai & Maharashtra
+  '400001': { city: 'Mumbai', state: 'Maharashtra', days: '1-2 Business Days', hub: 'Mumbai GPO / Fort Hub', codAvailable: true, expressAvailable: true },
+  '400020': { city: 'Mumbai', state: 'Maharashtra', days: '1-2 Business Days', hub: 'Churchgate Hub', codAvailable: true, expressAvailable: true },
+  '400050': { city: 'Mumbai', state: 'Maharashtra', days: '1-2 Business Days', hub: 'Bandra West Hub', codAvailable: true, expressAvailable: true },
+  '400051': { city: 'Mumbai', state: 'Maharashtra', days: '1-2 Business Days', hub: 'Bandra Kurla Complex (BKC) Hub', codAvailable: true, expressAvailable: true },
+  '400053': { city: 'Mumbai', state: 'Maharashtra', days: '1-2 Business Days', hub: 'Andheri West Hub', codAvailable: true, expressAvailable: true },
+  '400076': { city: 'Mumbai', state: 'Maharashtra', days: '1-2 Business Days', hub: 'Powai Tech Hub', codAvailable: true, expressAvailable: true },
+  '411001': { city: 'Pune', state: 'Maharashtra', days: '1-2 Business Days', hub: 'Pune GPO Hub', codAvailable: true, expressAvailable: true },
+  '411004': { city: 'Pune', state: 'Maharashtra', days: '1-2 Business Days', hub: 'Deccan Gymkhana Hub', codAvailable: true, expressAvailable: true },
+  '411057': { city: 'Pune', state: 'Maharashtra', days: '1-2 Business Days', hub: 'Hinjawadi Infotech Hub', codAvailable: true, expressAvailable: true },
+  '440001': { city: 'Nagpur', state: 'Maharashtra', days: '2-3 Business Days', hub: 'Nagpur Air Cargo Hub', codAvailable: true, expressAvailable: true },
 
   // Delhi NCR
-  '110': { city: 'New Delhi', state: 'Delhi', days: '2-3 Business Days', hub: 'Delhi North Air Hub', codAvailable: true, expressAvailable: true },
-  '122': { city: 'Gurugram', state: 'Haryana', days: '2-3 Business Days', hub: 'Gurugram NCR Hub', codAvailable: true, expressAvailable: true },
-  '201': { city: 'Noida / Ghaziabad', state: 'Uttar Pradesh', days: '2-3 Business Days', hub: 'Noida Hub', codAvailable: true, expressAvailable: true },
-  '121': { city: 'Faridabad', state: 'Haryana', days: '2-3 Business Days', hub: 'Faridabad Hub', codAvailable: true, expressAvailable: true },
+  '110001': { city: 'New Delhi', state: 'Delhi', days: '2-3 Business Days', hub: 'Connaught Place / Delhi GPO Hub', codAvailable: true, expressAvailable: true },
+  '110003': { city: 'New Delhi', state: 'Delhi', days: '2-3 Business Days', hub: 'Lodhi Road Hub', codAvailable: true, expressAvailable: true },
+  '110016': { city: 'New Delhi', state: 'Delhi', days: '2-3 Business Days', hub: 'Hauz Khas Hub', codAvailable: true, expressAvailable: true },
+  '110019': { city: 'New Delhi', state: 'Delhi', days: '2-3 Business Days', hub: 'Nehru Place Hub', codAvailable: true, expressAvailable: true },
+  '110021': { city: 'New Delhi', state: 'Delhi', days: '2-3 Business Days', hub: 'Chanakyapuri Hub', codAvailable: true, expressAvailable: true },
+  '122001': { city: 'Gurugram', state: 'Haryana', days: '2-3 Business Days', hub: 'Gurugram Central Hub', codAvailable: true, expressAvailable: true },
+  '122002': { city: 'Gurugram', state: 'Haryana', days: '2-3 Business Days', hub: 'DLF Cyber City Hub', codAvailable: true, expressAvailable: true },
+  '201301': { city: 'Noida', state: 'Uttar Pradesh', days: '2-3 Business Days', hub: 'Noida Express Hub', codAvailable: true, expressAvailable: true },
 
-  // Tamil Nadu & Puducherry
-  '600': { city: 'Chennai', state: 'Tamil Nadu', days: '1-2 Business Days', hub: 'Chennai South Air Hub', codAvailable: true, expressAvailable: true },
-  '641': { city: 'Coimbatore', state: 'Tamil Nadu', days: '2-3 Business Days', hub: 'Coimbatore Hub', codAvailable: true, expressAvailable: true },
-  '625': { city: 'Madurai', state: 'Tamil Nadu', days: '2-3 Business Days', hub: 'Madurai Hub', codAvailable: true, expressAvailable: true },
+  // Chennai & Tamil Nadu
+  '600001': { city: 'Chennai', state: 'Tamil Nadu', days: '1-2 Business Days', hub: 'Chennai GPO Hub', codAvailable: true, expressAvailable: true },
+  '600004': { city: 'Chennai', state: 'Tamil Nadu', days: '1-2 Business Days', hub: 'Mylapore Heritage Hub', codAvailable: true, expressAvailable: true },
+  '600017': { city: 'Chennai', state: 'Tamil Nadu', days: '1-2 Business Days', hub: 'T. Nagar Silk Hub', codAvailable: true, expressAvailable: true },
+  '600096': { city: 'Chennai', state: 'Tamil Nadu', days: '1-2 Business Days', hub: 'OMR IT Corridor Hub', codAvailable: true, expressAvailable: true },
+  '641001': { city: 'Coimbatore', state: 'Tamil Nadu', days: '2-3 Business Days', hub: 'Coimbatore Central Hub', codAvailable: true, expressAvailable: true },
 
-  // West Bengal
-  '700': { city: 'Kolkata', state: 'West Bengal', days: '2-3 Business Days', hub: 'Kolkata East Hub', codAvailable: true, expressAvailable: true },
-  '711': { city: 'Howrah', state: 'West Bengal', days: '2-3 Business Days', hub: 'Howrah Hub', codAvailable: true, expressAvailable: true },
+  // Kolkata & West Bengal
+  '700001': { city: 'Kolkata', state: 'West Bengal', days: '2-3 Business Days', hub: 'Kolkata GPO Hub', codAvailable: true, expressAvailable: true },
+  '700016': { city: 'Kolkata', state: 'West Bengal', days: '2-3 Business Days', hub: 'Park Street Hub', codAvailable: true, expressAvailable: true },
+  '700091': { city: 'Kolkata', state: 'West Bengal', days: '2-3 Business Days', hub: 'Salt Lake Sector V Hub', codAvailable: true, expressAvailable: true },
 
-  // Gujarat
-  '380': { city: 'Ahmedabad', state: 'Gujarat', days: '2-3 Business Days', hub: 'Ahmedabad Hub', codAvailable: true, expressAvailable: true },
-  '395': { city: 'Surat', state: 'Gujarat', days: '2-3 Business Days', hub: 'Surat Textile Hub', codAvailable: true, expressAvailable: true },
-  '390': { city: 'Vadodara', state: 'Gujarat', days: '2-3 Business Days', hub: 'Vadodara Hub', codAvailable: true, expressAvailable: true },
+  // Gujarat & Rajasthan
+  '380001': { city: 'Ahmedabad', state: 'Gujarat', days: '2-3 Business Days', hub: 'Ahmedabad GPO Hub', codAvailable: true, expressAvailable: true },
+  '380015': { city: 'Ahmedabad', state: 'Gujarat', days: '2-3 Business Days', hub: 'Satellite Hub', codAvailable: true, expressAvailable: true },
+  '395001': { city: 'Surat', state: 'Gujarat', days: '2-3 Business Days', hub: 'Surat Textile City Hub', codAvailable: true, expressAvailable: true },
+  '302001': { city: 'Jaipur', state: 'Rajasthan', days: '2-3 Business Days', hub: 'Jaipur Heritage Hub', codAvailable: true, expressAvailable: true },
+  '302015': { city: 'Jaipur', state: 'Rajasthan', days: '2-3 Business Days', hub: 'Malviya Nagar Hub', codAvailable: true, expressAvailable: true },
 
-  // Rajasthan
-  '302': { city: 'Jaipur', state: 'Rajasthan', days: '2-3 Business Days', hub: 'Jaipur Heritage Hub', codAvailable: true, expressAvailable: true },
-  '342': { city: 'Jodhpur', state: 'Rajasthan', days: '2-3 Business Days', hub: 'Jodhpur Hub', codAvailable: true, expressAvailable: true },
-  '313': { city: 'Udaipur', state: 'Rajasthan', days: '2-3 Business Days', hub: 'Udaipur Hub', codAvailable: true, expressAvailable: true },
-
-  // Kerala
-  '682': { city: 'Kochi', state: 'Kerala', days: '2-3 Business Days', hub: 'Kochi Port Hub', codAvailable: true, expressAvailable: true },
-  '695': { city: 'Thiruvananthapuram', state: 'Kerala', days: '2-3 Business Days', hub: 'Trivandrum Hub', codAvailable: true, expressAvailable: true },
-
-  // Uttar Pradesh & Uttarakhand
-  '226': { city: 'Lucknow', state: 'Uttar Pradesh', days: '2-3 Business Days', hub: 'Lucknow Hub', codAvailable: true, expressAvailable: true },
-  '221': { city: 'Varanasi', state: 'Uttar Pradesh', days: '2-3 Business Days', hub: 'Varanasi Silk Hub', codAvailable: true, expressAvailable: true },
-  '208': { city: 'Kanpur', state: 'Uttar Pradesh', days: '2-3 Business Days', hub: 'Kanpur Hub', codAvailable: true, expressAvailable: true },
-  '248': { city: 'Dehradun', state: 'Uttarakhand', days: '3-4 Business Days', hub: 'Dehradun Valley Hub', codAvailable: true, expressAvailable: true },
-
-  // Punjab, Chandigarh, MP, Bihar, Odisha, Assam
-  '160': { city: 'Chandigarh', state: 'Punjab', days: '2-3 Business Days', hub: 'Chandigarh Tri-City Hub', codAvailable: true, expressAvailable: true },
-  '141': { city: 'Ludhiana', state: 'Punjab', days: '2-3 Business Days', hub: 'Ludhiana Hub', codAvailable: true, expressAvailable: true },
-  '452': { city: 'Indore', state: 'Madhya Pradesh', days: '2-3 Business Days', hub: 'Indore Central Hub', codAvailable: true, expressAvailable: true },
-  '462': { city: 'Bhopal', state: 'Madhya Pradesh', days: '2-3 Business Days', hub: 'Bhopal Hub', codAvailable: true, expressAvailable: true },
-  '751': { city: 'Bhubaneswar', state: 'Odisha', days: '3-4 Business Days', hub: 'Bhubaneswar Hub', codAvailable: true, expressAvailable: true },
-  '800': { city: 'Patna', state: 'Bihar', days: '3-4 Business Days', hub: 'Patna Hub', codAvailable: true, expressAvailable: true },
-  '834': { city: 'Ranchi', state: 'Jharkhand', days: '3-4 Business Days', hub: 'Ranchi Hub', codAvailable: true, expressAvailable: true },
-  '781': { city: 'Guwahati', state: 'Assam', days: '3-5 Business Days', hub: 'Guwahati Gateway Hub', codAvailable: true, expressAvailable: true }
+  // Kerala, UP, MP, Punjab, Bihar, Odisha, Assam
+  '682001': { city: 'Kochi', state: 'Kerala', days: '2-3 Business Days', hub: 'Kochi Port Hub', codAvailable: true, expressAvailable: true },
+  '682016': { city: 'Kochi', state: 'Kerala', days: '2-3 Business Days', hub: 'Ernakulam South Hub', codAvailable: true, expressAvailable: true },
+  '226001': { city: 'Lucknow', state: 'Uttar Pradesh', days: '2-3 Business Days', hub: 'Lucknow Central Hub', codAvailable: true, expressAvailable: true },
+  '221001': { city: 'Varanasi', state: 'Uttar Pradesh', days: '2-3 Business Days', hub: 'Varanasi Silk Hub', codAvailable: true, expressAvailable: true },
+  '160017': { city: 'Chandigarh', state: 'Punjab', days: '2-3 Business Days', hub: 'Chandigarh Central Hub', codAvailable: true, expressAvailable: true },
+  '452001': { city: 'Indore', state: 'Madhya Pradesh', days: '2-3 Business Days', hub: 'Indore Central Hub', codAvailable: true, expressAvailable: true },
+  '751001': { city: 'Bhubaneswar', state: 'Odisha', days: '3-4 Business Days', hub: 'Bhubaneswar Central Hub', codAvailable: true, expressAvailable: true },
+  '800001': { city: 'Patna', state: 'Bihar', days: '3-4 Business Days', hub: 'Patna Central Hub', codAvailable: true, expressAvailable: true },
+  '781001': { city: 'Guwahati', state: 'Assam', days: '3-5 Business Days', hub: 'Guwahati Gateway Hub', codAvailable: true, expressAvailable: true }
 };
 
 // Official India Post Postal Circle 2-digit prefixes
@@ -159,14 +190,13 @@ router.get('/check/:pincode', (req, res) => {
     });
   }
 
-  const prefix3 = cleanPin.substring(0, 3);
-  const verifiedHub = VERIFIED_HUBS[prefix3];
-
-  if (verifiedHub) {
-    const city = verifiedHub.city;
-    const state = verifiedHub.state;
+  // 1. Authoritative check of the complete 6-digit PIN against verified delivery offices
+  const verifiedOffice = VERIFIED_DELIVERY_OFFICES[cleanPin];
+  if (verifiedOffice) {
+    const city = verifiedOffice.city;
+    const state = verifiedOffice.state;
     const location = `${city}, ${state}`;
-    const days = verifiedHub.days;
+    const days = verifiedOffice.days;
 
     return res.json({
       valid: true,
@@ -180,14 +210,15 @@ router.get('/check/:pincode', (req, res) => {
       estimated_delivery: days,
       estimatedDays: days,
       deliveryDate: 'Delivery in ' + days,
-      expressAvailable: verifiedHub.expressAvailable,
+      expressAvailable: verifiedOffice.expressAvailable,
       freeDeliveryEligible: true,
-      codAvailable: verifiedHub.codAvailable,
+      codAvailable: verifiedOffice.codAvailable,
       courier: 'BlueDart Luxury Express Hand-Delivery',
-      hub: verifiedHub.hub
+      hub: verifiedOffice.hub
     });
   }
 
+  // 2. Prefix-only matches are treated as estimates without claiming confirmed serviceability, COD, or express
   const prefix2 = cleanPin.substring(0, 2);
   const circle = POSTAL_CIRCLES[prefix2];
 
@@ -197,10 +228,9 @@ router.get('/check/:pincode', (req, res) => {
     const location = `${city}, ${state}`;
     const days = '4-6 Business Days';
 
-    // Regional circle estimate without asserting verified express/COD availability
     return res.json({
       valid: true,
-      serviceable: true,
+      serviceable: false,
       verified: false,
       is_estimate: true,
       pincode: cleanPin,
@@ -214,7 +244,7 @@ router.get('/check/:pincode', (req, res) => {
       freeDeliveryEligible: true,
       codAvailable: false,
       courier: 'Delhivery / Xpressbees Standard',
-      message: 'Estimated delivery timeline. Final COD and express availability confirmed at checkout.'
+      message: 'Estimated delivery timeline. Serviceability, COD, and express availability confirmed at checkout.'
     });
   }
 
