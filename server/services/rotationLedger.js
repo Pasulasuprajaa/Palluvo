@@ -181,7 +181,7 @@ class AnonymousVoteRotationLedger {
           for (const [qid, item] of legacyEntries.entries()) {
             if (qid !== numericQaId) {
               initialCommands.push([
-                'HSET',
+                'HSETNX',
                 fullKey,
                 String(qid),
                 JSON.stringify({
@@ -360,9 +360,10 @@ class AnonymousVoteRotationLedger {
 
         if (legacyEntries.size > 0) {
           const migrationCommands = [];
-          for (const [qid, item] of legacyEntries.entries()) {
+          const legacyKeyEntries = Array.from(legacyEntries.entries());
+          for (const [qid, item] of legacyKeyEntries) {
             migrationCommands.push([
-              'HSET',
+              'HSETNX',
               fullKey,
               String(qid),
               JSON.stringify({
@@ -383,15 +384,39 @@ class AnonymousVoteRotationLedger {
           migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'GT']);
 
           // CONFIRM destination write first! If pipeline fails, executePipeline throws and legacyKey is kept intact!
-          await this.executePipeline(migrationCommands);
+          const pipelineResults = await this.executePipeline(migrationCommands);
 
           // ONLY delete legacy source key after destination write is verified!
           await fetch(`${this.restUrl}/DEL/${encodeURIComponent(legacyKey)}`, {
             headers: { Authorization: `Bearer ${this.restToken}` }
           }).catch(() => {});
 
-          for (const [qid, item] of legacyEntries.entries()) {
-            if (!votesByQa.has(qid)) {
+          for (let i = 0; i < legacyKeyEntries.length; i++) {
+            const [qid, item] = legacyKeyEntries[i];
+            const hsetnxRes = pipelineResults[i]?.result;
+            if (hsetnxRes === 0) {
+              // Field already existed in v2 destination hash (concurrent write took precedence)
+              // Ensure we reflect the fresh v2 record in votesByQa rather than stale legacy snapshot
+              if (!votesByQa.has(qid)) {
+                try {
+                  const freshRes = await fetch(`${this.restUrl}/HGET/${encodeURIComponent(fullKey)}/${encodeURIComponent(String(qid))}`, {
+                    headers: { Authorization: `Bearer ${this.restToken}` }
+                  });
+                  if (freshRes.ok) {
+                    const freshData = await freshRes.json();
+                    if (freshData?.result) {
+                      const parsed = typeof freshData.result === 'string' ? JSON.parse(freshData.result) : freshData.result;
+                      if (parsed && parsed.expiresAt > now) {
+                        votesByQa.set(qid, {
+                          qa_id: qid,
+                          original_browser_key: parsed.originalBrowserKey
+                        });
+                      }
+                    }
+                  }
+                } catch (e) {}
+              }
+            } else if (!votesByQa.has(qid)) {
               votesByQa.set(qid, {
                 qa_id: qid,
                 original_browser_key: item.originalBrowserKey
@@ -513,9 +538,10 @@ class AnonymousVoteRotationLedger {
 
         if (legacyEntries.size > 0) {
           const migrationCommands = [];
-          for (const [qid, item] of legacyEntries.entries()) {
+          const legacyKeyEntries = Array.from(legacyEntries.entries());
+          for (const [qid, item] of legacyKeyEntries) {
             migrationCommands.push([
-              'HSET',
+              'HSETNX',
               fullKey,
               String(qid),
               JSON.stringify({
@@ -533,7 +559,7 @@ class AnonymousVoteRotationLedger {
           migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'GT']);
 
           // Verify destination write before deleting source key
-          await this.executePipeline(migrationCommands);
+          const pipelineResults = await this.executePipeline(migrationCommands);
 
           await fetch(`${this.restUrl}/DEL/${encodeURIComponent(legacyKey)}`, {
             headers: { Authorization: `Bearer ${this.restToken}` }
@@ -541,10 +567,50 @@ class AnonymousVoteRotationLedger {
 
           const match = legacyEntries.get(numericQaId);
           if (match && match.expiresAt > now) {
+            const targetIdx = legacyKeyEntries.findIndex(([qid]) => qid === numericQaId);
+            if (targetIdx !== -1 && pipelineResults[targetIdx]?.result === 0) {
+              // Newer v2 field already existed: fetch and return the fresh v2 record
+              try {
+                const freshRes = await fetch(`${this.restUrl}/HGET/${encodeURIComponent(fullKey)}/${encodeURIComponent(String(numericQaId))}`, {
+                  headers: { Authorization: `Bearer ${this.restToken}` }
+                });
+                if (freshRes.ok) {
+                  const freshData = await freshRes.json();
+                  if (freshData?.result) {
+                    const parsed = typeof freshData.result === 'string' ? JSON.parse(freshData.result) : freshData.result;
+                    if (parsed && parsed.expiresAt > now) {
+                      return {
+                        qa_id: numericQaId,
+                        original_browser_key: parsed.originalBrowserKey
+                      };
+                    }
+                  }
+                }
+              } catch (e) {}
+            }
             return {
               qa_id: numericQaId,
               original_browser_key: match.originalBrowserKey
             };
+          } else if (!match) {
+            // numericQaId was not in legacy snapshot, but could have been committed to v2 concurrently
+            try {
+              const freshRes = await fetch(`${this.restUrl}/HGET/${encodeURIComponent(fullKey)}/${encodeURIComponent(String(numericQaId))}`, {
+                headers: { Authorization: `Bearer ${this.restToken}` }
+              });
+              if (freshRes.ok) {
+                const freshData = await freshRes.json();
+                if (freshData?.result) {
+                  const parsed = typeof freshData.result === 'string' ? JSON.parse(freshData.result) : freshData.result;
+                  if (parsed && parsed.expiresAt > now) {
+                    return {
+                      qa_id: numericQaId,
+                      original_browser_key: parsed.originalBrowserKey
+                    };
+                  }
+                }
+              }
+            } catch (e) {}
           }
         }
       }

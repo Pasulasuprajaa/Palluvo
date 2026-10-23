@@ -1544,11 +1544,16 @@ async function runTests() {
         const results = [];
         for (const cmd of pipelineBody) {
           const op = cmd[0];
-          if (op === 'HSET') {
+          if (op === 'HSET' || op === 'HSETNX') {
             const [, key, field, val] = cmd;
             if (!mockKvStore.has(key)) mockKvStore.set(key, new Map());
-            mockKvStore.get(key).set(String(field), val);
-            results.push({ result: 1 });
+            const map = mockKvStore.get(key);
+            if (op === 'HSETNX' && map.has(String(field))) {
+              results.push({ result: 0 });
+            } else {
+              map.set(String(field), val);
+              results.push({ result: 1 });
+            }
           } else if (op === 'EXPIRE') {
             results.push({ result: 1 });
           } else {
@@ -1858,14 +1863,20 @@ async function runTests() {
     const keyTtls = new Map();
     let failHsetCommands = false;
     let failGetCommands = false;
+    let onPipelineHook = null;
     global.fetch = async (url, opts) => {
       const u = String(url);
       if (u.includes('/pipeline')) {
         const pipelineBody = typeof opts.body === 'string' ? JSON.parse(opts.body) : opts.body;
+        if (typeof onPipelineHook === 'function') {
+          const hook = onPipelineHook;
+          onPipelineHook = null;
+          await hook(pipelineBody);
+        }
         if (failHsetCommands) {
-          // Return command-level error on HSET
+          // Return command-level error on HSET / HSETNX
           const results = pipelineBody.map(cmd => {
-            if (cmd[0] === 'HSET') {
+            if (cmd[0] === 'HSET' || cmd[0] === 'HSETNX') {
               return { error: 'ERR simulated pipeline HSET failure' };
             }
             return { result: 1 };
@@ -1875,7 +1886,7 @@ async function runTests() {
         const results = [];
         for (const cmd of pipelineBody) {
           const op = cmd[0];
-          if (op === 'HSET') {
+          if (op === 'HSET' || op === 'HSETNX') {
             const [, key, field, val] = cmd;
             const existingVal = migrationKvStore.get(key);
             if (typeof existingVal === 'string') {
@@ -1883,8 +1894,13 @@ async function runTests() {
               results.push({ error: 'WRONGTYPE Operation against a key holding the wrong kind of value' });
             } else {
               if (!migrationKvStore.has(key)) migrationKvStore.set(key, new Map());
-              migrationKvStore.get(key).set(String(field), val);
-              results.push({ result: 1 });
+              const map = migrationKvStore.get(key);
+              if (op === 'HSETNX' && map.has(String(field))) {
+                results.push({ result: 0 });
+              } else {
+                map.set(String(field), val);
+                results.push({ result: 1 });
+              }
             }
           } else if (op === 'EXPIRE') {
             const [, key, ttlStr, condition] = cmd;
@@ -2246,66 +2262,151 @@ async function runTests() {
           'Legacy source key must be deleted only after successful recovery'
         );
 
-        // 6. Test concurrent reader/writer TTL preservation on v2 hash migration
+        // 6. Test true interleaving race on lazy migration:
+        // Reader GETs stale legacy snapshot with 45s TTL.
+        // BEFORE reader's migration pipeline commits, another instance commits a fresh vote
+        // for the SAME question (405) to v2 with 86400s TTL.
+        // Stale legacy HSETNX must NOT overwrite the fresher v2 field or its expiresAt!
         const concIp = '198.51.100.244';
         const concLegacyKey = 'palluvo:qa_rot:ip:' + concIp;
         const concV2Key = 'palluvo:qa_rot:v2:ip:' + concIp;
-        // Pre-populate legacy key with 45s remaining TTL
+        const legacyExpiresAt = Date.now() + 45000;
+
+        // Pre-populate legacy key with questions 405 (stale 45s) and 409 (unrelated legacy question)
         migrationKvStore.set(concLegacyKey, JSON.stringify({
-          405: { originalBrowserKey: 'anon_voter_legacy_405', expiresAt: Date.now() + 45000 }
+          405: { originalBrowserKey: 'anon_voter_legacy_405', expiresAt: legacyExpiresAt },
+          409: { originalBrowserKey: 'anon_voter_legacy_409', expiresAt: legacyExpiresAt }
         }));
         keyTtls.set(concLegacyKey, 45);
 
-        // Instance B writes a fresh vote with 24-hour TTL (86400s) to the v2 hash
         const concWriter = new AnonymousVoteRotationLedger({
           restUrl: 'https://mock-kv.upstash.io',
           restToken: 'mock_token',
           prefix: 'qa_rot:v2'
         });
-        await concWriter.recordVote(concIp, 406, 'anon_voter_fresh_406', 86400000);
-        assert.strictEqual(keyTtls.get(concV2Key), 86400, 'Fresh vote sets 86400s TTL on v2 hash');
-
-        // Instance A (reader) triggers lazy migration on getVotedQuestionsForIp
         const concReader = new AnonymousVoteRotationLedger({
           restUrl: 'https://mock-kv.upstash.io',
           restToken: 'mock_token',
           prefix: 'qa_rot:v2'
         });
+
+        // Interleave: exactly when concReader issues the migration pipeline (after GETting legacy snapshot),
+        // but BEFORE it is executed on KV, concWriter commits fresh vote for SAME question 405 with 86400s TTL
+        onPipelineHook = async (pipelineBody) => {
+          const isReaderMigration = pipelineBody.some(cmd => cmd[0] === 'HSETNX' && cmd[1] === concV2Key && cmd[2] === '405');
+          if (isReaderMigration) {
+            await concWriter.recordVote(concIp, 405, 'anon_voter_fresh_405', 86400000);
+          }
+        };
+
+        // concReader runs getVotedQuestionsForIp (which reads legacy, hooks writer, and executes HSETNX pipeline)
         const concVotes = await concReader.getVotedQuestionsForIp(concIp);
         const concQaIds = new Set(concVotes.map(v => v.qa_id));
-        assert.ok(concQaIds.has(405), 'Migrated legacy question 405 present');
-        assert.ok(concQaIds.has(406), 'Fresh question 406 present');
+        assert.ok(concQaIds.has(405), 'Question 405 present in getVotedQuestionsForIp');
+        assert.ok(concQaIds.has(409), 'Uncontested legacy question 409 migrated');
 
-        // Verify that the v2 hash TTL was NOT shortened from 86400 to 45!
+        // Verify that the destination v2 hash retains the FRESH vote for 405, NOT the stale legacy vote
+        const v2Map = migrationKvStore.get(concV2Key);
+        assert.ok(v2Map instanceof Map, 'concV2Key must exist as Map in shared KV store');
+        const field405 = JSON.parse(v2Map.get('405'));
+        assert.strictEqual(
+          field405.originalBrowserKey,
+          'anon_voter_fresh_405',
+          'Interleaved stale migration MUST NOT overwrite newer v2 originalBrowserKey'
+        );
+        assert.ok(
+          field405.expiresAt > legacyExpiresAt + 1000000,
+          `Fresh expiresAt must be retained (~86400s), not stale legacy snapshot (~45s). Got ${field405.expiresAt}`
+        );
         assert.strictEqual(
           keyTtls.get(concV2Key),
           86400,
-          'Lazy migration MUST NOT shorten existing v2 destination TTL from stale legacy snapshot'
+          'Destination v2 hash TTL must remain 86400s'
         );
 
-        // Analogous path: test concurrent write and getVoteRecord migration path
+        // Fast forward 46 seconds: simulate time after the 45s legacy record would have expired
+        const origDateNow1 = Date.now;
+        try {
+          Date.now = () => legacyExpiresAt + 1000;
+          const recordAfter46s = await concReader.getVoteRecord(concIp, 405);
+          assert.ok(
+            recordAfter46s,
+            'getVoteRecord MUST NOT return null after 45s when a fresh 24h vote was committed'
+          );
+          assert.strictEqual(
+            recordAfter46s.original_browser_key,
+            'anon_voter_fresh_405',
+            'getVoteRecord must return fresh browser key after 45s'
+          );
+          assert.strictEqual(
+            await concReader.isOriginalVoter(concIp, 405, 'rotated_intruder_token'),
+            false,
+            'Rotated identity token must be blocked even after 45s'
+          );
+          assert.strictEqual(
+            await concReader.isOriginalVoter(concIp, 405, 'anon_voter_fresh_405'),
+            true,
+            'Original voter token must match'
+          );
+
+          // Verify uncontested legacy question 409 expired as expected
+          const record409After46s = await concReader.getVoteRecord(concIp, 409);
+          assert.strictEqual(record409After46s, null, 'Unrefreshed legacy vote expires after its 45s window');
+        } finally {
+          Date.now = origDateNow1;
+        }
+
+        // 7. Analogous path: test concurrent write and getVoteRecord migration race for the SAME question
         const concIp2 = '198.51.100.245';
         const concLegacyKey2 = 'palluvo:qa_rot:ip:' + concIp2;
         const concV2Key2 = 'palluvo:qa_rot:v2:ip:' + concIp2;
+        const legacyExpiresAt2 = Date.now() + 30000;
         migrationKvStore.set(concLegacyKey2, JSON.stringify({
-          407: { originalBrowserKey: 'anon_voter_legacy_407', expiresAt: Date.now() + 30000 }
+          407: { originalBrowserKey: 'anon_voter_legacy_407', expiresAt: legacyExpiresAt2 },
+          410: { originalBrowserKey: 'anon_voter_legacy_410', expiresAt: legacyExpiresAt2 }
         }));
         keyTtls.set(concLegacyKey2, 30);
 
-        await concWriter.recordVote(concIp2, 408, 'anon_voter_fresh_408', 86400000);
-        assert.strictEqual(keyTtls.get(concV2Key2), 86400);
+        // Interleave: when getVoteRecord reaches migration pipeline, concWriter commits fresh vote for SAME question 407
+        onPipelineHook = async (pipelineBody) => {
+          const isReaderMigration = pipelineBody.some(cmd => cmd[0] === 'HSETNX' && cmd[1] === concV2Key2 && cmd[2] === '407');
+          if (isReaderMigration) {
+            await concWriter.recordVote(concIp2, 407, 'anon_voter_fresh_407', 86400000);
+          }
+        };
 
-        // Reader calls getVoteRecord on legacy question
         const record407 = await concReader.getVoteRecord(concIp2, 407);
-        assert.strictEqual(record407.qa_id, 407);
-        assert.strictEqual(record407.original_browser_key, 'anon_voter_legacy_407');
-
-        // Verify v2 hash TTL was not shortened to 30s
+        assert.ok(record407, 'getVoteRecord must return a record');
         assert.strictEqual(
-          keyTtls.get(concV2Key2),
-          86400,
-          'getVoteRecord migration MUST NOT shorten existing v2 destination TTL'
+          record407.original_browser_key,
+          'anon_voter_fresh_407',
+          'getVoteRecord must return the fresher v2 voter key, not stale legacy key'
         );
+
+        const v2Map2 = migrationKvStore.get(concV2Key2);
+        assert.ok(v2Map2 instanceof Map, 'concV2Key2 must exist as Map in shared KV store');
+        const field407 = JSON.parse(v2Map2.get('407'));
+        assert.strictEqual(field407.originalBrowserKey, 'anon_voter_fresh_407');
+        assert.ok(
+          field407.expiresAt > legacyExpiresAt2 + 1000000,
+          'v2 field 407 must preserve 24h expiresAt'
+        );
+        assert.strictEqual(keyTtls.get(concV2Key2), 86400, 'Hash TTL must remain 86400s');
+
+        // Fast forward 31 seconds: simulate after 30s legacy record expires
+        const origDateNow2 = Date.now;
+        try {
+          Date.now = () => legacyExpiresAt2 + 1000;
+          const recordAfter31s = await concReader.getVoteRecord(concIp2, 407);
+          assert.ok(recordAfter31s, 'getVoteRecord on question 407 must not return null after 30s');
+          assert.strictEqual(recordAfter31s.original_browser_key, 'anon_voter_fresh_407');
+
+          // Question 410 was unrefreshed legacy, must expire
+          const recordAfter31s_410 = await concReader.getVoteRecord(concIp2, 410);
+          assert.strictEqual(recordAfter31s_410, null, 'Unrefreshed legacy question 410 must expire');
+        } finally {
+          Date.now = origDateNow2;
+        }
       } finally {
         failingServer.close();
       }
