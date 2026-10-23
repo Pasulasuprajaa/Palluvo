@@ -3028,7 +3028,45 @@ async function runTests() {
       assert.strictEqual(pin560999Res.body.expressAvailable, false, '560999 must NOT assert express availability');
       assert.ok(pin560999Res.body.estimated_delivery, 'Must provide estimated_delivery');
 
-      console.log('✅ PASS: [P2] PIN serviceability rejects invalid PINs, normalizes schema for UI, and distinguishes verified hubs from prefix estimates');
+      // 6. Mixed prefix 24 (Uttarakhand & Western Uttar Pradesh) handling
+      // Unlisted PIN under mixed prefix 24 must keep state unknown (null) instead of falsely claiming 'Uttarakhand'
+      const pin24UnlistedRes = await request('/api/pincode/check/244002');
+      assert.strictEqual(pin24UnlistedRes.status, 200, 'Unlisted 24 prefix PIN must return HTTP 200');
+      assert.strictEqual(pin24UnlistedRes.body.valid, true);
+      assert.strictEqual(pin24UnlistedRes.body.verified, false);
+      assert.strictEqual(pin24UnlistedRes.body.serviceable, false);
+      assert.strictEqual(pin24UnlistedRes.body.is_estimate, true);
+      assert.strictEqual(pin24UnlistedRes.body.state, null, 'Unlisted PIN under mixed prefix 24 must not assign a single state');
+      assert.strictEqual(pin24UnlistedRes.body.location, 'Uttarakhand & Western UP');
+
+      // Authoritative exact-PIN lookup for Moradabad (244001) resolves to Uttar Pradesh
+      const pin244001Res = await request('/api/pincode/check/244001');
+      assert.strictEqual(pin244001Res.status, 200);
+      assert.strictEqual(pin244001Res.body.valid, true);
+      assert.strictEqual(pin244001Res.body.verified, true);
+      assert.strictEqual(pin244001Res.body.serviceable, true);
+      assert.strictEqual(pin244001Res.body.city, 'Moradabad');
+      assert.strictEqual(pin244001Res.body.state, 'Uttar Pradesh', 'PIN 244001 must resolve to Uttar Pradesh from exact-PIN source');
+      assert.strictEqual(pin244001Res.body.location, 'Moradabad, Uttar Pradesh');
+
+      // Authoritative exact-PIN lookup for Dehradun (248001) resolves to Uttarakhand
+      const pin248001Res = await request('/api/pincode/check/248001');
+      assert.strictEqual(pin248001Res.status, 200);
+      assert.strictEqual(pin248001Res.body.valid, true);
+      assert.strictEqual(pin248001Res.body.verified, true);
+      assert.strictEqual(pin248001Res.body.serviceable, true);
+      assert.strictEqual(pin248001Res.body.city, 'Dehradun');
+      assert.strictEqual(pin248001Res.body.state, 'Uttarakhand', 'PIN 248001 must resolve to Uttarakhand from exact-PIN source');
+      assert.strictEqual(pin248001Res.body.location, 'Dehradun, Uttarakhand');
+
+      // Mixed prefix 79 (North Eastern States) keeps state null
+      const pin79Res = await request('/api/pincode/check/790001');
+      assert.strictEqual(pin79Res.status, 200);
+      assert.strictEqual(pin79Res.body.valid, true);
+      assert.strictEqual(pin79Res.body.state, null, 'Multi-state prefix 79 must keep state null');
+      assert.strictEqual(pin79Res.body.location, 'North Eastern States');
+
+      console.log('✅ PASS: [P2] PIN serviceability rejects invalid PINs, normalizes schema for UI, resolves exact mixed PINs, and keeps mixed prefixes unknown');
     } finally {
       global.fetch = regressionFetch;
     }

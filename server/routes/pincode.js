@@ -71,6 +71,13 @@ const VERIFIED_DELIVERY_OFFICES = {
   '122002': { city: 'Gurugram', state: 'Haryana', days: '2-3 Business Days', hub: 'DLF Cyber City Hub', codAvailable: true, expressAvailable: true },
   '201301': { city: 'Noida', state: 'Uttar Pradesh', days: '2-3 Business Days', hub: 'Noida Express Hub', codAvailable: true, expressAvailable: true },
 
+  // Uttarakhand & Western Uttar Pradesh
+  '244001': { city: 'Moradabad', state: 'Uttar Pradesh', days: '2-3 Business Days', hub: 'Moradabad Central Hub', codAvailable: true, expressAvailable: true },
+  '248001': { city: 'Dehradun', state: 'Uttarakhand', days: '2-3 Business Days', hub: 'Dehradun GPO Hub', codAvailable: true, expressAvailable: true },
+  '247001': { city: 'Saharanpur', state: 'Uttar Pradesh', days: '2-3 Business Days', hub: 'Saharanpur Central Hub', codAvailable: true, expressAvailable: true },
+  '249201': { city: 'Rishikesh', state: 'Uttarakhand', days: '2-3 Business Days', hub: 'Rishikesh City Hub', codAvailable: true, expressAvailable: true },
+  '249401': { city: 'Haridwar', state: 'Uttarakhand', days: '2-3 Business Days', hub: 'Haridwar Central Hub', codAvailable: true, expressAvailable: true },
+
   // Chennai & Tamil Nadu
   '600001': { city: 'Chennai', state: 'Tamil Nadu', days: '1-2 Business Days', hub: 'Chennai GPO Hub', codAvailable: true, expressAvailable: true },
   '600004': { city: 'Chennai', state: 'Tamil Nadu', days: '1-2 Business Days', hub: 'Mylapore Heritage Hub', codAvailable: true, expressAvailable: true },
@@ -117,7 +124,9 @@ const POSTAL_CIRCLES = {
   '21': { region: 'Central Uttar Pradesh', state: 'Uttar Pradesh' },
   '22': { region: 'Eastern Uttar Pradesh', state: 'Uttar Pradesh' },
   '23': { region: 'Eastern Uttar Pradesh', state: 'Uttar Pradesh' },
-  '24': { region: 'Uttarakhand & Western UP', state: 'Uttarakhand' },
+  // Mixed-state prefix: 24 covers both Uttarakhand (Dehradun, Haridwar) and Western UP (Moradabad, Saharanpur)
+  // State is kept unknown (null) unless resolved from an exact-PIN source
+  '24': { region: 'Uttarakhand & Western UP', state: null },
   '25': { region: 'Western Uttar Pradesh', state: 'Uttar Pradesh' },
   '26': { region: 'Rohilkhand & Kumaon', state: 'Uttar Pradesh' },
   '27': { region: 'Eastern Uttar Pradesh', state: 'Uttar Pradesh' },
@@ -166,7 +175,7 @@ const POSTAL_CIRCLES = {
   '76': { region: 'Southern Odisha', state: 'Odisha' },
   '77': { region: 'Northern & Western Odisha', state: 'Odisha' },
   '78': { region: 'Assam Circle', state: 'Assam' },
-  '79': { region: 'North Eastern States', state: 'North East' },
+  '79': { region: 'North Eastern States', state: null },
   '80': { region: 'Patna & Central Bihar', state: 'Bihar' },
   '81': { region: 'Eastern Bihar', state: 'Bihar' },
   '82': { region: 'Southern Bihar', state: 'Bihar' },
@@ -224,8 +233,8 @@ router.get('/check/:pincode', (req, res) => {
 
   if (circle) {
     const city = circle.region;
-    const state = circle.state;
-    const location = `${city}, ${state}`;
+    const state = circle.state || null;
+    const location = state ? `${city}, ${state}` : city;
     const days = '4-6 Business Days';
 
     return res.json({
