@@ -19,6 +19,59 @@ const DEFAULT_TTL_MS = parseInt(process.env.QA_VOTE_ROTATION_TTL_MS, 10) || 24 *
  * 3. Process-local TTL-pruned Map fallback.
  * Automatically prunes expired records on read/write to prevent accumulation over the lifetime of warm instances.
  */
+
+const ATOMIC_CONDITIONAL_REPLACE_SCRIPT = `
+local current = redis.call('HGET', KEYS[1], ARGV[1])
+local now = tonumber(ARGV[5])
+local legacyExpiresAt = tonumber(ARGV[3])
+local ttl = tonumber(ARGV[4])
+
+if not current then
+  redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
+  local curTtl = redis.call('TTL', KEYS[1])
+  if curTtl < 0 or (ttl and ttl > curTtl) then
+    redis.call('EXPIRE', KEYS[1], ttl)
+  end
+  return 'SET'
+end
+
+local curExpiresAt = nil
+if cjson and cjson.decode then
+  pcall(function()
+    local parsed = cjson.decode(current)
+    if parsed and parsed.expiresAt then
+      curExpiresAt = tonumber(parsed.expiresAt)
+    end
+  end)
+end
+if not curExpiresAt then
+  local match = string.match(current, '"expiresAt"%s*:%s*(%d+)')
+  if match then
+    curExpiresAt = tonumber(match)
+  end
+end
+
+if (not curExpiresAt or curExpiresAt <= now or curExpiresAt < legacyExpiresAt) and (legacyExpiresAt > now) then
+  redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
+  local curTtl = redis.call('TTL', KEYS[1])
+  if curTtl < 0 or (ttl and ttl > curTtl) then
+    redis.call('EXPIRE', KEYS[1], ttl)
+  end
+  return 'REPLACED'
+else
+  return current
+end
+`;
+
+const ATOMIC_COMPARE_AND_DELETE_SCRIPT = `
+local current = redis.call('GET', KEYS[1])
+if current == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+else
+  return 0
+end
+`;
+
 class AnonymousVoteRotationLedger {
   constructor(options = {}) {
     this.prefix = options.prefix || 'qa_rot:v2';
@@ -66,6 +119,56 @@ class AnonymousVoteRotationLedger {
       }
     }
     return data;
+  }
+
+  async executeEval(script, keys = [], args = []) {
+    if (!this.isShared || !this.restUrl || !this.restToken) return null;
+    const res = await fetch(`${this.restUrl}/eval`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.restToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        script,
+        keys: keys.map(String),
+        args: args.map(String)
+      })
+    });
+    if (!res.ok) {
+      // Fallback: try pipeline with EVAL command
+      const pipelineRes = await this.executePipeline([
+        ['EVAL', script, keys.length, ...keys, ...args]
+      ]);
+      return pipelineRes[0]?.result;
+    }
+    const data = await res.json();
+    if (data?.error) {
+      throw new Error(`Redis EVAL error: ${data.error}`);
+    }
+    return data.result;
+  }
+
+  async executeAtomicConditionalSet(fullKey, field, payload, expiresAt, remainingTtlSec, now) {
+    if (typeof this._beforeConditionalReplaceHook === 'function') {
+      await this._beforeConditionalReplaceHook(fullKey, field);
+    }
+    return await this.executeEval(
+      ATOMIC_CONDITIONAL_REPLACE_SCRIPT,
+      [fullKey],
+      [field, payload, String(expiresAt), String(remainingTtlSec), String(now)]
+    );
+  }
+
+  async executeCompareAndDelete(key, expectedValue) {
+    if (typeof this._beforeCompareAndDeleteHook === 'function') {
+      await this._beforeCompareAndDeleteHook(key);
+    }
+    return await this.executeEval(
+      ATOMIC_COMPARE_AND_DELETE_SCRIPT,
+      [key],
+      [expectedValue]
+    );
   }
 
   async readLegacyStringSnapshot(sourceKey) {
@@ -119,14 +222,9 @@ class AnonymousVoteRotationLedger {
 
     if (!snapshot.rawString || snapshot.entries.size === 0) {
       if (snapshot.rawString) {
-        // Legacy source key exists but has no active unexpired entries.
-        // Confirm source is unchanged before deleting.
-        const verify = await this.readLegacyStringSnapshot(legacyKey);
-        if (verify.rawString === snapshot.rawString) {
-          await fetch(`${this.restUrl}/DEL/${encodeURIComponent(legacyKey)}`, {
-            headers: { Authorization: `Bearer ${this.restToken}` }
-          }).catch(() => {});
-        }
+        // Source key exists but has no active unexpired entries.
+        // Compare and delete atomically against the observed snapshot.
+        await this.executeCompareAndDelete(legacyKey, snapshot.rawString).catch(() => {});
       }
       return { migratedVotes };
     }
@@ -137,116 +235,56 @@ class AnonymousVoteRotationLedger {
     while (snapshot.entries.size > 0 && retries < maxRetries) {
       const now = Date.now();
       const legacyKeyEntries = Array.from(snapshot.entries.entries());
-      const migrationCommands = [];
 
       for (const [qid, item] of legacyKeyEntries) {
         if (options.skipQaId && qid === options.skipQaId) continue;
-        migrationCommands.push([
-          'HSETNX',
+        const remainingTtlSec = Math.max(1, Math.ceil((item.expiresAt - now) / 1000));
+        const legacyPayload = JSON.stringify({
+          originalBrowserKey: item.originalBrowserKey,
+          expiresAt: item.expiresAt
+        });
+
+        // Atomically evaluate destination field in Redis and conditionally replace if expired/older
+        const result = await this.executeAtomicConditionalSet(
           fullKey,
           String(qid),
-          JSON.stringify({
-            originalBrowserKey: item.originalBrowserKey,
-            expiresAt: item.expiresAt
-          })
-        ]);
-      }
+          legacyPayload,
+          item.expiresAt,
+          remainingTtlSec,
+          now
+        );
 
-      const allExpires = Array.from(snapshot.entries.values()).map(e => e.expiresAt);
-      const maxRemainingTtlSec = Math.max(
-        1,
-        Math.ceil(Math.max(...allExpires.map(e => e - now)) / 1000)
-      );
-      if (migrationCommands.length > 0) {
-        migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'NX']);
-        migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'GT']);
-      }
-
-      let pipelineResults = [];
-      if (migrationCommands.length > 0) {
-        pipelineResults = await this.executePipeline(migrationCommands);
-      }
-
-      // Check results for each legacy entry:
-      // If HSETNX returned 0, compare expirations: if destination v2 is expired or older while legacy record is still live,
-      // replace the expired destination field with the live legacy record before deleting source.
-      const replacementCommands = [];
-      let maxReplacementTtlSec = 1;
-
-      let cmdIdx = 0;
-      for (const [qid, item] of legacyKeyEntries) {
-        if (options.skipQaId && qid === options.skipQaId) continue;
-        const hsetnxRes = pipelineResults[cmdIdx]?.result;
-        cmdIdx++;
-
-        if (hsetnxRes === 0) {
-          let v2Parsed = null;
-          try {
-            const freshRes = await fetch(`${this.restUrl}/HGET/${encodeURIComponent(fullKey)}/${encodeURIComponent(String(qid))}`, {
-              headers: { Authorization: `Bearer ${this.restToken}` }
-            });
-            if (freshRes.ok) {
-              const freshData = await freshRes.json();
-              if (freshData?.result) {
-                v2Parsed = typeof freshData.result === 'string' ? JSON.parse(freshData.result) : freshData.result;
-              }
-            }
-          } catch (e) {}
-
-          if (v2Parsed && v2Parsed.expiresAt > now && v2Parsed.expiresAt >= item.expiresAt) {
-            // Live v2 record is fresher or equal
-            migratedVotes.set(qid, {
-              qa_id: qid,
-              original_browser_key: v2Parsed.originalBrowserKey
-            });
-          } else if (item.expiresAt > now) {
-            // Destination v2 field is expired or older, but legacy record is still live!
-            // Atomically replace expired destination field with live legacy record before deleting source.
-            replacementCommands.push([
-              'HSET',
-              fullKey,
-              String(qid),
-              JSON.stringify({
-                originalBrowserKey: item.originalBrowserKey,
-                expiresAt: item.expiresAt
-              })
-            ]);
-            const remSec = Math.max(1, Math.ceil((item.expiresAt - now) / 1000));
-            if (remSec > maxReplacementTtlSec) maxReplacementTtlSec = remSec;
-            migratedVotes.set(qid, {
-              qa_id: qid,
-              original_browser_key: item.originalBrowserKey
-            });
-          }
-        } else if (item.expiresAt > now) {
+        if (result === 'SET' || result === 'REPLACED') {
           migratedVotes.set(qid, {
             qa_id: qid,
             original_browser_key: item.originalBrowserKey
           });
+        } else if (typeof result === 'string') {
+          // Destination v2 field was fresher! Retain the active v2 browser key.
+          try {
+            const parsed = JSON.parse(result);
+            if (parsed && parsed.expiresAt > now) {
+              migratedVotes.set(qid, {
+                qa_id: qid,
+                original_browser_key: parsed.originalBrowserKey
+              });
+            }
+          } catch (e) {}
         }
       }
 
-      if (replacementCommands.length > 0) {
-        replacementCommands.push(['EXPIRE', fullKey, maxReplacementTtlSec, 'NX']);
-        replacementCommands.push(['EXPIRE', fullKey, maxReplacementTtlSec, 'GT']);
-        await this.executePipeline(replacementCommands);
+      // Atomic Compare-And-Delete against the observed source snapshot
+      const cadResult = await this.executeCompareAndDelete(legacyKey, snapshot.rawString);
+      if (cadResult === 1) {
+        // Source key was unchanged and successfully deleted!
+        break;
+      } else {
+        // Source key was modified concurrently (or already deleted).
+        // Re-read snapshot and retry so newly added entries are migrated before deletion.
+        snapshot = await this.readLegacyStringSnapshot(legacyKey);
+        retries++;
+        continue;
       }
-
-      // Verify that the legacy source key did not change after the migration snapshot before deleting
-      const verifySnapshot = await this.readLegacyStringSnapshot(legacyKey);
-      if (verifySnapshot.rawString !== null) {
-        if (verifySnapshot.rawString !== snapshot.rawString) {
-          // Legacy key was modified concurrently! Do NOT delete; loop to migrate newly arrived writes.
-          snapshot = verifySnapshot;
-          retries++;
-          continue;
-        }
-        // Legacy source key is confirmed unchanged: safe to delete
-        await fetch(`${this.restUrl}/DEL/${encodeURIComponent(legacyKey)}`, {
-          headers: { Authorization: `Bearer ${this.restToken}` }
-        }).catch(() => {});
-      }
-      break;
     }
 
     return { migratedVotes };

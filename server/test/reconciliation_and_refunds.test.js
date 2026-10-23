@@ -1864,8 +1864,75 @@ async function runTests() {
     let failHsetCommands = false;
     let failGetCommands = false;
     let onPipelineHook = null;
+    const handleEval = (script, keys, args) => {
+      if (failHsetCommands) {
+        return { ok: false, status: 500, json: async () => ({ error: 'ERR simulated pipeline HSET failure' }) };
+      }
+      if (script.includes('HGET') || script.includes('HSET')) {
+        const key = keys[0];
+        const field = String(args[0]);
+        const payload = args[1];
+        const legacyExpiresAt = Number(args[2]);
+        const ttl = Number(args[3]);
+        const now = Number(args[4]);
+
+        const existingVal = migrationKvStore.get(key);
+        if (typeof existingVal === 'string') {
+          return { ok: true, json: async () => ({ error: 'WRONGTYPE Operation against a key holding the wrong kind of value' }) };
+        }
+        if (!migrationKvStore.has(key)) {
+          migrationKvStore.set(key, new Map());
+        }
+        const map = migrationKvStore.get(key);
+        const current = map.get(field);
+
+        if (!current) {
+          map.set(field, payload);
+          const curTtl = keyTtls.get(key);
+          if (curTtl === undefined || ttl > curTtl) {
+            keyTtls.set(key, ttl);
+          }
+          return { ok: true, json: async () => ({ result: 'SET' }) };
+        }
+
+        let curExpiresAt = null;
+        try {
+          const parsed = JSON.parse(current);
+          curExpiresAt = parsed.expiresAt ? Number(parsed.expiresAt) : null;
+        } catch (e) {}
+
+        if ((!curExpiresAt || curExpiresAt <= now || curExpiresAt < legacyExpiresAt) && (legacyExpiresAt > now)) {
+          map.set(field, payload);
+          const curTtl = keyTtls.get(key);
+          if (curTtl === undefined || ttl > curTtl) {
+            keyTtls.set(key, ttl);
+          }
+          return { ok: true, json: async () => ({ result: 'REPLACED' }) };
+        } else {
+          return { ok: true, json: async () => ({ result: current }) };
+        }
+      } else if (script.includes('current == ARGV[1]') || script.includes('DEL')) {
+        const key = keys[0];
+        const expected = args[0];
+        const current = migrationKvStore.get(key);
+        if (current === expected) {
+          migrationKvStore.delete(key);
+          keyTtls.delete(key);
+          return { ok: true, json: async () => ({ result: 1 }) };
+        } else {
+          return { ok: true, json: async () => ({ result: 0 }) };
+        }
+      }
+      return { ok: true, json: async () => ({ result: 1 }) };
+    };
+
     global.fetch = async (url, opts) => {
       const u = String(url);
+      if (u.includes('/eval')) {
+        const payload = typeof opts.body === 'string' ? JSON.parse(opts.body) : opts.body;
+        const { script, keys, args } = payload;
+        return handleEval(script, keys, args);
+      }
       if (u.includes('/pipeline')) {
         const pipelineBody = typeof opts.body === 'string' ? JSON.parse(opts.body) : opts.body;
         if (typeof onPipelineHook === 'function') {
@@ -1874,9 +1941,9 @@ async function runTests() {
           await hook(pipelineBody);
         }
         if (failHsetCommands) {
-          // Return command-level error on HSET / HSETNX
+          // Return command-level error on HSET / HSETNX / EVAL
           const results = pipelineBody.map(cmd => {
-            if (cmd[0] === 'HSET' || cmd[0] === 'HSETNX') {
+            if (cmd[0] === 'HSET' || cmd[0] === 'HSETNX' || cmd[0] === 'EVAL') {
               return { error: 'ERR simulated pipeline HSET failure' };
             }
             return { result: 1 };
@@ -1902,6 +1969,14 @@ async function runTests() {
                 results.push({ result: 1 });
               }
             }
+          } else if (op === 'EVAL') {
+            const [, script, numkeys, ...rest] = cmd;
+            const nKeys = Number(numkeys);
+            const keys = rest.slice(0, nKeys);
+            const args = rest.slice(nKeys);
+            const evalRes = await handleEval(script, keys, args);
+            const evalJson = await evalRes.json();
+            results.push(evalJson);
           } else if (op === 'EXPIRE') {
             const [, key, ttlStr, condition] = cmd;
             const ttl = Number(ttlStr);
@@ -1951,7 +2026,7 @@ async function runTests() {
             result[f] = v;
           }
         }
-        return { ok: true, json: async () => ({ result }) };
+        return { ok: true, json: async () => ({ result: result }) };
       }
       if (u.includes('/HGET/')) {
         const parts = u.split('/HGET/')[1].split('/');
@@ -2290,11 +2365,10 @@ async function runTests() {
           prefix: 'qa_rot:v2'
         });
 
-        // Interleave: exactly when concReader issues the migration pipeline (after GETting legacy snapshot),
-        // but BEFORE it is executed on KV, concWriter commits fresh vote for SAME question 405 with 86400s TTL
-        onPipelineHook = async (pipelineBody) => {
-          const isReaderMigration = pipelineBody.some(cmd => cmd[0] === 'HSETNX' && cmd[1] === concV2Key && cmd[2] === '405');
-          if (isReaderMigration) {
+        // Interleave: exactly when concReader evaluates/replaces destination field for question 405,
+        // concWriter commits fresh vote for SAME question 405 with 86400s TTL
+        concReader._beforeConditionalReplaceHook = async (fullKey, field) => {
+          if (fullKey === concV2Key && field === '405') {
             await concWriter.recordVote(concIp, 405, 'anon_voter_fresh_405', 86400000);
           }
         };
@@ -2367,10 +2441,9 @@ async function runTests() {
         }));
         keyTtls.set(concLegacyKey2, 30);
 
-        // Interleave: when getVoteRecord reaches migration pipeline, concWriter commits fresh vote for SAME question 407
-        onPipelineHook = async (pipelineBody) => {
-          const isReaderMigration = pipelineBody.some(cmd => cmd[0] === 'HSETNX' && cmd[1] === concV2Key2 && cmd[2] === '407');
-          if (isReaderMigration) {
+        // Interleave: when getVoteRecord evaluates/replaces question 407, concWriter commits fresh vote for SAME question 407
+        concReader._beforeConditionalReplaceHook = async (fullKey, field) => {
+          if (fullKey === concV2Key2 && field === '407') {
             await concWriter.recordVote(concIp2, 407, 'anon_voter_fresh_407', 86400000);
           }
         };
@@ -2409,8 +2482,8 @@ async function runTests() {
         }
 
         // 8. [P2] Regression: Replace an expired v2 field when the legacy record is still live
-        // HSETNX returns 0 for an existing hash field even if expired. The migration must compare expirations
-        // and replace the expired destination field with the live legacy record before deleting source.
+        // The migration atomically evaluates expiration and conditionally replaces expired destination field
+        // with the live legacy record before deleting source.
         const expIp = '198.51.100.246';
         const expLegacyKey = 'palluvo:qa_rot:ip:' + expIp;
         const expV2Key = 'palluvo:qa_rot:v2:ip:' + expIp;
@@ -2475,9 +2548,86 @@ async function runTests() {
           'Intruder token must be blocked from voting again'
         );
 
-        // 9. [P2] Regression: Do not delete a legacy key that changed after the migration snapshot
-        // If an older instance adds question 402 after the reader fetches a snapshot containing 401,
-        // the reader must verify source is unchanged and retry, preserving 402 in destination before deleting source.
+        // 8b. [P2] Regression: Interleaved fresh v2 writer between evaluation and replacement
+        // Review finding: "replacement can overwrite a concurrent fresh v2 vote. Please make the expiry comparison
+        // and conditional replacement atomic (for example, a Redis Lua script), and add a regression that interleaves
+        // the fresh writer between HGET and replacement."
+        const interIp = '198.51.100.248';
+        const interLegacyKey = 'palluvo:qa_rot:ip:' + interIp;
+        const interV2Key = 'palluvo:qa_rot:v2:ip:' + interIp;
+
+        // Destination v2 hash has field 406 expired 5 seconds ago
+        const v2MapInter = new Map();
+        v2MapInter.set('406', JSON.stringify({
+          originalBrowserKey: 'anon_voter_expired_v2_406',
+          expiresAt: Date.now() - 5000
+        }));
+        migrationKvStore.set(interV2Key, v2MapInter);
+        keyTtls.set(interV2Key, 60);
+
+        // Legacy key has live record expiring in 60s
+        migrationKvStore.set(interLegacyKey, JSON.stringify({
+          406: { originalBrowserKey: 'anon_voter_stale_legacy_406', expiresAt: Date.now() + 60000 }
+        }));
+        keyTtls.set(interLegacyKey, 60);
+
+        const interReader = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+
+        // Interleave fresh writer: right in _beforeConditionalReplaceHook
+        // (simulating a concurrent writer arriving between evaluation and replacement)
+        let interWriterRan = false;
+        interReader._beforeConditionalReplaceHook = async (fullKey, field) => {
+          if (field === '406' && !interWriterRan) {
+            interWriterRan = true;
+            await concWriter.recordVote(interIp, 406, 'anon_voter_fresh_interleaved_406', 86400000);
+          }
+        };
+
+        const interVotes = await interReader.getVotedQuestionsForIp(interIp);
+        assert.strictEqual(interWriterRan, true, 'Interleaved fresh writer must have executed in race window');
+        assert.strictEqual(interVotes.length, 1);
+        assert.strictEqual(interVotes[0].qa_id, 406);
+        assert.strictEqual(
+          interVotes[0].original_browser_key,
+          'anon_voter_fresh_interleaved_406',
+          'Interleaved fresh v2 write must take precedence over stale legacy record'
+        );
+
+        // Destination v2 hash must retain the fresh write and its 24h expiration
+        const interUpdatedV2Map = migrationKvStore.get(interV2Key);
+        const interField = JSON.parse(interUpdatedV2Map.get('406'));
+        assert.strictEqual(
+          interField.originalBrowserKey,
+          'anon_voter_fresh_interleaved_406',
+          'Fresh v2 originalBrowserKey must NOT be overwritten by stale legacy record'
+        );
+        assert.ok(
+          interField.expiresAt > Date.now() + 1000000,
+          'Fresh v2 24h expiration must be preserved'
+        );
+
+        // Legacy key is deleted after migration resolves
+        assert.strictEqual(migrationKvStore.has(interLegacyKey), false, 'Legacy key must be deleted after migration resolves');
+
+        // isOriginalVoter verifies fresh voter and rejects stale legacy voter
+        assert.strictEqual(
+          await interReader.isOriginalVoter(interIp, 406, 'anon_voter_fresh_interleaved_406'),
+          true,
+          'Fresh voter recognized'
+        );
+        assert.strictEqual(
+          await interReader.isOriginalVoter(interIp, 406, 'anon_voter_stale_legacy_406'),
+          false,
+          'Stale legacy voter key rejected'
+        );
+
+        // 9. [P2] Regression: Atomic Compare-And-Delete prevents dropping legacy keys updated in verification-to-delete window
+        // Review finding: "the legacy key can still change between verification and deletion. Please compare-and-delete
+        // atomically against the observed source value (or use an equivalent versioned migration), and test an update in this exact verification-to-delete window."
         const concRaceIp = '198.51.100.247';
         const concRaceLegacyKey = 'palluvo:qa_rot:ip:' + concRaceIp;
         const concRaceV2Key = 'palluvo:qa_rot:v2:ip:' + concRaceIp;
@@ -2488,11 +2638,18 @@ async function runTests() {
         }));
         keyTtls.set(concRaceLegacyKey, 60);
 
-        // Interleaving hook: when reader's migration pipeline for 401 is received,
-        // an older instance concurrently writes question 402 to the legacy key!
-        onPipelineHook = async (pipelineBody) => {
-          const isRaceMigration = pipelineBody.some(cmd => cmd[1] === concRaceV2Key && cmd[2] === '401');
-          if (isRaceMigration) {
+        const concRaceReader = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+
+        // Interleaving hook: An older instance updates the legacy JSON in the EXACT verification-to-delete window!
+        // (after reading snapshot of 401, right before executing atomic Compare-And-Delete)
+        let legacyUpdateTriggered = false;
+        concRaceReader._beforeCompareAndDeleteHook = async (key) => {
+          if (key === concRaceLegacyKey && !legacyUpdateTriggered) {
+            legacyUpdateTriggered = true;
             migrationKvStore.set(concRaceLegacyKey, JSON.stringify({
               401: { originalBrowserKey: 'anon_voter_legacy_401', expiresAt: Date.now() + 60000 },
               402: { originalBrowserKey: 'anon_voter_legacy_402', expiresAt: Date.now() + 60000 }
@@ -2500,16 +2657,11 @@ async function runTests() {
           }
         };
 
-        const concRaceReader = new AnonymousVoteRotationLedger({
-          restUrl: 'https://mock-kv.upstash.io',
-          restToken: 'mock_token',
-          prefix: 'qa_rot:v2'
-        });
-
         const raceVotes = await concRaceReader.getVotedQuestionsForIp(concRaceIp);
+        assert.strictEqual(legacyUpdateTriggered, true, 'Legacy update hook must have executed in verification-to-delete window');
         const raceQaIds = new Set(raceVotes.map(v => v.qa_id));
 
-        // Both questions must be present! Question 402 must NOT be erased!
+        // Both questions must be present! Question 402 was not erased because Compare-And-Delete rejected the mismatch and retried
         assert.ok(raceQaIds.has(401), 'Question 401 must be migrated');
         assert.ok(raceQaIds.has(402), 'Concurrently added question 402 must be migrated after retry');
 
@@ -2520,7 +2672,7 @@ async function runTests() {
         assert.ok(concRaceV2Map.has('402'), 'Field 402 must exist in v2 hash');
 
         // Legacy key was safely deleted after both questions were confirmed migrated
-        assert.strictEqual(migrationKvStore.has(concRaceLegacyKey), false);
+        assert.strictEqual(migrationKvStore.has(concRaceLegacyKey), false, 'Legacy key deleted only after full migration');
 
         // Independent reader confirms both questions exist in v2 hash
         const indepRaceReader = new AnonymousVoteRotationLedger({
