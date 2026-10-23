@@ -2407,6 +2407,131 @@ async function runTests() {
         } finally {
           Date.now = origDateNow2;
         }
+
+        // 8. [P2] Regression: Replace an expired v2 field when the legacy record is still live
+        // HSETNX returns 0 for an existing hash field even if expired. The migration must compare expirations
+        // and replace the expired destination field with the live legacy record before deleting source.
+        const expIp = '198.51.100.246';
+        const expLegacyKey = 'palluvo:qa_rot:ip:' + expIp;
+        const expV2Key = 'palluvo:qa_rot:v2:ip:' + expIp;
+
+        // In destination v2 hash: field 405 exists, but expired 5 seconds ago
+        const v2MapExp = new Map();
+        v2MapExp.set('405', JSON.stringify({
+          originalBrowserKey: 'anon_voter_expired_v2_405',
+          expiresAt: Date.now() - 5000
+        }));
+        migrationKvStore.set(expV2Key, v2MapExp);
+        keyTtls.set(expV2Key, 60);
+
+        // In legacy key: question 405 has a live record expiring 60s in the future
+        const liveLegacyExpiresAt = Date.now() + 60000;
+        migrationKvStore.set(expLegacyKey, JSON.stringify({
+          405: { originalBrowserKey: 'anon_voter_live_legacy_405', expiresAt: liveLegacyExpiresAt }
+        }));
+        keyTtls.set(expLegacyKey, 60);
+
+        const expReader = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+
+        // Reader calls getVotedQuestionsForIp
+        const expVotes = await expReader.getVotedQuestionsForIp(expIp);
+        assert.strictEqual(expVotes.length, 1, 'Live legacy vote must NOT be dropped when v2 field is expired');
+        assert.strictEqual(expVotes[0].qa_id, 405);
+        assert.strictEqual(
+          expVotes[0].original_browser_key,
+          'anon_voter_live_legacy_405',
+          'Live legacy voter key must replace expired v2 field'
+        );
+
+        // Destination v2 field in Redis must be replaced with the live record
+        const updatedV2Map = migrationKvStore.get(expV2Key);
+        const replacedField = JSON.parse(updatedV2Map.get('405'));
+        assert.strictEqual(
+          replacedField.originalBrowserKey,
+          'anon_voter_live_legacy_405',
+          'Expired v2 field must be replaced by live legacy record'
+        );
+        assert.ok(
+          replacedField.expiresAt > Date.now(),
+          'Replaced v2 field must have future expiration'
+        );
+
+        // Legacy key was deleted only after destination replacement succeeded
+        assert.strictEqual(migrationKvStore.has(expLegacyKey), false, 'Legacy key must be deleted after replacement');
+
+        // Verification with isOriginalVoter
+        assert.strictEqual(
+          await expReader.isOriginalVoter(expIp, 405, 'anon_voter_live_legacy_405'),
+          true,
+          'Original voter token must match live legacy identity'
+        );
+        assert.strictEqual(
+          await expReader.isOriginalVoter(expIp, 405, 'new_unaliased_intruder'),
+          false,
+          'Intruder token must be blocked from voting again'
+        );
+
+        // 9. [P2] Regression: Do not delete a legacy key that changed after the migration snapshot
+        // If an older instance adds question 402 after the reader fetches a snapshot containing 401,
+        // the reader must verify source is unchanged and retry, preserving 402 in destination before deleting source.
+        const concRaceIp = '198.51.100.247';
+        const concRaceLegacyKey = 'palluvo:qa_rot:ip:' + concRaceIp;
+        const concRaceV2Key = 'palluvo:qa_rot:v2:ip:' + concRaceIp;
+
+        // Initial legacy key has only question 401
+        migrationKvStore.set(concRaceLegacyKey, JSON.stringify({
+          401: { originalBrowserKey: 'anon_voter_legacy_401', expiresAt: Date.now() + 60000 }
+        }));
+        keyTtls.set(concRaceLegacyKey, 60);
+
+        // Interleaving hook: when reader's migration pipeline for 401 is received,
+        // an older instance concurrently writes question 402 to the legacy key!
+        onPipelineHook = async (pipelineBody) => {
+          const isRaceMigration = pipelineBody.some(cmd => cmd[1] === concRaceV2Key && cmd[2] === '401');
+          if (isRaceMigration) {
+            migrationKvStore.set(concRaceLegacyKey, JSON.stringify({
+              401: { originalBrowserKey: 'anon_voter_legacy_401', expiresAt: Date.now() + 60000 },
+              402: { originalBrowserKey: 'anon_voter_legacy_402', expiresAt: Date.now() + 60000 }
+            }));
+          }
+        };
+
+        const concRaceReader = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+
+        const raceVotes = await concRaceReader.getVotedQuestionsForIp(concRaceIp);
+        const raceQaIds = new Set(raceVotes.map(v => v.qa_id));
+
+        // Both questions must be present! Question 402 must NOT be erased!
+        assert.ok(raceQaIds.has(401), 'Question 401 must be migrated');
+        assert.ok(raceQaIds.has(402), 'Concurrently added question 402 must be migrated after retry');
+
+        // Destination v2 hash in KV store must contain BOTH 401 and 402
+        const concRaceV2Map = migrationKvStore.get(concRaceV2Key);
+        assert.ok(concRaceV2Map instanceof Map, 'concRaceV2Key must exist as Map in shared KV');
+        assert.ok(concRaceV2Map.has('401'), 'Field 401 must exist in v2 hash');
+        assert.ok(concRaceV2Map.has('402'), 'Field 402 must exist in v2 hash');
+
+        // Legacy key was safely deleted after both questions were confirmed migrated
+        assert.strictEqual(migrationKvStore.has(concRaceLegacyKey), false);
+
+        // Independent reader confirms both questions exist in v2 hash
+        const indepRaceReader = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+        const rec401 = await indepRaceReader.getVoteRecord(concRaceIp, 401);
+        const rec402 = await indepRaceReader.getVoteRecord(concRaceIp, 402);
+        assert.strictEqual(rec401.original_browser_key, 'anon_voter_legacy_401');
+        assert.strictEqual(rec402.original_browser_key, 'anon_voter_legacy_402');
       } finally {
         failingServer.close();
       }

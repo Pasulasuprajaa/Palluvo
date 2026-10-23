@@ -68,8 +68,10 @@ class AnonymousVoteRotationLedger {
     return data;
   }
 
-  async readLegacyStringEntries(sourceKey) {
-    if (!this.isShared || !this.restUrl || !this.restToken) return new Map();
+  async readLegacyStringSnapshot(sourceKey) {
+    if (!this.isShared || !this.restUrl || !this.restToken) {
+      return { rawString: null, entries: new Map() };
+    }
     const entries = new Map();
     const getRes = await fetch(`${this.restUrl}/GET/${encodeURIComponent(sourceKey)}`, {
       headers: { Authorization: `Bearer ${this.restToken}` }
@@ -81,21 +83,173 @@ class AnonymousVoteRotationLedger {
     if (getData?.error) {
       throw new Error(`Redis GET command error: ${getData.error}`);
     }
-    if (getData && typeof getData.result === 'string') {
-      const parsed = JSON.parse(getData.result);
-      if (parsed && typeof parsed === 'object') {
-        const now = Date.now();
-        for (const [k, v] of Object.entries(parsed)) {
-          if (v && v.expiresAt > now) {
-            entries.set(Number(k), {
-              originalBrowserKey: v.originalBrowserKey || '',
-              expiresAt: v.expiresAt
-            });
+    const rawString = typeof getData?.result === 'string' ? getData.result : null;
+    if (rawString) {
+      try {
+        const parsed = JSON.parse(rawString);
+        if (parsed && typeof parsed === 'object') {
+          const now = Date.now();
+          for (const [k, v] of Object.entries(parsed)) {
+            if (v && v.expiresAt > now) {
+              entries.set(Number(k), {
+                originalBrowserKey: v.originalBrowserKey || '',
+                expiresAt: v.expiresAt
+              });
+            }
           }
         }
-      }
+      } catch (e) {}
     }
-    return entries;
+    return { rawString, entries };
+  }
+
+  async readLegacyStringEntries(sourceKey) {
+    const snapshot = await this.readLegacyStringSnapshot(sourceKey);
+    return snapshot.entries;
+  }
+
+  async migrateLegacyKey(clientIp, fullKey, options = {}) {
+    const migratedVotes = new Map();
+    if (!this.isShared || !this.restUrl || !this.restToken || !this.prefix.endsWith(':v2')) {
+      return { migratedVotes };
+    }
+    const legacyPrefix = this.prefix.replace(/:v2$/, '');
+    const legacyKey = `palluvo:${legacyPrefix}:ip:${clientIp}`;
+    let snapshot = await this.readLegacyStringSnapshot(legacyKey);
+
+    if (!snapshot.rawString || snapshot.entries.size === 0) {
+      if (snapshot.rawString) {
+        // Legacy source key exists but has no active unexpired entries.
+        // Confirm source is unchanged before deleting.
+        const verify = await this.readLegacyStringSnapshot(legacyKey);
+        if (verify.rawString === snapshot.rawString) {
+          await fetch(`${this.restUrl}/DEL/${encodeURIComponent(legacyKey)}`, {
+            headers: { Authorization: `Bearer ${this.restToken}` }
+          }).catch(() => {});
+        }
+      }
+      return { migratedVotes };
+    }
+
+    let retries = 0;
+    const maxRetries = 5;
+
+    while (snapshot.entries.size > 0 && retries < maxRetries) {
+      const now = Date.now();
+      const legacyKeyEntries = Array.from(snapshot.entries.entries());
+      const migrationCommands = [];
+
+      for (const [qid, item] of legacyKeyEntries) {
+        if (options.skipQaId && qid === options.skipQaId) continue;
+        migrationCommands.push([
+          'HSETNX',
+          fullKey,
+          String(qid),
+          JSON.stringify({
+            originalBrowserKey: item.originalBrowserKey,
+            expiresAt: item.expiresAt
+          })
+        ]);
+      }
+
+      const allExpires = Array.from(snapshot.entries.values()).map(e => e.expiresAt);
+      const maxRemainingTtlSec = Math.max(
+        1,
+        Math.ceil(Math.max(...allExpires.map(e => e - now)) / 1000)
+      );
+      if (migrationCommands.length > 0) {
+        migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'NX']);
+        migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'GT']);
+      }
+
+      let pipelineResults = [];
+      if (migrationCommands.length > 0) {
+        pipelineResults = await this.executePipeline(migrationCommands);
+      }
+
+      // Check results for each legacy entry:
+      // If HSETNX returned 0, compare expirations: if destination v2 is expired or older while legacy record is still live,
+      // replace the expired destination field with the live legacy record before deleting source.
+      const replacementCommands = [];
+      let maxReplacementTtlSec = 1;
+
+      let cmdIdx = 0;
+      for (const [qid, item] of legacyKeyEntries) {
+        if (options.skipQaId && qid === options.skipQaId) continue;
+        const hsetnxRes = pipelineResults[cmdIdx]?.result;
+        cmdIdx++;
+
+        if (hsetnxRes === 0) {
+          let v2Parsed = null;
+          try {
+            const freshRes = await fetch(`${this.restUrl}/HGET/${encodeURIComponent(fullKey)}/${encodeURIComponent(String(qid))}`, {
+              headers: { Authorization: `Bearer ${this.restToken}` }
+            });
+            if (freshRes.ok) {
+              const freshData = await freshRes.json();
+              if (freshData?.result) {
+                v2Parsed = typeof freshData.result === 'string' ? JSON.parse(freshData.result) : freshData.result;
+              }
+            }
+          } catch (e) {}
+
+          if (v2Parsed && v2Parsed.expiresAt > now && v2Parsed.expiresAt >= item.expiresAt) {
+            // Live v2 record is fresher or equal
+            migratedVotes.set(qid, {
+              qa_id: qid,
+              original_browser_key: v2Parsed.originalBrowserKey
+            });
+          } else if (item.expiresAt > now) {
+            // Destination v2 field is expired or older, but legacy record is still live!
+            // Atomically replace expired destination field with live legacy record before deleting source.
+            replacementCommands.push([
+              'HSET',
+              fullKey,
+              String(qid),
+              JSON.stringify({
+                originalBrowserKey: item.originalBrowserKey,
+                expiresAt: item.expiresAt
+              })
+            ]);
+            const remSec = Math.max(1, Math.ceil((item.expiresAt - now) / 1000));
+            if (remSec > maxReplacementTtlSec) maxReplacementTtlSec = remSec;
+            migratedVotes.set(qid, {
+              qa_id: qid,
+              original_browser_key: item.originalBrowserKey
+            });
+          }
+        } else if (item.expiresAt > now) {
+          migratedVotes.set(qid, {
+            qa_id: qid,
+            original_browser_key: item.originalBrowserKey
+          });
+        }
+      }
+
+      if (replacementCommands.length > 0) {
+        replacementCommands.push(['EXPIRE', fullKey, maxReplacementTtlSec, 'NX']);
+        replacementCommands.push(['EXPIRE', fullKey, maxReplacementTtlSec, 'GT']);
+        await this.executePipeline(replacementCommands);
+      }
+
+      // Verify that the legacy source key did not change after the migration snapshot before deleting
+      const verifySnapshot = await this.readLegacyStringSnapshot(legacyKey);
+      if (verifySnapshot.rawString !== null) {
+        if (verifySnapshot.rawString !== snapshot.rawString) {
+          // Legacy key was modified concurrently! Do NOT delete; loop to migrate newly arrived writes.
+          snapshot = verifySnapshot;
+          retries++;
+          continue;
+        }
+        // Legacy source key is confirmed unchanged: safe to delete
+        await fetch(`${this.restUrl}/DEL/${encodeURIComponent(legacyKey)}`, {
+          headers: { Authorization: `Bearer ${this.restToken}` }
+        }).catch(() => {});
+      }
+      break;
+    }
+
+    return { migratedVotes };
   }
 
   pruneLocal() {
@@ -169,33 +323,14 @@ class AnonymousVoteRotationLedger {
       });
 
       // Check if an unmigrated legacy v1 string key exists
-      let legacyKeyToDelete = null;
-      const initialCommands = [];
-
       if (this.prefix.endsWith(':v2')) {
-        const legacyPrefix = this.prefix.replace(/:v2$/, '');
-        const legacyKey = `palluvo:${legacyPrefix}:ip:${clientIp}`;
-        const legacyEntries = await this.readLegacyStringEntries(legacyKey);
-        if (legacyEntries.size > 0) {
-          legacyKeyToDelete = legacyKey;
-          for (const [qid, item] of legacyEntries.entries()) {
-            if (qid !== numericQaId) {
-              initialCommands.push([
-                'HSETNX',
-                fullKey,
-                String(qid),
-                JSON.stringify({
-                  originalBrowserKey: item.originalBrowserKey,
-                  expiresAt: item.expiresAt
-                })
-              ]);
-            }
-          }
-        }
+        await this.migrateLegacyKey(clientIp, fullKey, { skipQaId: numericQaId });
       }
 
-      initialCommands.push(['HSET', fullKey, String(numericQaId), payload]);
-      initialCommands.push(['EXPIRE', fullKey, windowSec]);
+      const initialCommands = [
+        ['HSET', fullKey, String(numericQaId), payload],
+        ['EXPIRE', fullKey, windowSec]
+      ];
 
       // Execute pipeline
       const res = await fetch(`${this.restUrl}/pipeline`, {
@@ -245,12 +380,6 @@ class AnonymousVoteRotationLedger {
       }
 
       // Destination v2 write is confirmed successful!
-      // Delete the legacy source key ONLY now that the destination write is verified.
-      if (legacyKeyToDelete) {
-        await fetch(`${this.restUrl}/DEL/${encodeURIComponent(legacyKeyToDelete)}`, {
-          headers: { Authorization: `Bearer ${this.restToken}` }
-        }).catch(() => {});
-      }
     }
 
     // 2. In-memory local fallback (commit ONLY after shared storage succeeds)
@@ -354,74 +483,10 @@ class AnonymousVoteRotationLedger {
 
       // Check unmigrated legacy v1 string key if using v2 namespace
       if (this.prefix.endsWith(':v2')) {
-        const legacyPrefix = this.prefix.replace(/:v2$/, '');
-        const legacyKey = `palluvo:${legacyPrefix}:ip:${clientIp}`;
-        const legacyEntries = await this.readLegacyStringEntries(legacyKey);
-
-        if (legacyEntries.size > 0) {
-          const migrationCommands = [];
-          const legacyKeyEntries = Array.from(legacyEntries.entries());
-          for (const [qid, item] of legacyKeyEntries) {
-            migrationCommands.push([
-              'HSETNX',
-              fullKey,
-              String(qid),
-              JSON.stringify({
-                originalBrowserKey: item.originalBrowserKey,
-                expiresAt: item.expiresAt
-              })
-            ]);
-          }
-          const allExpires = [
-            ...Array.from(legacyEntries.values()).map(e => e.expiresAt)
-          ];
-          const maxRemainingTtlSec = Math.max(
-            1,
-            Math.ceil(Math.max(...allExpires.map(e => e - now)) / 1000)
-          );
-          // Atomically preserve destination TTL without shortening from stale legacy snapshot
-          migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'NX']);
-          migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'GT']);
-
-          // CONFIRM destination write first! If pipeline fails, executePipeline throws and legacyKey is kept intact!
-          const pipelineResults = await this.executePipeline(migrationCommands);
-
-          // ONLY delete legacy source key after destination write is verified!
-          await fetch(`${this.restUrl}/DEL/${encodeURIComponent(legacyKey)}`, {
-            headers: { Authorization: `Bearer ${this.restToken}` }
-          }).catch(() => {});
-
-          for (let i = 0; i < legacyKeyEntries.length; i++) {
-            const [qid, item] = legacyKeyEntries[i];
-            const hsetnxRes = pipelineResults[i]?.result;
-            if (hsetnxRes === 0) {
-              // Field already existed in v2 destination hash (concurrent write took precedence)
-              // Ensure we reflect the fresh v2 record in votesByQa rather than stale legacy snapshot
-              if (!votesByQa.has(qid)) {
-                try {
-                  const freshRes = await fetch(`${this.restUrl}/HGET/${encodeURIComponent(fullKey)}/${encodeURIComponent(String(qid))}`, {
-                    headers: { Authorization: `Bearer ${this.restToken}` }
-                  });
-                  if (freshRes.ok) {
-                    const freshData = await freshRes.json();
-                    if (freshData?.result) {
-                      const parsed = typeof freshData.result === 'string' ? JSON.parse(freshData.result) : freshData.result;
-                      if (parsed && parsed.expiresAt > now) {
-                        votesByQa.set(qid, {
-                          qa_id: qid,
-                          original_browser_key: parsed.originalBrowserKey
-                        });
-                      }
-                    }
-                  }
-                } catch (e) {}
-              }
-            } else if (!votesByQa.has(qid)) {
-              votesByQa.set(qid, {
-                qa_id: qid,
-                original_browser_key: item.originalBrowserKey
-              });
-            }
+        const { migratedVotes } = await this.migrateLegacyKey(clientIp, fullKey);
+        for (const [qid, vote] of migratedVotes.entries()) {
+          if (!votesByQa.has(qid)) {
+            votesByQa.set(qid, vote);
           }
         }
       }
@@ -532,87 +597,29 @@ class AnonymousVoteRotationLedger {
 
       // Check legacy v1 key if prefix ends with :v2 and no match in v2
       if (this.prefix.endsWith(':v2')) {
-        const legacyPrefix = this.prefix.replace(/:v2$/, '');
-        const legacyKey = `palluvo:${legacyPrefix}:ip:${clientIp}`;
-        const legacyEntries = await this.readLegacyStringEntries(legacyKey);
-
-        if (legacyEntries.size > 0) {
-          const migrationCommands = [];
-          const legacyKeyEntries = Array.from(legacyEntries.entries());
-          for (const [qid, item] of legacyKeyEntries) {
-            migrationCommands.push([
-              'HSETNX',
-              fullKey,
-              String(qid),
-              JSON.stringify({
-                originalBrowserKey: item.originalBrowserKey,
-                expiresAt: item.expiresAt
-              })
-            ]);
-          }
-          const maxRemainingTtlSec = Math.max(
-            1,
-            Math.ceil(Math.max(...Array.from(legacyEntries.values()).map(e => e.expiresAt - now)) / 1000)
-          );
-          // Atomically preserve destination TTL without shortening from stale legacy snapshot
-          migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'NX']);
-          migrationCommands.push(['EXPIRE', fullKey, maxRemainingTtlSec, 'GT']);
-
-          // Verify destination write before deleting source key
-          const pipelineResults = await this.executePipeline(migrationCommands);
-
-          await fetch(`${this.restUrl}/DEL/${encodeURIComponent(legacyKey)}`, {
-            headers: { Authorization: `Bearer ${this.restToken}` }
-          }).catch(() => {});
-
-          const match = legacyEntries.get(numericQaId);
-          if (match && match.expiresAt > now) {
-            const targetIdx = legacyKeyEntries.findIndex(([qid]) => qid === numericQaId);
-            if (targetIdx !== -1 && pipelineResults[targetIdx]?.result === 0) {
-              // Newer v2 field already existed: fetch and return the fresh v2 record
-              try {
-                const freshRes = await fetch(`${this.restUrl}/HGET/${encodeURIComponent(fullKey)}/${encodeURIComponent(String(numericQaId))}`, {
-                  headers: { Authorization: `Bearer ${this.restToken}` }
-                });
-                if (freshRes.ok) {
-                  const freshData = await freshRes.json();
-                  if (freshData?.result) {
-                    const parsed = typeof freshData.result === 'string' ? JSON.parse(freshData.result) : freshData.result;
-                    if (parsed && parsed.expiresAt > now) {
-                      return {
-                        qa_id: numericQaId,
-                        original_browser_key: parsed.originalBrowserKey
-                      };
-                    }
-                  }
-                }
-              } catch (e) {}
-            }
-            return {
-              qa_id: numericQaId,
-              original_browser_key: match.originalBrowserKey
-            };
-          } else if (!match) {
-            // numericQaId was not in legacy snapshot, but could have been committed to v2 concurrently
-            try {
-              const freshRes = await fetch(`${this.restUrl}/HGET/${encodeURIComponent(fullKey)}/${encodeURIComponent(String(numericQaId))}`, {
-                headers: { Authorization: `Bearer ${this.restToken}` }
-              });
-              if (freshRes.ok) {
-                const freshData = await freshRes.json();
-                if (freshData?.result) {
-                  const parsed = typeof freshData.result === 'string' ? JSON.parse(freshData.result) : freshData.result;
-                  if (parsed && parsed.expiresAt > now) {
-                    return {
-                      qa_id: numericQaId,
-                      original_browser_key: parsed.originalBrowserKey
-                    };
-                  }
-                }
-              }
-            } catch (e) {}
-          }
+        const { migratedVotes } = await this.migrateLegacyKey(clientIp, fullKey);
+        const match = migratedVotes.get(numericQaId);
+        if (match) {
+          return match;
         }
+        // If numericQaId was not in legacy snapshot, check if committed to v2 hash directly
+        try {
+          const freshRes = await fetch(`${this.restUrl}/HGET/${encodeURIComponent(fullKey)}/${encodeURIComponent(String(numericQaId))}`, {
+            headers: { Authorization: `Bearer ${this.restToken}` }
+          });
+          if (freshRes.ok) {
+            const freshData = await freshRes.json();
+            if (freshData?.result) {
+              const parsed = typeof freshData.result === 'string' ? JSON.parse(freshData.result) : freshData.result;
+              if (parsed && parsed.expiresAt > now) {
+                return {
+                  qa_id: numericQaId,
+                  original_browser_key: parsed.originalBrowserKey
+                };
+              }
+            }
+          }
+        } catch (e) {}
       }
     }
 
