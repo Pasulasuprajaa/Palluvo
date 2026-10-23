@@ -2684,6 +2684,108 @@ async function runTests() {
         const rec402 = await indepRaceReader.getVoteRecord(concRaceIp, 402);
         assert.strictEqual(rec401.original_browser_key, 'anon_voter_legacy_401');
         assert.strictEqual(rec402.original_browser_key, 'anon_voter_legacy_402');
+
+        // 10. [P2] Regression: Retry if the source changes after an empty snapshot
+        // If an empty legacy key (or one with only expired entries) is modified by a concurrent writer
+        // before the Compare-And-Delete runs, CAD rejects the mismatch and the migration retries, discovering and
+        // migrating the newly added live entry instead of returning an empty result.
+        const emptyIp = '198.51.100.249';
+        const emptyLegacyKey = 'palluvo:qa_rot:ip:' + emptyIp;
+        const emptyV2Key = 'palluvo:qa_rot:v2:ip:' + emptyIp;
+
+        // Legacy key initially exists but has 0 unexpired entries (expired 5s ago)
+        migrationKvStore.set(emptyLegacyKey, JSON.stringify({
+          411: { originalBrowserKey: 'anon_voter_expired_411', expiresAt: Date.now() - 5000 }
+        }));
+        keyTtls.set(emptyLegacyKey, 60);
+
+        const emptyReader = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+
+        // Interleaving hook: When Compare-And-Delete is about to run on the empty snapshot,
+        // a concurrent legacy writer writes a live vote for question 412!
+        let emptyHookRan = false;
+        emptyReader._beforeCompareAndDeleteHook = async (key) => {
+          if (key === emptyLegacyKey && !emptyHookRan) {
+            emptyHookRan = true;
+            migrationKvStore.set(emptyLegacyKey, JSON.stringify({
+              411: { originalBrowserKey: 'anon_voter_expired_411', expiresAt: Date.now() - 5000 },
+              412: { originalBrowserKey: 'anon_voter_live_412', expiresAt: Date.now() + 60000 }
+            }));
+          }
+        };
+
+        const emptyVotes = await emptyReader.getVotedQuestionsForIp(emptyIp);
+        assert.strictEqual(emptyHookRan, true, 'Concurrent writer hook must run');
+        assert.strictEqual(emptyVotes.length, 1, 'Live vote added after empty snapshot must be discovered and returned');
+        assert.strictEqual(emptyVotes[0].qa_id, 412);
+        assert.strictEqual(emptyVotes[0].original_browser_key, 'anon_voter_live_412');
+
+        // Destination v2 hash has question 412
+        const emptyV2Map = migrationKvStore.get(emptyV2Key);
+        assert.ok(emptyV2Map instanceof Map, 'v2 hash must exist');
+        assert.ok(emptyV2Map.has('412'), 'Question 412 must be migrated to v2 hash');
+
+        // Source key deleted after successful retry
+        assert.strictEqual(migrationKvStore.has(emptyLegacyKey), false, 'Source key deleted after retry migration');
+
+        // isOriginalVoter verifies original identity
+        assert.strictEqual(await emptyReader.isOriginalVoter(emptyIp, 412, 'anon_voter_live_412'), true);
+        assert.strictEqual(await emptyReader.isOriginalVoter(emptyIp, 412, 'rotated_intruder'), false);
+
+        // 11. [P2] Regression: Fail closed when migration retry limit is exhausted by repeated concurrent updates
+        // If more than 5 consecutive Compare-And-Delete conflicts occur, the migration must fail closed and throw
+        // rather than returning an incomplete vote set.
+        const retryLimitIp = '198.51.100.250';
+        const retryLimitLegacyKey = 'palluvo:qa_rot:ip:' + retryLimitIp;
+        const retryLimitV2Key = 'palluvo:qa_rot:v2:ip:' + retryLimitIp;
+
+        // Legacy key initially has question 420
+        migrationKvStore.set(retryLimitLegacyKey, JSON.stringify({
+          420: { originalBrowserKey: 'anon_voter_420', expiresAt: Date.now() + 60000 }
+        }));
+        keyTtls.set(retryLimitLegacyKey, 60);
+
+        const retryLimitReader = new AnonymousVoteRotationLedger({
+          restUrl: 'https://mock-kv.upstash.io',
+          restToken: 'mock_token',
+          prefix: 'qa_rot:v2'
+        });
+
+        // Interleave 6 consecutive source updates (more than five) on every CAD attempt
+        let conflictCount = 0;
+        retryLimitReader._beforeCompareAndDeleteHook = async (key) => {
+          if (key === retryLimitLegacyKey) {
+            conflictCount++;
+            // Each CAD attempt, update the source with a new question
+            const currentEntries = JSON.parse(migrationKvStore.get(retryLimitLegacyKey) || '{}');
+            currentEntries[420 + conflictCount] = {
+              originalBrowserKey: `anon_voter_${420 + conflictCount}`,
+              expiresAt: Date.now() + 60000
+            };
+            migrationKvStore.set(retryLimitLegacyKey, JSON.stringify(currentEntries));
+          }
+        };
+
+        let retryLimitThrew = false;
+        try {
+          await retryLimitReader.getVotedQuestionsForIp(retryLimitIp);
+        } catch (err) {
+          retryLimitThrew = true;
+          assert.ok(
+            err.message.includes('retry limit exceeded') || err.message.includes('concurrent legacy updates'),
+            `Error message must indicate retry limit exceeded: ${err.message}`
+          );
+        }
+
+        assert.strictEqual(retryLimitThrew, true, 'getVotedQuestionsForIp must fail closed and throw when retry limit is exhausted');
+        assert.ok(conflictCount > 5, `Must have performed more than 5 consecutive source changes (got ${conflictCount})`);
+
+        // The legacy source key MUST NOT be deleted (remains intact for future retry without losing votes)
+        assert.strictEqual(migrationKvStore.has(retryLimitLegacyKey), true, 'Source key must remain intact when migration fails closed');
       } finally {
         failingServer.close();
       }

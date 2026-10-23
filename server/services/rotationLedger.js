@@ -220,19 +220,15 @@ class AnonymousVoteRotationLedger {
     const legacyKey = `palluvo:${legacyPrefix}:ip:${clientIp}`;
     let snapshot = await this.readLegacyStringSnapshot(legacyKey);
 
-    if (!snapshot.rawString || snapshot.entries.size === 0) {
-      if (snapshot.rawString) {
-        // Source key exists but has no active unexpired entries.
-        // Compare and delete atomically against the observed snapshot.
-        await this.executeCompareAndDelete(legacyKey, snapshot.rawString).catch(() => {});
-      }
+    if (!snapshot.rawString) {
       return { migratedVotes };
     }
 
     let retries = 0;
-    const maxRetries = 5;
+    const maxRetries = options.maxRetries !== undefined ? options.maxRetries : 5;
+    let migrationComplete = false;
 
-    while (snapshot.entries.size > 0 && retries < maxRetries) {
+    while (retries <= maxRetries) {
       const now = Date.now();
       const legacyKeyEntries = Array.from(snapshot.entries.entries());
 
@@ -277,14 +273,27 @@ class AnonymousVoteRotationLedger {
       const cadResult = await this.executeCompareAndDelete(legacyKey, snapshot.rawString);
       if (cadResult === 1) {
         // Source key was unchanged and successfully deleted!
+        migrationComplete = true;
         break;
       } else {
         // Source key was modified concurrently (or already deleted).
-        // Re-read snapshot and retry so newly added entries are migrated before deletion.
-        snapshot = await this.readLegacyStringSnapshot(legacyKey);
         retries++;
-        continue;
+        if (retries > maxRetries) {
+          break;
+        }
+        // Re-read snapshot and retry so newly added entries (including after empty snapshots)
+        // are migrated before deletion
+        snapshot = await this.readLegacyStringSnapshot(legacyKey);
+        if (!snapshot.rawString) {
+          // Source key was deleted by another instance
+          migrationComplete = true;
+          break;
+        }
       }
+    }
+
+    if (!migrationComplete) {
+      throw new Error(`Legacy migration retry limit exceeded (${maxRetries}) due to concurrent legacy updates`);
     }
 
     return { migratedVotes };
