@@ -205,6 +205,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-touch py-1">
         <button
           onClick={() => { setFilterTag(''); setSelectedCategory(''); }}
+          aria-pressed={!filterTag && !selectedCategory}
           className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
             !filterTag && !selectedCategory
               ? 'bg-[#5B1425] text-[#FAF7F2] shadow-xs'
@@ -215,6 +216,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
         </button>
         <button
           onClick={() => setFilterTag(filterTag === 'best_seller' ? '' : 'best_seller')}
+          aria-pressed={filterTag === 'best_seller'}
           className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 ${
             filterTag === 'best_seller'
               ? 'bg-gradient-to-r from-[#C6A15B] to-[#D4AF37] text-[#1F1A1C] font-extrabold shadow-xs border border-[#B38F48]'
@@ -226,6 +228,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
         </button>
         <button
           onClick={() => setFilterTag(filterTag === 'new_arrival' ? '' : 'new_arrival')}
+          aria-pressed={filterTag === 'new_arrival'}
           className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
             filterTag === 'new_arrival'
               ? 'bg-[#1F1A1C] text-[#FAF7F2] font-bold shadow-xs'
@@ -236,6 +239,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
         </button>
         <button
           onClick={() => setSelectedCategory(selectedCategory === 'banarasi-sarees' ? '' : 'banarasi-sarees')}
+          aria-pressed={selectedCategory === 'banarasi-sarees'}
           className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
             selectedCategory === 'banarasi-sarees'
               ? 'bg-[#5B1425] text-[#FAF7F2] font-bold shadow-xs'
@@ -246,6 +250,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
         </button>
         <button
           onClick={() => setSelectedCategory(selectedCategory === 'kanjivaram-sarees' ? '' : 'kanjivaram-sarees')}
+          aria-pressed={selectedCategory === 'kanjivaram-sarees'}
           className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
             selectedCategory === 'kanjivaram-sarees'
               ? 'bg-[#5B1425] text-[#FAF7F2] font-bold shadow-xs'
@@ -339,6 +344,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
                 <button
                   key={cat.value}
                   onClick={() => setSelectedCategory(cat.value)}
+                  aria-pressed={selectedCategory === cat.value}
                   className={`w-full text-left px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
                     selectedCategory === cat.value ? 'bg-[#5B1425] text-[#FAF7F2] font-semibold' : 'text-[#1F1A1C] hover:bg-[#F4EFEB]'
                   }`}
@@ -381,6 +387,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
                 <button
                   key={occ}
                   onClick={() => setSelectedOccasion(selectedOccasion === occ ? '' : occ)}
+                  aria-pressed={selectedOccasion === occ}
                   className={`px-3 py-1 text-xs rounded-full border transition cursor-pointer ${
                     selectedOccasion === occ
                       ? 'bg-[#5B1425] text-[#FAF7F2] border-[#5B1425] font-medium'
@@ -401,6 +408,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
                 <button
                   key={fab}
                   onClick={() => setSelectedFabric(selectedFabric === fab ? '' : fab)}
+                  aria-pressed={selectedFabric === fab}
                   className={`px-3 py-1 text-xs rounded-full border transition cursor-pointer ${
                     selectedFabric === fab
                       ? 'bg-[#5B1425] text-[#FAF7F2] border-[#5B1425] font-medium'
@@ -421,6 +429,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
                 <button
                   key={c.name}
                   onClick={() => setSelectedColor(selectedColor === c.name ? '' : c.name)}
+                  aria-pressed={selectedColor === c.name}
                   className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border transition cursor-pointer ${
                     selectedColor === c.name ? 'border-[#5B1425] bg-[#5B1425]/5 shadow-xs' : 'border-transparent hover:bg-[#F4EFEB]'
                   }`}
@@ -519,6 +528,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
                       <button
                         key={c.value}
                         onClick={() => setSelectedCategory(c.value)}
+                        aria-pressed={selectedCategory === c.value}
                         className={`p-2.5 rounded-xl text-left transition font-medium cursor-pointer ${
                           selectedCategory === c.value ? 'bg-[#5B1425] text-white font-bold shadow-xs' : 'bg-white border border-[#EAE2D7] text-[#1F1A1C]'
                         }`}

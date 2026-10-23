@@ -647,22 +647,30 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
               <MapPin className="w-4 h-4 text-[#5B1425]" />
               <span>Check Doorstep Delivery & COD Availability</span>
             </div>
-            <form onSubmit={handleCheckPincode} className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Enter 6-digit PIN code"
-                value={pincode}
-                maxLength={6}
-                onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))}
-                className="flex-1 px-3 py-2 bg-[#FAF7F2] rounded-xl border border-[#E8E1D5] text-xs outline-none focus:border-[#5B1425]"
-              />
-              <button
-                type="submit"
-                disabled={checkingPin}
-                className="px-4 py-2 bg-[#5B1425] text-white text-xs font-semibold rounded-xl hover:bg-[#430e1b] transition disabled:opacity-50 cursor-pointer"
-              >
-                {checkingPin ? 'Checking...' : 'Check'}
-              </button>
+            <form onSubmit={handleCheckPincode} className="space-y-1.5">
+              <label htmlFor="pincode-input" className="block text-xs font-medium text-gray-600">
+                Delivery PIN Code
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="pincode-input"
+                  name="pincode"
+                  type="text"
+                  placeholder="Enter 6-digit PIN code"
+                  value={pincode}
+                  maxLength={6}
+                  onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))}
+                  className="flex-1 px-3 py-2 bg-[#FAF7F2] rounded-xl border border-[#E8E1D5] text-xs outline-none focus:border-[#5B1425]"
+                  aria-label="Delivery PIN code"
+                />
+                <button
+                  type="submit"
+                  disabled={checkingPin}
+                  className="px-4 py-2 bg-[#5B1425] text-white text-xs font-semibold rounded-xl hover:bg-[#430e1b] transition disabled:opacity-50 cursor-pointer"
+                >
+                  {checkingPin ? 'Checking...' : 'Check'}
+                </button>
+              </div>
             </form>
 
             {pincodeResult && (
