@@ -3100,6 +3100,10 @@ async function runTests() {
       global.fetch = regressionFetch;
     }
 
+    // [P2] Shop Filter Selection State & Modal Dialog Semantics Accessibility Test
+    const { testShopFilterAccessibility } = require('./shop_filter_accessibility.test');
+    await testShopFilterAccessibility();
+
     console.log('\n🎉 ALL TESTS PASSED SUCCESSFULLY!\n');
   } finally {
     if (server) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Filter, SlidersHorizontal, ChevronDown, X, Sparkles, RotateCcw, Check, Star } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 
@@ -7,14 +7,25 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
   const [loading, setLoading] = useState(true);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
+  // Modal Dialog & Focus Management Refs
+  const mobileFilterTriggerRef = useRef(null);
+  const dialogPanelRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const previouslyFocusedElementRef = useRef(null);
+
   // Filter States
   const [selectedCategory, setSelectedCategory] = useState(initialFilters.category || '');
   const [selectedOccasion, setSelectedOccasion] = useState(initialFilters.occasion || '');
   const [selectedFabric, setSelectedFabric] = useState(initialFilters.fabric || '');
   const [selectedColor, setSelectedColor] = useState(initialFilters.color || '');
-  const [priceRange, setPriceRange] = useState({ min: '', max: '' });
-  const [selectedRating, setSelectedRating] = useState('');
-  const [inStockOnly, setInStockOnly] = useState(false);
+  const [priceRange, setPriceRange] = useState(
+    initialFilters.priceRange || {
+      min: initialFilters.min_price || '',
+      max: initialFilters.max_price || ''
+    }
+  );
+  const [selectedRating, setSelectedRating] = useState(initialFilters.min_rating || '');
+  const [inStockOnly, setInStockOnly] = useState(Boolean(initialFilters.in_stock));
   const [sortOption, setSortOption] = useState(initialFilters.sort || 'recommended');
   const [searchQuery, setSearchQuery] = useState(initialFilters.search || '');
   const [filterTag, setFilterTag] = useState(initialFilters.filter || '');
@@ -24,7 +35,12 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
     setSelectedOccasion(initialFilters.occasion || '');
     setSelectedFabric(initialFilters.fabric || '');
     setSelectedColor(initialFilters.color || '');
-    setPriceRange(initialFilters.priceRange || { min: '', max: '' });
+    setPriceRange(
+      initialFilters.priceRange || {
+        min: initialFilters.min_price || '',
+        max: initialFilters.max_price || ''
+      }
+    );
     setSelectedRating(initialFilters.min_rating || '');
     setInStockOnly(Boolean(initialFilters.in_stock));
     setSearchQuery(initialFilters.search || '');
@@ -33,6 +49,85 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
       setSortOption(initialFilters.sort);
     }
   }, [initialFilters]);
+
+  // Manage Mobile Filter Modal Dialog: Focus Entry, Trapping, Escape-to-close, and Focus Restoration
+  useEffect(() => {
+    if (mobileFilterOpen) {
+      previouslyFocusedElementRef.current = document.activeElement;
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+
+      const focusTimer = setTimeout(() => {
+        if (closeButtonRef.current) {
+          closeButtonRef.current.focus();
+        } else if (dialogPanelRef.current) {
+          dialogPanelRef.current.focus();
+        }
+      }, 0);
+
+      const handleKeyDown = (event) => {
+        if (event.key === 'Escape' || event.key === 'Esc') {
+          event.preventDefault();
+          event.stopPropagation();
+          setMobileFilterOpen(false);
+          return;
+        }
+
+        if (event.key === 'Tab') {
+          const dialogNode = dialogPanelRef.current;
+          if (!dialogNode) return;
+
+          const focusableElements = Array.from(
+            dialogNode.querySelectorAll(
+              'button:not([disabled]), [href]:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )
+          ).filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
+
+          if (focusableElements.length === 0) {
+            event.preventDefault();
+            return;
+          }
+
+          const firstElement = focusableElements[0];
+          const lastElement = focusableElements[focusableElements.length - 1];
+
+          if (event.shiftKey) {
+            if (document.activeElement === firstElement || !dialogNode.contains(document.activeElement)) {
+              event.preventDefault();
+              lastElement.focus();
+            }
+          } else {
+            if (document.activeElement === lastElement || !dialogNode.contains(document.activeElement)) {
+              event.preventDefault();
+              firstElement.focus();
+            }
+          }
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown, true);
+
+      return () => {
+        clearTimeout(focusTimer);
+        document.body.style.overflow = originalOverflow;
+        document.removeEventListener('keydown', handleKeyDown, true);
+
+        const restoreTarget = previouslyFocusedElementRef.current || mobileFilterTriggerRef.current;
+        if (restoreTarget && typeof restoreTarget.focus === 'function') {
+          try {
+            restoreTarget.focus();
+          } catch (_) {}
+          setTimeout(() => {
+            if (typeof restoreTarget.focus === 'function') {
+              try {
+                restoreTarget.focus();
+              } catch (_) {}
+            }
+          }, 0);
+        }
+      };
+    }
+  }, [mobileFilterOpen]);
 
   useEffect(() => {
     fetchFilteredProducts();
@@ -132,6 +227,14 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
 
   const occasionsList = ['Wedding', 'Festive', 'Party', 'Workwear'];
   const fabricsList = ['Silk', 'Katan', 'Kanjivaram', 'Organza', 'Cotton', 'Linen', 'Georgette', 'Tussar'];
+  const priceRangesList = [
+    { label: 'All Prices', min: '', max: '' },
+    { label: 'Under ₹3,000', min: '0', max: '3000' },
+    { label: '₹3,000 – ₹7,000', min: '3000', max: '7000' },
+    { label: '₹7,000 – ₹15,000', min: '7000', max: '15000' },
+    { label: 'Above ₹15,000 (Bridal)', shortLabel: 'Above ₹15,000', min: '15000', max: '50000' }
+  ];
+  const ratingsList = ['4.5', '4.0', '3.5'];
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
@@ -175,10 +278,14 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
         {/* Mobile Filter & Sort Button Bar */}
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <button
+            ref={mobileFilterTriggerRef}
             onClick={() => setMobileFilterOpen(true)}
+            aria-expanded={mobileFilterOpen}
+            aria-controls="mobile-filter-dialog"
+            aria-haspopup="dialog"
             className="flex-1 sm:flex-none lg:hidden px-4 py-2.5 bg-white border border-[#EAE2D7] rounded-xl text-xs font-bold text-[#1F1A1C] flex items-center justify-center gap-2 shadow-2xs active:scale-95 transition cursor-pointer"
           >
-            <Filter className="w-4 h-4 text-[#5B1425]" />
+            <Filter className="w-4 h-4 text-[#5B1425]" aria-hidden="true" />
             <span>Filter & Sort {hasActiveFilters ? '•' : ''}</span>
           </button>
 
@@ -268,43 +375,49 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
           {filterTag && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#5B1425]/10 text-[#5B1425] text-[11px] rounded-full font-medium">
               Collection: {filterTag === 'new_arrival' ? 'New Arrivals' : filterTag === 'best_seller' ? 'Best Sellers' : filterTag === 'featured' ? 'Curated Collections' : filterTag}
-              <button onClick={() => setFilterTag('')}><X className="w-3 h-3" /></button>
+              <button onClick={() => setFilterTag('')} aria-label="Remove collection filter"><X className="w-3 h-3" /></button>
             </span>
           )}
           {selectedCategory && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#5B1425]/10 text-[#5B1425] text-[11px] rounded-full font-medium">
               Category: {selectedCategory}
-              <button onClick={() => setSelectedCategory('')}><X className="w-3 h-3" /></button>
+              <button onClick={() => setSelectedCategory('')} aria-label="Remove category filter"><X className="w-3 h-3" /></button>
             </span>
           )}
           {selectedOccasion && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#5B1425]/10 text-[#5B1425] text-[11px] rounded-full font-medium">
               Occasion: {selectedOccasion}
-              <button onClick={() => setSelectedOccasion('')}><X className="w-3 h-3" /></button>
+              <button onClick={() => setSelectedOccasion('')} aria-label="Remove occasion filter"><X className="w-3 h-3" /></button>
             </span>
           )}
           {selectedFabric && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#5B1425]/10 text-[#5B1425] text-[11px] rounded-full font-medium">
               Fabric: {selectedFabric}
-              <button onClick={() => setSelectedFabric('')}><X className="w-3 h-3" /></button>
+              <button onClick={() => setSelectedFabric('')} aria-label="Remove fabric filter"><X className="w-3 h-3" /></button>
             </span>
           )}
           {selectedColor && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#5B1425]/10 text-[#5B1425] text-[11px] rounded-full font-medium">
               Color: {selectedColor}
-              <button onClick={() => setSelectedColor('')}><X className="w-3 h-3" /></button>
+              <button onClick={() => setSelectedColor('')} aria-label="Remove color filter"><X className="w-3 h-3" /></button>
             </span>
           )}
           {priceRange.max && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#5B1425]/10 text-[#5B1425] text-[11px] rounded-full font-medium">
               Max ₹{parseInt(priceRange.max).toLocaleString('en-IN')}
-              <button onClick={() => setPriceRange({ min: '', max: '' })}><X className="w-3 h-3" /></button>
+              <button onClick={() => setPriceRange({ min: '', max: '' })} aria-label="Remove price filter"><X className="w-3 h-3" /></button>
+            </span>
+          )}
+          {selectedRating && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#5B1425]/10 text-[#5B1425] text-[11px] rounded-full font-medium">
+              Rating: {selectedRating}★ & up
+              <button onClick={() => setSelectedRating('')} aria-label="Remove rating filter"><X className="w-3 h-3" /></button>
             </span>
           )}
           {inStockOnly && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[11px] rounded-full font-medium">
               In Stock Only
-              <button onClick={() => setInStockOnly(false)}><X className="w-3 h-3" /></button>
+              <button onClick={() => setInStockOnly(false)} aria-label="Remove in stock filter"><X className="w-3 h-3" /></button>
             </span>
           )}
           <button
@@ -359,23 +472,22 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
           <div className="pt-3 border-t border-[#F4EFEB]">
             <h4 className="text-xs font-bold text-[#1F1A1C] uppercase tracking-wider mb-2">Price Range</h4>
             <div className="space-y-1.5 text-xs">
-              {[
-                { label: 'All Prices', min: '', max: '' },
-                { label: 'Under ₹3,000', min: '0', max: '3000' },
-                { label: '₹3,000 – ₹7,000', min: '3000', max: '7000' },
-                { label: '₹7,000 – ₹15,000', min: '7000', max: '15000' },
-                { label: 'Above ₹15,000 (Bridal)', min: '15000', max: '50000' }
-              ].map((p, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setPriceRange({ min: p.min, max: p.max })}
-                  className={`w-full text-left px-2.5 py-1 rounded transition cursor-pointer ${
-                    priceRange.min === p.min && priceRange.max === p.max ? 'text-[#5B1425] font-bold bg-[#5B1425]/10' : 'text-[#6E6467] hover:text-[#1F1A1C]'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
+              {priceRangesList.map((p, idx) => {
+                const isSelected = priceRange.min === p.min && priceRange.max === p.max;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setPriceRange({ min: p.min, max: p.max })}
+                    aria-pressed={isSelected}
+                    className={`w-full text-left px-2.5 py-1 rounded transition cursor-pointer ${
+                      isSelected ? 'text-[#5B1425] font-bold bg-[#5B1425]/10' : 'text-[#6E6467] hover:text-[#1F1A1C]'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -386,6 +498,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
               {occasionsList.map((occ) => (
                 <button
                   key={occ}
+                  type="button"
                   onClick={() => setSelectedOccasion(selectedOccasion === occ ? '' : occ)}
                   aria-pressed={selectedOccasion === occ}
                   className={`px-3 py-1 text-xs rounded-full border transition cursor-pointer ${
@@ -407,6 +520,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
               {fabricsList.map((fab) => (
                 <button
                   key={fab}
+                  type="button"
                   onClick={() => setSelectedFabric(selectedFabric === fab ? '' : fab)}
                   aria-pressed={selectedFabric === fab}
                   className={`px-3 py-1 text-xs rounded-full border transition cursor-pointer ${
@@ -428,8 +542,10 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
               {colorsList.map((c) => (
                 <button
                   key={c.name}
+                  type="button"
                   onClick={() => setSelectedColor(selectedColor === c.name ? '' : c.name)}
                   aria-pressed={selectedColor === c.name}
+                  aria-label={c.name}
                   className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border transition cursor-pointer ${
                     selectedColor === c.name ? 'border-[#5B1425] bg-[#5B1425]/5 shadow-xs' : 'border-transparent hover:bg-[#F4EFEB]'
                   }`}
@@ -437,6 +553,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
                   <span
                     className="w-5 h-5 rounded-full border border-black/10 shadow-xs"
                     style={{ backgroundColor: c.hex }}
+                    aria-hidden="true"
                   />
                   <span className="text-[10px] text-[#6E6467] font-medium">{c.name}</span>
                 </button>
@@ -444,7 +561,33 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
             </div>
           </div>
 
-          {/* 6. Availability */}
+          {/* 6. Customer Rating */}
+          <div className="pt-3 border-t border-[#F4EFEB]">
+            <h4 className="text-xs font-bold text-[#1F1A1C] uppercase tracking-wider mb-2">Customer Rating</h4>
+            <div className="flex gap-2">
+              {ratingsList.map((r) => {
+                const isSelected = selectedRating === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setSelectedRating(selectedRating === r ? '' : r)}
+                    aria-pressed={isSelected}
+                    className={`flex-1 p-2 rounded-xl border text-xs flex items-center justify-center gap-1 cursor-pointer transition ${
+                      isSelected
+                        ? 'bg-[#5B1425] text-white border-[#5B1425] font-bold shadow-xs'
+                        : 'bg-[#FAF7F2] border-[#EAE2D7] text-[#1F1A1C] hover:border-[#5B1425]'
+                    }`}
+                  >
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" aria-hidden="true" />
+                    <span>{r}★+</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 7. Availability */}
           <div className="pt-3 border-t border-[#F4EFEB]">
             <label className="flex items-center gap-2 text-xs font-medium text-[#1F1A1C] cursor-pointer">
               <input
@@ -496,25 +639,43 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
 
       {/* Mobile Bottom-Sheet / Full-Screen Filter Panel */}
       {mobileFilterOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden lg:hidden">
-          <div onClick={() => setMobileFilterOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-xs" />
+        <div
+          id="mobile-filter-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mobile-filter-title"
+          className="fixed inset-0 z-50 overflow-hidden lg:hidden"
+        >
+          {/* Backdrop */}
+          <div
+            onClick={() => setMobileFilterOpen(false)}
+            aria-hidden="true"
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs cursor-pointer"
+          />
           
           <div className="fixed inset-y-0 right-0 max-w-full flex">
-            <div className="w-screen max-w-md bg-[#FAF7F2] shadow-2xl flex flex-col justify-between">
+            <div
+              ref={dialogPanelRef}
+              tabIndex={-1}
+              className="w-screen max-w-md bg-[#FAF7F2] shadow-2xl flex flex-col justify-between focus:outline-none"
+            >
               
               {/* Header */}
               <div className="p-4 border-b border-[#EAE2D7] bg-white flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-[#5B1425]" />
-                  <h3 className="font-serif font-bold text-sm text-[#1F1A1C] uppercase tracking-wider">
+                  <Filter className="w-4 h-4 text-[#5B1425]" aria-hidden="true" />
+                  <h2 id="mobile-filter-title" className="font-serif font-bold text-sm text-[#1F1A1C] uppercase tracking-wider">
                     Filter & Sort Sarees
-                  </h3>
+                  </h2>
                 </div>
                 <button
+                  ref={closeButtonRef}
+                  type="button"
                   onClick={() => setMobileFilterOpen(false)}
-                  className="p-1.5 rounded-full text-[#6E6467] hover:bg-[#F4EFEB] transition"
+                  aria-label="Close filters"
+                  className="p-1.5 rounded-full text-[#6E6467] hover:bg-[#F4EFEB] transition cursor-pointer"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5" aria-hidden="true" />
                 </button>
               </div>
 
@@ -522,120 +683,144 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
               <div className="flex-1 overflow-y-auto p-4 space-y-6">
                 {/* 1. Category */}
                 <div>
-                  <h4 className="text-xs font-bold text-[#1F1A1C] uppercase mb-2">Category</h4>
+                  <h3 className="text-xs font-bold text-[#1F1A1C] uppercase mb-2">Category</h3>
                   <div className="grid grid-cols-2 gap-1.5 text-xs">
-                    {categoriesList.map(c => (
-                      <button
-                        key={c.value}
-                        onClick={() => setSelectedCategory(c.value)}
-                        aria-pressed={selectedCategory === c.value}
-                        className={`p-2.5 rounded-xl text-left transition font-medium cursor-pointer ${
-                          selectedCategory === c.value ? 'bg-[#5B1425] text-white font-bold shadow-xs' : 'bg-white border border-[#EAE2D7] text-[#1F1A1C]'
-                        }`}
-                      >
-                        {c.label}
-                      </button>
-                    ))}
+                    {categoriesList.map(c => {
+                      const isSelected = selectedCategory === c.value;
+                      return (
+                        <button
+                          key={c.value}
+                          type="button"
+                          onClick={() => setSelectedCategory(c.value)}
+                          aria-pressed={isSelected}
+                          className={`p-2.5 rounded-xl text-left transition font-medium cursor-pointer ${
+                            isSelected ? 'bg-[#5B1425] text-white font-bold shadow-xs' : 'bg-white border border-[#EAE2D7] text-[#1F1A1C]'
+                          }`}
+                        >
+                          {c.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* 2. Price Range */}
                 <div>
-                  <h4 className="text-xs font-bold text-[#1F1A1C] uppercase mb-2">Price Range</h4>
+                  <h3 className="text-xs font-bold text-[#1F1A1C] uppercase mb-2">Price Range</h3>
                   <div className="grid grid-cols-2 gap-1.5 text-xs">
-                    {[
-                      { label: 'All Prices', min: '', max: '' },
-                      { label: 'Under ₹3,000', min: '0', max: '3000' },
-                      { label: '₹3,000 – ₹7,000', min: '3000', max: '7000' },
-                      { label: '₹7,000 – ₹15,000', min: '7000', max: '15000' },
-                      { label: 'Above ₹15,000', min: '15000', max: '50000' }
-                    ].map((p, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setPriceRange({ min: p.min, max: p.max })}
-                        className={`p-2.5 rounded-xl text-left transition font-medium cursor-pointer ${
-                          priceRange.min === p.min && priceRange.max === p.max
-                            ? 'bg-[#5B1425] text-white font-bold shadow-xs'
-                            : 'bg-white border border-[#EAE2D7] text-[#1F1A1C]'
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
+                    {priceRangesList.map((p, idx) => {
+                      const isSelected = priceRange.min === p.min && priceRange.max === p.max;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setPriceRange({ min: p.min, max: p.max })}
+                          aria-pressed={isSelected}
+                          className={`p-2.5 rounded-xl text-left transition font-medium cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#5B1425] text-white font-bold shadow-xs'
+                              : 'bg-white border border-[#EAE2D7] text-[#1F1A1C]'
+                          }`}
+                        >
+                          {p.shortLabel || p.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* 3. Color */}
                 <div>
-                  <h4 className="text-xs font-bold text-[#1F1A1C] uppercase mb-2">Color Palette</h4>
+                  <h3 className="text-xs font-bold text-[#1F1A1C] uppercase mb-2">Color Palette</h3>
                   <div className="grid grid-cols-4 gap-2">
-                    {colorsList.map(c => (
-                      <button
-                        key={c.name}
-                        onClick={() => setSelectedColor(selectedColor === c.name ? '' : c.name)}
-                        className={`p-2 rounded-xl border flex flex-col items-center gap-1 bg-white cursor-pointer ${
-                          selectedColor === c.name ? 'border-[#5B1425] ring-2 ring-[#5B1425]' : 'border-[#EAE2D7]'
-                        }`}
-                      >
-                        <span className="w-5 h-5 rounded-full border" style={{ backgroundColor: c.hex }} />
-                        <span className="text-[10px] text-[#1F1A1C]">{c.name}</span>
-                      </button>
-                    ))}
+                    {colorsList.map(c => {
+                      const isSelected = selectedColor === c.name;
+                      return (
+                        <button
+                          key={c.name}
+                          type="button"
+                          onClick={() => setSelectedColor(selectedColor === c.name ? '' : c.name)}
+                          aria-pressed={isSelected}
+                          aria-label={c.name}
+                          className={`p-2 rounded-xl border flex flex-col items-center gap-1 bg-white cursor-pointer ${
+                            isSelected ? 'border-[#5B1425] ring-2 ring-[#5B1425]' : 'border-[#EAE2D7]'
+                          }`}
+                        >
+                          <span className="w-5 h-5 rounded-full border border-black/10 shadow-xs" style={{ backgroundColor: c.hex }} aria-hidden="true" />
+                          <span className="text-[10px] text-[#1F1A1C]">{c.name}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* 4. Fabric */}
                 <div>
-                  <h4 className="text-xs font-bold text-[#1F1A1C] uppercase mb-2">Fabric</h4>
+                  <h3 className="text-xs font-bold text-[#1F1A1C] uppercase mb-2">Fabric</h3>
                   <div className="flex flex-wrap gap-1.5">
-                    {fabricsList.map(f => (
-                      <button
-                        key={f}
-                        onClick={() => setSelectedFabric(selectedFabric === f ? '' : f)}
-                        className={`px-3.5 py-2 rounded-xl text-xs border transition cursor-pointer ${
-                          selectedFabric === f ? 'bg-[#5B1425] text-white border-[#5B1425] font-bold' : 'bg-white border-[#EAE2D7] text-[#1F1A1C]'
-                        }`}
-                      >
-                        {f}
-                      </button>
-                    ))}
+                    {fabricsList.map(f => {
+                      const isSelected = selectedFabric === f;
+                      return (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => setSelectedFabric(selectedFabric === f ? '' : f)}
+                          aria-pressed={isSelected}
+                          className={`px-3.5 py-2 rounded-xl text-xs border transition cursor-pointer ${
+                            isSelected ? 'bg-[#5B1425] text-white border-[#5B1425] font-bold' : 'bg-white border-[#EAE2D7] text-[#1F1A1C]'
+                          }`}
+                        >
+                          {f}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* 5. Occasion */}
                 <div>
-                  <h4 className="text-xs font-bold text-[#1F1A1C] uppercase mb-2">Occasion</h4>
+                  <h3 className="text-xs font-bold text-[#1F1A1C] uppercase mb-2">Occasion</h3>
                   <div className="flex flex-wrap gap-1.5">
-                    {occasionsList.map(o => (
-                      <button
-                        key={o}
-                        onClick={() => setSelectedOccasion(selectedOccasion === o ? '' : o)}
-                        className={`px-3.5 py-2 rounded-xl text-xs border transition cursor-pointer ${
-                          selectedOccasion === o ? 'bg-[#5B1425] text-white border-[#5B1425] font-bold' : 'bg-white border-[#EAE2D7] text-[#1F1A1C]'
-                        }`}
-                      >
-                        {o}
-                      </button>
-                    ))}
+                    {occasionsList.map(o => {
+                      const isSelected = selectedOccasion === o;
+                      return (
+                        <button
+                          key={o}
+                          type="button"
+                          onClick={() => setSelectedOccasion(selectedOccasion === o ? '' : o)}
+                          aria-pressed={isSelected}
+                          className={`px-3.5 py-2 rounded-xl text-xs border transition cursor-pointer ${
+                            isSelected ? 'bg-[#5B1425] text-white border-[#5B1425] font-bold' : 'bg-white border-[#EAE2D7] text-[#1F1A1C]'
+                          }`}
+                        >
+                          {o}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* 6. Rating */}
                 <div>
-                  <h4 className="text-xs font-bold text-[#1F1A1C] uppercase mb-2">Customer Rating</h4>
+                  <h3 className="text-xs font-bold text-[#1F1A1C] uppercase mb-2">Customer Rating</h3>
                   <div className="flex gap-2">
-                    {['4.5', '4.0', '3.5'].map(r => (
-                      <button
-                        key={r}
-                        onClick={() => setSelectedRating(selectedRating === r ? '' : r)}
-                        className={`flex-1 p-2 rounded-xl border text-xs flex items-center justify-center gap-1 cursor-pointer ${
-                          selectedRating === r ? 'bg-[#5B1425] text-white border-[#5B1425] font-bold' : 'bg-white border-[#EAE2D7]'
-                        }`}
-                      >
-                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                        <span>{r} & up</span>
-                      </button>
-                    ))}
+                    {ratingsList.map(r => {
+                      const isSelected = selectedRating === r;
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setSelectedRating(selectedRating === r ? '' : r)}
+                          aria-pressed={isSelected}
+                          className={`flex-1 p-2 rounded-xl border text-xs flex items-center justify-center gap-1 cursor-pointer transition ${
+                            isSelected ? 'bg-[#5B1425] text-white border-[#5B1425] font-bold shadow-xs' : 'bg-white border-[#EAE2D7]'
+                          }`}
+                        >
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" aria-hidden="true" />
+                          <span>{r} & up</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -656,6 +841,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
               {/* Action Buttons */}
               <div className="p-4 border-t border-[#EAE2D7] bg-white grid grid-cols-2 gap-3 safe-area-pb">
                 <button
+                  type="button"
                   onClick={() => {
                     handleClearAllFilters();
                     setMobileFilterOpen(false);
@@ -665,6 +851,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
                   Clear All
                 </button>
                 <button
+                  type="button"
                   onClick={() => setMobileFilterOpen(false)}
                   className="py-3 bg-[#5B1425] text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md hover:bg-[#7E1E34] transition cursor-pointer"
                 >
