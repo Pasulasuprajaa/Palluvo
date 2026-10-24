@@ -991,24 +991,78 @@ async function runTests() {
     assert.strictEqual(returnedQA.answered_by, null, 'Exposed QA must not contain fake concierge attribution');
     console.log('✅ PASS: [P2] Seeded Q&A and GET endpoint strictly avoid unverified concierge claims and fabricated social proof');
 
-    // 6b. Verify GET /api/products/:slugOrId returns verified recent_orders_24h matching actual database orders
+    // 6b. Verify GET /api/products/:slugOrId returns verified recent_orders_24h matching distinct paid non-cancelled orders
     const getProdDetailRes1 = await request(`/api/products/${prodWithImgId}`);
     assert.strictEqual(getProdDetailRes1.status, 200);
     const initialOrders24h = getProdDetailRes1.body.product.recent_orders_24h;
 
-    // Create an order in last 24h containing this product with quantity 2
+    // Create a completed paid order in last 24h containing this product with quantity 2
     const orderInsertResult = db.prepare(`
       INSERT INTO orders (user_id, order_number, address_data, subtotal, total_amount, status, payment_status, created_at)
-      VALUES (1, 'ORD-TEST-RECENT-${Date.now()}', '{}', 5000, 5000, 'Processing', 'Paid', datetime('now', '-2 hours'))
+      VALUES (1, 'ORD-TEST-RECENT-${Date.now()}-1', '{}', 5000, 5000, 'Processing', 'Paid', datetime('now', '-2 hours'))
     `).run();
     db.prepare(`
       INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
       VALUES (?, ?, 'Test Silk Saree', 5000, 2)
     `).run(orderInsertResult.lastInsertRowid, prodWithImgId);
 
+    // One order with quantity 2 must increment the order count by exactly 1 (COUNT(DISTINCT o.id))
     const getProdDetailRes2 = await request(`/api/products/${prodWithImgId}`);
     assert.strictEqual(getProdDetailRes2.status, 200);
-    assert.strictEqual(getProdDetailRes2.body.product.recent_orders_24h, initialOrders24h + 2, 'Verified recent_orders_24h must accurately reflect order_items quantity from last 24 hours');
+    assert.strictEqual(
+      getProdDetailRes2.body.product.recent_orders_24h,
+      initialOrders24h + 1,
+      'One order with multiple items must increment order count by exactly 1'
+    );
+
+    // Create a second distinct paid order
+    const orderInsertResult2 = db.prepare(`
+      INSERT INTO orders (user_id, order_number, address_data, subtotal, total_amount, status, payment_status, created_at)
+      VALUES (1, 'ORD-TEST-RECENT-${Date.now()}-2', '{}', 5000, 5000, 'Processing', 'Paid', datetime('now', '-1 hours'))
+    `).run();
+    db.prepare(`
+      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+      VALUES (?, ?, 'Test Silk Saree', 5000, 1)
+    `).run(orderInsertResult2.lastInsertRowid, prodWithImgId);
+
+    const getProdDetailRes3 = await request(`/api/products/${prodWithImgId}`);
+    assert.strictEqual(getProdDetailRes3.status, 200);
+    assert.strictEqual(
+      getProdDetailRes3.body.product.recent_orders_24h,
+      initialOrders24h + 2,
+      'Second paid order must increment distinct order count to initial + 2'
+    );
+
+    // Verify orders with invalid payment or cancellation statuses do NOT inflate the count
+    const nonQualifyingStatuses = [
+      { payment: 'Pending', status: 'Placed' },
+      { payment: 'Expired', status: 'Placed' },
+      { payment: 'Failed', status: 'Placed' },
+      { payment: 'Refunded', status: 'Processing' },
+      { payment: 'Refund_Pending', status: 'Processing' },
+      { payment: 'Refund_Failed', status: 'Processing' },
+      { payment: 'Paid', status: 'Cancelled' }
+    ];
+
+    for (let i = 0; i < nonQualifyingStatuses.length; i++) {
+      const { payment, status } = nonQualifyingStatuses[i];
+      const invalidOrder = db.prepare(`
+        INSERT INTO orders (user_id, order_number, address_data, subtotal, total_amount, status, payment_status, created_at)
+        VALUES (1, 'ORD-TEST-INVALID-${Date.now()}-${i}', '{}', 5000, 5000, ?, ?, datetime('now', '-30 minutes'))
+      `).run(status, payment);
+      db.prepare(`
+        INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+        VALUES (?, ?, 'Test Silk Saree', 5000, 1)
+      `).run(invalidOrder.lastInsertRowid, prodWithImgId);
+    }
+
+    // Count must still be exactly initialOrders24h + 2
+    const getProdDetailRes4 = await request(`/api/products/${prodWithImgId}`);
+    assert.strictEqual(
+      getProdDetailRes4.body.product.recent_orders_24h,
+      initialOrders24h + 2,
+      'Non-qualifying orders (Pending, Expired, Failed, Refunded, Cancelled) must NOT inflate order count'
+    );
 
     // Also verify an unpurchased product returns exactly 0
     const unpurchasedCreateRes = await request('/api/admin/products', {
@@ -1032,7 +1086,7 @@ async function runTests() {
     assert.strictEqual(unpurchasedCreateRes.status, 201);
     const unpurchasedRes = await request(`/api/products/${unpurchasedCreateRes.body.productId}`);
     assert.strictEqual(unpurchasedRes.body.product.recent_orders_24h, 0, 'Unpurchased product must return recent_orders_24h === 0');
-    console.log('✅ PASS: [P2] Product endpoint derives verified recent_orders_24h from database and rejects unsupported popularity metrics');
+    console.log('✅ PASS: [P2] Product endpoint strictly counts completed paid, non-cancelled orders using COUNT(DISTINCT o.id)');
 
     // 7. Verify real customer questions with names matching former fixtures are NOT wiped on database restart/init
     const realCustomerQuestionText = 'Can this bridal saree be delivered with custom blouse stitching in Pune?';

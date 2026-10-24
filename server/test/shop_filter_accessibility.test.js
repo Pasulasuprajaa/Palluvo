@@ -197,8 +197,11 @@ async function testShopFilterAccessibility() {
   const productsRouteSource = fs.readFileSync(path.resolve(__dirname, '../routes/products.js'), 'utf8');
   assert.ok(
     productsRouteSource.includes('recent_orders_24h') &&
+    productsRouteSource.includes('COUNT(DISTINCT o.id)') &&
+    productsRouteSource.includes("o.payment_status = 'Paid'") &&
+    productsRouteSource.includes("o.status != 'Cancelled'") &&
     productsRouteSource.includes("datetime('now', '-24 hours')"),
-    'server/routes/products.js must derive recent_orders_24h from verified orders in the last 24 hours'
+    'server/routes/products.js must count distinct completed paid, non-cancelled orders in the last 24 hours'
   );
   console.log('✅ PASS: [P2] ProductDetailPage customer trust: fake countdown and unverified popularity badges eliminated, verified metrics properly gated');
 
