@@ -332,7 +332,12 @@ export default function SearchModal({ onNavigate }) {
                             className="w-full text-left flex items-center gap-3.5 p-2.5 rounded-xl hover:bg-white bg-white sm:bg-[#FAF7F2] border border-[#E8E1D5] focus:border-[#5B1425] focus:ring-2 focus:ring-[#5B1425]/30 focus:outline-hidden cursor-pointer transition group shadow-xs active:scale-[0.99]"
                           >
                             <img
-                              src={prod.thumbnail || prod.thumbnail_url || getThumbnailUrl(prod.primary_image) || '/images/thumbnails/categories/banarasi.jpg'}
+                              src={
+                                (prod.thumbnail && prod.thumbnail !== prod.primary_image ? prod.thumbnail : null) ||
+                                (prod.thumbnail_url && prod.thumbnail_url !== prod.primary_image ? prod.thumbnail_url : null) ||
+                                getThumbnailUrl(prod.primary_image) ||
+                                '/images/thumbnails/categories/banarasi.jpg'
+                              }
                               alt={prod.name}
                               className="w-12 h-16 object-cover rounded-lg shadow-xs group-hover:scale-105 transition shrink-0"
                             />

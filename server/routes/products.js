@@ -8,6 +8,19 @@ const { anonymousVoteLimiter, anonymousVoteStore, getNormalizedIp } = require('.
 const { reconcileExpiredReservations } = require('./payments');
 const { rotationLedger: defaultRotationLedger } = require('../services/rotationLedger');
 
+function getThumbnailForUrl(u) {
+  if (typeof u !== 'string' || !u) return null;
+  if (u.startsWith('/images/thumbnails/')) return u;
+  if (u.startsWith('/images/')) return u.replace('/images/', '/images/thumbnails/');
+  if (u.includes('images.unsplash.com')) {
+    if (/w=\d+/.test(u)) {
+      return u.replace(/w=\d+/, 'w=180');
+    }
+    return u + (u.includes('?') ? '&w=180' : '?w=180');
+  }
+  return null;
+}
+
 function createProductsRouter(deps = {}) {
   const router = express.Router();
   let currentDb = deps.db || defaultDb;
@@ -449,17 +462,13 @@ router.get('/search/suggestions', async (req, res) => {
     `).all(term);
 
     const mappedProducts = products.map((prod) => {
-      let thumbnail = prod.primary_image;
-      if (typeof thumbnail === 'string' && thumbnail.startsWith('/images/thumbnails/')) {
-        // already thumbnail
-      } else if (typeof thumbnail === 'string' && thumbnail.startsWith('/images/')) {
-        thumbnail = thumbnail.replace('/images/', '/images/thumbnails/');
+      const derivedThumbnail = getThumbnailForUrl(prod.primary_image);
+      const mapped = { ...prod };
+      if (derivedThumbnail) {
+        mapped.thumbnail = derivedThumbnail;
+        mapped.thumbnail_url = derivedThumbnail;
       }
-      return {
-        ...prod,
-        thumbnail,
-        thumbnail_url: thumbnail
-      };
+      return mapped;
     });
 
     res.json({
@@ -570,9 +579,7 @@ router.get('/:slugOrId', async (req, res) => {
         images: images.map(i => i.image_url),
         thumbnails: images.map(i => {
           const u = i.image_url;
-          if (typeof u === 'string' && u.startsWith('/images/')) return u.replace('/images/', '/images/thumbnails/');
-          if (typeof u === 'string' && u.includes('images.unsplash.com')) return u.replace(/w=\d+/, 'w=180');
-          return u;
+          return getThumbnailForUrl(u) || u;
         }),
         imageObjects: images,
         variants,

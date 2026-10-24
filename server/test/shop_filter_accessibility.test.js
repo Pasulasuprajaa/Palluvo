@@ -406,10 +406,16 @@ async function testShopFilterAccessibility() {
     );
     console.log('✅ PASS: [P2] Catalog cards utilize generated lightweight thumbnails (~12KB) instead of heavy full-size assets (~839KB)');
 
-    // 7. Verify [P2] Category-specific metadata preservation after hydration
+    // 7. Verify [P2] Category-specific metadata preservation after hydration with full canonical catalog.json parity
     const { updatePageMeta, getCategoryRecord, CATEGORY_CATALOG } = require(path.resolve(__dirname, '../../client/src/utils/seo'));
-    assert.ok(CATEGORY_CATALOG['cotton-sarees'], 'CATEGORY_CATALOG must define cotton-sarees');
-    assert.strictEqual(CATEGORY_CATALOG['cotton-sarees'].name, 'Cotton & Handloom');
+    const canonicalCategories = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../data/catalog.json'), 'utf8')).categories;
+    for (const cat of canonicalCategories) {
+      const clientRecord = getCategoryRecord(cat.slug);
+      assert.ok(clientRecord, `Client CATEGORY_CATALOG must define category ${cat.slug}`);
+      assert.strictEqual(clientRecord.name, cat.name, `Category name mismatch for ${cat.slug}`);
+      assert.strictEqual(clientRecord.description, cat.description, `Category description mismatch for ${cat.slug}`);
+      assert.strictEqual(clientRecord.image_url, cat.image_url, `Category image_url mismatch for ${cat.slug}`);
+    }
 
     // Simulate DOM environment for updatePageMeta
     const metaTags = {};
@@ -433,6 +439,7 @@ async function testShopFilterAccessibility() {
     global.document = mockDocument;
 
     try {
+      // Test cotton-sarees
       updatePageMeta('shop', { category: 'cotton-sarees' });
       assert.strictEqual(
         mockDocument.title,
@@ -453,12 +460,42 @@ async function testShopFilterAccessibility() {
         metaTags['og:image:alt'],
         'Cotton & Handloom - Luxury Handloom Sarees | PALLUVO'
       );
-      console.log('✅ PASS: [P2] Category-specific metadata preserved after hydration (title, description, and social tags)');
+
+      // Test bridal-collection canonical alignment
+      updatePageMeta('shop', { category: 'bridal-collection' });
+      assert.strictEqual(
+        mockDocument.title,
+        'Bridal Collection Collection | PALLUVO',
+        'Direct load/hydration of bridal-collection must preserve "Bridal Collection Collection | PALLUVO" title'
+      );
+      assert.strictEqual(
+        metaTags['description'],
+        'Heirloom trousseau masterworks handcrafted for weddings and lifetime memories.',
+        'Direct load/hydration of bridal-collection must preserve canonical description from catalog.json'
+      );
+      assert.strictEqual(
+        metaTags['og:image'],
+        'https://palluvo.com/images/categories/bridal.jpg',
+        'Direct load/hydration of bridal-collection must preserve canonical /images/categories/bridal.jpg'
+      );
+      assert.strictEqual(
+        metaTags['og:image:alt'],
+        'Bridal Collection - Luxury Handloom Sarees | PALLUVO'
+      );
+      console.log('✅ PASS: [P2] Category-specific metadata strictly preserves canonical catalog.json parity after hydration');
     } finally {
       global.document = previousDocument;
     }
 
-    // 8. Verify [P2] SearchModal uses lightweight thumbnails in instant-search results
+    // 8. Verify [P2] SearchModal and imageUtils use lightweight thumbnails including remote URLs
+    const { getThumbnailUrl } = require(path.resolve(__dirname, '../../client/src/utils/imageUtils'));
+    const remoteUnsplashUrl = 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=1000&q=80';
+    assert.strictEqual(
+      getThumbnailUrl(remoteUnsplashUrl),
+      'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=180&q=80',
+      'getThumbnailUrl must resize remote Unsplash URLs to lightweight w=180 thumbnail'
+    );
+
     const searchModalPath = path.resolve(__dirname, '../../client/src/components/SearchModal.jsx');
     const searchModalSource = fs.readFileSync(searchModalPath, 'utf8');
     assert.ok(
@@ -467,7 +504,6 @@ async function testShopFilterAccessibility() {
       'SearchModal must import getThumbnailUrl'
     );
     assert.ok(
-      searchModalSource.includes('prod.thumbnail') &&
       searchModalSource.includes('getThumbnailUrl(prod.primary_image)'),
       'SearchModal result rows must render lightweight thumbnail variant for instant-search suggestions'
     );
@@ -475,7 +511,7 @@ async function testShopFilterAccessibility() {
       searchModalSource.includes('image: product.primary_image'),
       'SearchModal handleSelectProduct must preserve original full-size image when navigating to product detail'
     );
-    console.log('✅ PASS: [P2] Instant-search results utilize lightweight thumbnails in 48x64 suggestion rows');
+    console.log('✅ PASS: [P2] Instant-search results and imageUtils utilize lightweight thumbnails for local and remote assets');
   } catch (renderErr) {
     console.error('SSR test error:', renderErr);
     throw renderErr;

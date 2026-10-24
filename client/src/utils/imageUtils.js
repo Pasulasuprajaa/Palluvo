@@ -9,7 +9,10 @@ export function getThumbnailUrl(rawUrl) {
     return rawUrl.replace('/images/', '/images/thumbnails/');
   }
   if (rawUrl.includes('images.unsplash.com')) {
-    return rawUrl.replace(/w=\d+/, 'w=180');
+    if (/w=\d+/.test(rawUrl)) {
+      return rawUrl.replace(/w=\d+/, 'w=180');
+    }
+    return rawUrl + (rawUrl.includes('?') ? '&w=180' : '?w=180');
   }
   return rawUrl;
 }

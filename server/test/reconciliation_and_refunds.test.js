@@ -1121,16 +1121,57 @@ async function runTests() {
     assert.strictEqual(suggestionsRes.status, 200);
     assert.ok(suggestionsRes.body.products && suggestionsRes.body.products.length > 0, 'Suggestions must return products');
     for (const prod of suggestionsRes.body.products) {
-      assert.ok(prod.thumbnail, 'Search suggestions product must contain thumbnail');
-      assert.ok(prod.thumbnail_url, 'Search suggestions product must contain thumbnail_url');
       if (typeof prod.primary_image === 'string' && prod.primary_image.startsWith('/images/')) {
+        assert.ok(prod.thumbnail, 'Local image suggestion must contain thumbnail');
+        assert.ok(prod.thumbnail_url, 'Local image suggestion must contain thumbnail_url');
         assert.ok(
           prod.thumbnail.startsWith('/images/thumbnails/'),
           `Local image suggestion thumbnail must point to /images/thumbnails/: ${prod.thumbnail}`
         );
       }
     }
-    console.log('✅ PASS: [P2] Search suggestions endpoint returns lightweight thumbnail URLs for instant search');
+
+    // Insert a product with a remote Unsplash image (w=1000)
+    const validCat = db.prepare('SELECT id FROM categories LIMIT 1').get() || { id: 1 };
+    const remoteProductInsert = db.prepare(`
+      INSERT INTO products (name, slug, description, short_desc, category_id, fabric, occasion, price, mrp, discount_percent)
+      VALUES ('Remote Unsplash Saree', 'remote-unsplash-saree-${Date.now()}', 'Remote image test', 'Remote image test', ?, 'Silk', 'Party', 8000, 10000, 20)
+    `).run(validCat.id);
+    db.prepare(`
+      INSERT INTO product_images (product_id, image_url, is_primary, display_order)
+      VALUES (?, 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=1000&q=80', 1, 1)
+    `).run(remoteProductInsert.lastInsertRowid);
+
+    const remoteSuggestionsRes = await request('/api/products/search/suggestions?q=Remote');
+    assert.strictEqual(remoteSuggestionsRes.status, 200);
+    const remoteProd = remoteSuggestionsRes.body.products.find(p => p.name === 'Remote Unsplash Saree');
+    assert.ok(remoteProd, 'Remote product must be found in suggestions');
+    assert.strictEqual(
+      remoteProd.thumbnail,
+      'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=180&q=80',
+      'Remote Unsplash image in suggestions must be resized to w=180 thumbnail'
+    );
+    assert.strictEqual(
+      remoteProd.thumbnail_url,
+      'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=180&q=80'
+    );
+
+    // Insert a product with an unsupported remote image URL
+    const unsupportedProductInsert = db.prepare(`
+      INSERT INTO products (name, slug, description, short_desc, category_id, fabric, occasion, price, mrp, discount_percent)
+      VALUES ('Custom Domain Saree', 'custom-domain-saree-${Date.now()}', 'Custom domain test', 'Custom domain test', ?, 'Silk', 'Party', 8000, 10000, 20)
+    `).run(validCat.id);
+    db.prepare(`
+      INSERT INTO product_images (product_id, image_url, is_primary, display_order)
+      VALUES (?, 'https://custom-domain.example/saree.jpg', 1, 1)
+    `).run(unsupportedProductInsert.lastInsertRowid);
+
+    const unsupportedSuggestionsRes = await request('/api/products/search/suggestions?q=Custom');
+    assert.strictEqual(unsupportedSuggestionsRes.status, 200);
+    const customProd = unsupportedSuggestionsRes.body.products.find(p => p.name === 'Custom Domain Saree');
+    assert.ok(customProd, 'Custom domain product must be found in suggestions');
+    assert.strictEqual(customProd.thumbnail, undefined, 'Unsupported remote URL must omit thumbnail so client helper can run');
+    console.log('✅ PASS: [P2] Search suggestions endpoint returns lightweight thumbnail URLs for local and supported remote URLs (Unsplash w=180)');
 
     // 7. Verify real customer questions with names matching former fixtures are NOT wiped on database restart/init
     const realCustomerQuestionText = 'Can this bridal saree be delivered with custom blouse stitching in Pune?';

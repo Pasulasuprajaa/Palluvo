@@ -59,8 +59,8 @@ export const CATEGORY_CATALOG = {
   },
   'bridal-collection': {
     name: 'Bridal Collection',
-    description: 'Opulent bridal heirlooms woven with real silver and gold zari for once-in-a-lifetime moments.',
-    image_url: '/images/occasions/wedding_collection.jpg'
+    description: 'Heirloom trousseau masterworks handcrafted for weddings and lifetime memories.',
+    image_url: '/images/categories/bridal.jpg'
   }
 };
 
