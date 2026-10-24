@@ -3,6 +3,7 @@ import { Heart, Eye, ShoppingBag, Star, Check } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { useCompare } from '../context/CompareContext';
+import { getThumbnailUrl } from '../utils/imageUtils';
 
 export default function ProductCard({ product, onNavigate, imageLoading = 'lazy', priority = false }) {
   const [isHovered, setIsHovered] = useState(false);
@@ -22,6 +23,10 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
     !rawSecondary.includes('/images/occasions/')
   );
   const secondaryImg = hasItemSpecificAlternate ? rawSecondary : primaryImg;
+  const primaryThumb = (product.thumbnails && product.thumbnails[0]) || getThumbnailUrl(primaryImg);
+  const secondaryThumb = (hasItemSpecificAlternate && product.thumbnails && product.thumbnails[1])
+    ? product.thumbnails[1]
+    : getThumbnailUrl(secondaryImg);
 
   const handleProductClick = (e) => {
     if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) {
@@ -76,7 +81,7 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
           />
 
           <img
-            src={isHovered ? secondaryImg : primaryImg}
+            src={isHovered ? secondaryThumb : primaryThumb}
             alt={product.name}
             loading={priority ? 'eager' : imageLoading}
             decoding="async"

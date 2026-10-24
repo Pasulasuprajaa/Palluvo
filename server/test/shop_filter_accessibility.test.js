@@ -278,6 +278,133 @@ async function testShopFilterAccessibility() {
     assert.ok(htmlWithFilters.includes('Wedding'), 'Wedding occasion option rendered');
 
     console.log('✅ PASS: [P2] SSR rendering confirms synchronized selected state (aria-pressed) across active filter choices');
+
+    // 5. Verify [P2] Category deep link routing (/sarees/category/:slug and /category/:slug) and direct-load hydration
+    const appResult = await vite.build({
+      root: path.resolve(__dirname, '../../client'),
+      logLevel: 'silent',
+      build: {
+        write: false,
+        lib: {
+          entry: path.resolve(__dirname, '../../client/src/App.jsx'),
+          formats: ['cjs'],
+          fileName: 'app'
+        },
+        rollupOptions: {
+          external: () => true
+        }
+      }
+    });
+
+    const appCode = appResult[0].output[0].code;
+    const appMod = { exports: {} };
+    const appFn = new Function('require', 'module', 'exports', appCode);
+    appFn((id) => (id === 'react' ? React : {}), appMod, appMod.exports);
+
+    const { getRouteFromPath } = appMod.exports;
+    assert.strictEqual(typeof getRouteFromPath, 'function', 'getRouteFromPath must be exported from App.jsx');
+
+    // Route /sarees/category/:slug to shop page with category filter
+    const r1 = getRouteFromPath('/sarees/category/banarasi');
+    assert.strictEqual(r1.page, 'shop', '/sarees/category/:slug must route to shop page');
+    assert.strictEqual(r1.params.category, 'banarasi', 'category param must map to banarasi');
+
+    // Route /category/:slug to shop page with category filter
+    const r2 = getRouteFromPath('/category/kanjivaram');
+    assert.strictEqual(r2.page, 'shop', '/category/:slug must route to shop page');
+    assert.strictEqual(r2.params.category, 'kanjivaram', 'category param must map to kanjivaram');
+
+    // Preserve search params alongside category route
+    const r3 = getRouteFromPath('/sarees/category/chanderi', '?sort=price_low&fabric=Silk');
+    assert.strictEqual(r3.page, 'shop');
+    assert.strictEqual(r3.params.category, 'chanderi');
+    assert.strictEqual(r3.params.sort, 'price_low');
+    assert.strictEqual(r3.params.fabric, 'Silk');
+
+    // Generic product routes must remain unaffected
+    const r4 = getRouteFromPath('/sarees/samrajni-grand-muhurtham-24k-gold-korvai-kanjivaram');
+    assert.strictEqual(r4.page, 'product', '/sarees/:slug must route to product page');
+    assert.strictEqual(r4.params.slug, 'samrajni-grand-muhurtham-24k-gold-korvai-kanjivaram');
+
+    const r5 = getRouteFromPath('/product/samrajni-grand-muhurtham-24k-gold-korvai-kanjivaram');
+    assert.strictEqual(r5.page, 'product', '/product/:slug must route to product page');
+    assert.strictEqual(r5.params.slug, 'samrajni-grand-muhurtham-24k-gold-korvai-kanjivaram');
+
+    // Direct-load hydration: verify ShopPage renders collection view when hydrated with category params
+    const categoryHydratedHtml = ReactDOMServer.renderToString(React.createElement(ShopPage, {
+      onNavigate: () => {},
+      initialFilters: r1.params
+    }));
+    assert.ok(categoryHydratedHtml.includes('aria-controls="mobile-filter-dialog"'), 'Direct-loaded category view renders collection controls');
+    assert.ok(!categoryHydratedHtml.includes('Product not found'), 'Direct-loaded category view must not display product-not-found');
+    console.log('✅ PASS: [P2] Category deep links (/sarees/category/:slug and /category/:slug) route to collection page with direct-load support');
+
+    // 6. Verify [P2] Lightweight generated thumbnails in catalog cards
+    const productCardSource = fs.readFileSync(path.resolve(__dirname, '../../client/src/components/ProductCard.jsx'), 'utf8');
+    assert.ok(
+      productCardSource.includes("import { getThumbnailUrl } from '../utils/imageUtils'") ||
+      productCardSource.includes('getThumbnailUrl'),
+      'ProductCard must import getThumbnailUrl'
+    );
+    assert.ok(
+      productCardSource.includes('primaryThumb') && productCardSource.includes('secondaryThumb'),
+      'ProductCard must compute primary and secondary thumbnail variants'
+    );
+    assert.ok(
+      productCardSource.includes('onNavigate(\'product\', { slug: product.slug, image: primaryImg'),
+      'ProductCard must preserve full-resolution primaryImg when navigating to product detail'
+    );
+
+    const productCardResult = await vite.build({
+      root: path.resolve(__dirname, '../../client'),
+      logLevel: 'silent',
+      build: {
+        write: false,
+        lib: {
+          entry: path.resolve(__dirname, '../../client/src/components/ProductCard.jsx'),
+          formats: ['cjs'],
+          fileName: 'productCard'
+        },
+        rollupOptions: {
+          external: ['react', 'react-dom', 'lucide-react', '../context/WishlistContext', '../context/CartContext', '../context/CompareContext']
+        }
+      }
+    });
+
+    const cardCode = productCardResult[0].output[0].code;
+    const cardMod = { exports: {} };
+    const cardFn = new Function('require', 'module', 'exports', cardCode);
+    cardFn((id) => {
+      if (id === 'react') return React;
+      if (id.includes('WishlistContext')) return { useWishlist: () => ({ isWishlisted: () => false, toggleWishlist: () => {} }) };
+      if (id.includes('CartContext')) return { useCart: () => ({ addToCart: () => {}, setQuickViewProduct: () => {} }) };
+      if (id.includes('CompareContext')) return { useCompare: () => ({ isInCompare: () => false, addToCompare: () => {} }) };
+      return mockLucide;
+    }, cardMod, cardMod.exports);
+
+    const ProductCard = cardMod.exports.default || cardMod.exports;
+    const cardHtml = ReactDOMServer.renderToString(React.createElement(ProductCard, {
+      product: {
+        id: 1,
+        name: 'Rajkumari Heritage Bridal Banarasi',
+        slug: 'rajkumari-heritage-bridal-banarasi',
+        price: 45000,
+        primary_image: '/images/sarees/bridal_sindoor.jpg',
+        secondary_image: '/images/sarees/bridal_sindoor_detail.jpg'
+      },
+      onNavigate: () => {}
+    }));
+
+    // Verify card image uses thumbnail variant (12KB) instead of full-size (839KB)
+    assert.ok(
+      cardHtml.includes('/images/thumbnails/sarees/bridal_sindoor.jpg'),
+      'ProductCard img src must use generated thumbnail variant /images/thumbnails/...'
+    );
+    assert.ok(
+      !cardHtml.includes('src="/images/sarees/bridal_sindoor.jpg"'),
+      'ProductCard img src must not use full-size source image'
+    );
+    console.log('✅ PASS: [P2] Catalog cards utilize generated lightweight thumbnails (~12KB) instead of heavy full-size assets (~839KB)');
   } catch (renderErr) {
     console.error('SSR test error:', renderErr);
     throw renderErr;

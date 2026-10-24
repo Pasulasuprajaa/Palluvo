@@ -43,15 +43,36 @@ function PageLoader() {
   );
 }
 
-function getRouteFromPath(pathname = window.location.pathname, search = window.location.search) {
+export function getRouteFromPath(
+  pathname = typeof window !== 'undefined' ? window.location.pathname : '/',
+  search = typeof window !== 'undefined' ? window.location.search : ''
+) {
   const path = pathname.toLowerCase();
   const searchParams = new URLSearchParams(search);
 
   if (path === '/' || path === '') {
     return { page: 'home', params: {} };
-  } else if (path.startsWith('/sarees/') || path.startsWith('/product/')) {
-    const slug = pathname.split('/')[2];
-    return { page: 'product', params: { slug } };
+  } else if (
+    path === '/sarees/category' ||
+    path.startsWith('/sarees/category/') ||
+    path === '/category' ||
+    path.startsWith('/category/')
+  ) {
+    const parts = pathname.split('/').filter(Boolean);
+    const isSareesPrefix = path.startsWith('/sarees/category');
+    const categorySlug = isSareesPrefix ? parts[2] : parts[1];
+    const filters = {};
+    for (const [key, value] of searchParams.entries()) {
+      if (value) filters[key] = value;
+    }
+    if (categorySlug) {
+      filters.category = decodeURIComponent(categorySlug);
+    }
+    return { page: 'shop', params: filters };
+  } else if ((path.startsWith('/sarees/') && !path.startsWith('/sarees/category/')) || path.startsWith('/product/')) {
+    const parts = pathname.split('/').filter(Boolean);
+    const slug = parts[1];
+    return { page: 'product', params: { slug: slug ? decodeURIComponent(slug) : '' } };
   } else if (path === '/sarees' || path === '/shop') {
     const filters = {};
     for (const [key, value] of searchParams.entries()) {
