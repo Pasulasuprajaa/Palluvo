@@ -161,6 +161,14 @@ async function testShopFilterAccessibility() {
   );
   console.log('✅ PASS: [P1] body-parser patched to >= 2.4.0 and express.json({ inflate: false }) prevents compressed payload crash');
 
+  // 3.5b Verify [P2] ip-address GHSA-rxp7-6hxx-x8q5 Mitigation in server lockfile
+  const ipAddressLockVer = serverPackageLock.packages?.['node_modules/ip-address']?.version;
+  assert.ok(
+    ipAddressLockVer && !['10.7.3', '10.7.2', '10.7.1', '10.7.0'].includes(ipAddressLockVer),
+    'server/package-lock.json must resolve ip-address to patched version >= 10.7.4 (GHSA-rxp7-6hxx-x8q5)'
+  );
+  console.log('✅ PASS: [P2] ip-address patched to >= 10.7.4 in server lockfile (GHSA-rxp7-6hxx-x8q5 resolved)');
+
   // 3.6 Verify [P2] Product Detail Customer Trust & Truthful Urgency/Popularity Metrics
   const productDetailPagePath = path.resolve(__dirname, '../../client/src/pages/ProductDetailPage.jsx');
   assert.ok(fs.existsSync(productDetailPagePath), 'ProductDetailPage.jsx must exist');

@@ -1088,6 +1088,34 @@ async function runTests() {
     assert.strictEqual(unpurchasedRes.body.product.recent_orders_24h, 0, 'Unpurchased product must return recent_orders_24h === 0');
     console.log('✅ PASS: [P2] Product endpoint strictly counts completed paid, non-cancelled orders using COUNT(DISTINCT o.id)');
 
+    // Verify composite index idx_order_items_product_order exists and is utilized by EXPLAIN QUERY PLAN
+    const indexCheck = db.prepare(`
+      SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_order_items_product_order'
+    `).get();
+    assert.ok(indexCheck, 'Composite index idx_order_items_product_order must exist on order_items(product_id, order_id)');
+
+    const queryPlan = db.prepare(`
+      EXPLAIN QUERY PLAN
+      SELECT COUNT(DISTINCT o.id) as count
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      WHERE oi.product_id = ?
+        AND o.created_at >= datetime('now', '-24 hours')
+        AND o.payment_status = 'Paid'
+        AND o.status != 'Cancelled'
+    `).all(prodWithImgId);
+
+    const planDetails = queryPlan.map(p => p.detail).join(' | ');
+    assert.ok(
+      !planDetails.includes('SCAN oi'),
+      `Query plan must not scan oi table sequentially: ${planDetails}`
+    );
+    assert.ok(
+      planDetails.includes('idx_order_items_product_order'),
+      `Query plan must utilize idx_order_items_product_order: ${planDetails}`
+    );
+    console.log('✅ PASS: [P2] Composite index idx_order_items_product_order covers recent order lookup without table scan');
+
     // 7. Verify real customer questions with names matching former fixtures are NOT wiped on database restart/init
     const realCustomerQuestionText = 'Can this bridal saree be delivered with custom blouse stitching in Pune?';
     db.prepare(`

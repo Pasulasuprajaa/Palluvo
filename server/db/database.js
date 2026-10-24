@@ -426,6 +426,7 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
     CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
     CREATE INDEX IF NOT EXISTS idx_product_qa_product ON product_qa(product_id);
+    CREATE INDEX IF NOT EXISTS idx_order_items_product_order ON order_items(product_id, order_id);
 
     -- Q&A Helpful Votes Table (Tracks unique votes per voter key / user)
     CREATE TABLE IF NOT EXISTS product_qa_votes (
@@ -493,6 +494,9 @@ function initSchema() {
   } catch (e) {}
   try {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_orders_pending_expiry ON orders(payment_status, expires_at);`);
+  } catch (e) {}
+  try {
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_order_items_product_order ON order_items(product_id, order_id);`);
   } catch (e) {}
 
   try {
