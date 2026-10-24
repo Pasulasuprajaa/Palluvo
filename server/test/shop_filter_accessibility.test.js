@@ -405,6 +405,77 @@ async function testShopFilterAccessibility() {
       'ProductCard img src must not use full-size source image'
     );
     console.log('✅ PASS: [P2] Catalog cards utilize generated lightweight thumbnails (~12KB) instead of heavy full-size assets (~839KB)');
+
+    // 7. Verify [P2] Category-specific metadata preservation after hydration
+    const { updatePageMeta, getCategoryRecord, CATEGORY_CATALOG } = require(path.resolve(__dirname, '../../client/src/utils/seo'));
+    assert.ok(CATEGORY_CATALOG['cotton-sarees'], 'CATEGORY_CATALOG must define cotton-sarees');
+    assert.strictEqual(CATEGORY_CATALOG['cotton-sarees'].name, 'Cotton & Handloom');
+
+    // Simulate DOM environment for updatePageMeta
+    const metaTags = {};
+    const mockDocument = {
+      title: '',
+      createElement: () => ({
+        setAttribute(k, v) {
+          this[k] = v;
+          if (k === 'content' && (this.name || this.property)) {
+            metaTags[this.name || this.property] = v;
+          }
+        }
+      }),
+      querySelector: (selector) => null,
+      head: {
+        appendChild: () => {}
+      }
+    };
+
+    const previousDocument = global.document;
+    global.document = mockDocument;
+
+    try {
+      updatePageMeta('shop', { category: 'cotton-sarees' });
+      assert.strictEqual(
+        mockDocument.title,
+        'Cotton & Handloom Collection | PALLUVO',
+        'Direct load/hydration of cotton-sarees must preserve "Cotton & Handloom Collection | PALLUVO" title'
+      );
+      assert.strictEqual(
+        metaTags['description'],
+        'Breathable handcrafted mulmul, linen, and jamdani sarees for breezy effortless grace.',
+        'Direct load/hydration must preserve category-specific description instead of generic text'
+      );
+      assert.strictEqual(
+        metaTags['og:image'],
+        'https://palluvo.com/images/categories/cotton.jpg',
+        'Direct load/hydration must preserve category-specific og:image'
+      );
+      assert.strictEqual(
+        metaTags['og:image:alt'],
+        'Cotton & Handloom - Luxury Handloom Sarees | PALLUVO'
+      );
+      console.log('✅ PASS: [P2] Category-specific metadata preserved after hydration (title, description, and social tags)');
+    } finally {
+      global.document = previousDocument;
+    }
+
+    // 8. Verify [P2] SearchModal uses lightweight thumbnails in instant-search results
+    const searchModalPath = path.resolve(__dirname, '../../client/src/components/SearchModal.jsx');
+    const searchModalSource = fs.readFileSync(searchModalPath, 'utf8');
+    assert.ok(
+      searchModalSource.includes("import { getThumbnailUrl } from '../utils/imageUtils'") ||
+      searchModalSource.includes('getThumbnailUrl'),
+      'SearchModal must import getThumbnailUrl'
+    );
+    assert.ok(
+      searchModalSource.includes('prod.thumbnail') &&
+      searchModalSource.includes('getThumbnailUrl(prod.primary_image)'),
+      'SearchModal result rows must render lightweight thumbnail variant for instant-search suggestions'
+    );
+    assert.ok(
+      searchModalSource.includes('image: product.primary_image'),
+      'SearchModal handleSelectProduct must preserve original full-size image when navigating to product detail'
+    );
+    console.log('✅ PASS: [P2] Instant-search results utilize lightweight thumbnails in 48x64 suggestion rows');
   } catch (renderErr) {
     console.error('SSR test error:', renderErr);
     throw renderErr;

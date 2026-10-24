@@ -21,7 +21,61 @@ function setCanonicalUrl(url) {
   link.setAttribute('href', url);
 }
 
-function formatCategoryTitle(slug) {
+export const CATEGORY_CATALOG = {
+  'banarasi-sarees': {
+    name: 'Banarasi Sarees',
+    description: 'Timeless Varanasi heritage woven with pure gold and silver zari on luscious mulberry silk.',
+    image_url: '/images/categories/banarasi.jpg'
+  },
+  'kanjivaram-sarees': {
+    name: 'Kanjivaram Sarees',
+    description: 'Royal temple borders and rich korvai weaving from the ancient holy town of Kanchipuram.',
+    image_url: '/images/categories/kanjivaram.jpg'
+  },
+  'silk-sarees': {
+    name: 'Silk Sarees',
+    description: 'Lustrous mulberry, raw tussar, chanderi, and tissue silk weaves for regal occasions.',
+    image_url: '/images/categories/silk.jpg'
+  },
+  'organza-sarees': {
+    name: 'Organza Sarees',
+    description: 'Whisper-light translucent drapes adorned with delicate floral hand embroidery and scalloped borders.',
+    image_url: '/images/categories/organza.jpg'
+  },
+  'cotton-sarees': {
+    name: 'Cotton & Handloom',
+    description: 'Breathable handcrafted mulmul, linen, and jamdani sarees for breezy effortless grace.',
+    image_url: '/images/categories/cotton.jpg'
+  },
+  'designer-sarees': {
+    name: 'Designer Sarees',
+    description: 'Contemporary silhouettes, sequins, metallic sheen, and modern cocktail drapes.',
+    image_url: '/images/categories/designer.jpg'
+  },
+  'party-wear': {
+    name: 'Party Wear',
+    description: 'Glamorous shimmer georgettes, velvet trims, and pre-draped luxury for evening celebrations.',
+    image_url: '/images/categories/partywear.jpg'
+  },
+  'bridal-collection': {
+    name: 'Bridal Collection',
+    description: 'Opulent bridal heirlooms woven with real silver and gold zari for once-in-a-lifetime moments.',
+    image_url: '/images/occasions/wedding_collection.jpg'
+  }
+};
+
+export function getCategoryRecord(slugOrAlias) {
+  if (!slugOrAlias) return null;
+  const key = String(slugOrAlias).toLowerCase().trim();
+  if (CATEGORY_CATALOG[key]) return CATEGORY_CATALOG[key];
+  if (CATEGORY_CATALOG[`${key}-sarees`]) return CATEGORY_CATALOG[`${key}-sarees`];
+  if (key === 'bridal' || key === 'wedding') return CATEGORY_CATALOG['bridal-collection'];
+  return null;
+}
+
+export function formatCategoryTitle(slug) {
+  const cat = getCategoryRecord(slug);
+  if (cat) return cat.name;
   if (!slug) return 'Luxury Saree Collection';
   return slug
     .split('-')
@@ -50,14 +104,24 @@ export function updatePageMeta(page, params = {}) {
   }
 
   if (page === 'shop') {
-    const categoryName = params.category ? formatCategoryTitle(params.category) : null;
-    title = categoryName
-      ? `${categoryName} | PALLUVO Luxury Sarees`
-      : 'Explore Luxury Handloom Sarees | PALLUVO';
-    description = `Browse authentic handcrafted Indian sarees${categoryName ? ` in our ${categoryName} edit` : ''}. Curated luxury drapes with insured nationwide delivery.`;
-    url = params.category
-      ? `${BASE_URL}/sarees?category=${encodeURIComponent(params.category)}`
-      : `${BASE_URL}/sarees`;
+    const rawCategory = params.category || '';
+    const catRecord = getCategoryRecord(rawCategory);
+    if (catRecord) {
+      title = `${catRecord.name} Collection | PALLUVO`;
+      description = catRecord.description || `Explore authentic ${catRecord.name} handcrafted by master weavers across India.`;
+      url = `${BASE_URL}/sarees?category=${encodeURIComponent(rawCategory)}`;
+      image = toAbsoluteUrl(catRecord.image_url);
+      imageAlt = `${catRecord.name} - Luxury Handloom Sarees | PALLUVO`;
+    } else if (rawCategory) {
+      const categoryName = formatCategoryTitle(rawCategory);
+      title = `${categoryName} | PALLUVO Luxury Sarees`;
+      description = `Browse authentic handcrafted Indian sarees in our ${categoryName} edit. Curated luxury drapes with insured nationwide delivery.`;
+      url = `${BASE_URL}/sarees?category=${encodeURIComponent(rawCategory)}`;
+    } else {
+      title = 'Explore Luxury Handloom Sarees | PALLUVO';
+      description = 'Browse authentic handcrafted Indian sarees. Curated luxury drapes with insured nationwide delivery.';
+      url = `${BASE_URL}/sarees`;
+    }
   } else if (page === 'product' && (params.slug || params.product)) {
     const rawSlug = params.slug || params.product?.slug || '';
     const formattedName = (params.name || params.product?.name || rawSlug)

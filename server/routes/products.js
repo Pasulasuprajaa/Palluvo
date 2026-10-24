@@ -448,9 +448,23 @@ router.get('/search/suggestions', async (req, res) => {
       SELECT name, slug FROM categories WHERE name LIKE ? LIMIT 4
     `).all(term);
 
+    const mappedProducts = products.map((prod) => {
+      let thumbnail = prod.primary_image;
+      if (typeof thumbnail === 'string' && thumbnail.startsWith('/images/thumbnails/')) {
+        // already thumbnail
+      } else if (typeof thumbnail === 'string' && thumbnail.startsWith('/images/')) {
+        thumbnail = thumbnail.replace('/images/', '/images/thumbnails/');
+      }
+      return {
+        ...prod,
+        thumbnail,
+        thumbnail_url: thumbnail
+      };
+    });
+
     res.json({
       query: q,
-      products,
+      products: mappedProducts,
       categories
     });
   } catch (err) {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, TrendingUp, Sparkles, ArrowRight, History, Trash2, Star } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { getThumbnailUrl } from '../utils/imageUtils';
 
 export default function SearchModal({ onNavigate }) {
   const { isSearchOpen, setIsSearchOpen } = useCart();
@@ -331,7 +332,7 @@ export default function SearchModal({ onNavigate }) {
                             className="w-full text-left flex items-center gap-3.5 p-2.5 rounded-xl hover:bg-white bg-white sm:bg-[#FAF7F2] border border-[#E8E1D5] focus:border-[#5B1425] focus:ring-2 focus:ring-[#5B1425]/30 focus:outline-hidden cursor-pointer transition group shadow-xs active:scale-[0.99]"
                           >
                             <img
-                              src={prod.primary_image || '/images/categories/banarasi.jpg'}
+                              src={prod.thumbnail || prod.thumbnail_url || getThumbnailUrl(prod.primary_image) || '/images/thumbnails/categories/banarasi.jpg'}
                               alt={prod.name}
                               className="w-12 h-16 object-cover rounded-lg shadow-xs group-hover:scale-105 transition shrink-0"
                             />

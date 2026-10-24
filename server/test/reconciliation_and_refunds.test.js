@@ -1116,6 +1116,22 @@ async function runTests() {
     );
     console.log('✅ PASS: [P2] Composite index idx_order_items_product_order covers recent order lookup without table scan');
 
+    // 6c. Verify /api/products/search/suggestions returns lightweight thumbnail URLs for instant search
+    const suggestionsRes = await request('/api/products/search/suggestions?q=saree');
+    assert.strictEqual(suggestionsRes.status, 200);
+    assert.ok(suggestionsRes.body.products && suggestionsRes.body.products.length > 0, 'Suggestions must return products');
+    for (const prod of suggestionsRes.body.products) {
+      assert.ok(prod.thumbnail, 'Search suggestions product must contain thumbnail');
+      assert.ok(prod.thumbnail_url, 'Search suggestions product must contain thumbnail_url');
+      if (typeof prod.primary_image === 'string' && prod.primary_image.startsWith('/images/')) {
+        assert.ok(
+          prod.thumbnail.startsWith('/images/thumbnails/'),
+          `Local image suggestion thumbnail must point to /images/thumbnails/: ${prod.thumbnail}`
+        );
+      }
+    }
+    console.log('✅ PASS: [P2] Search suggestions endpoint returns lightweight thumbnail URLs for instant search');
+
     // 7. Verify real customer questions with names matching former fixtures are NOT wiped on database restart/init
     const realCustomerQuestionText = 'Can this bridal saree be delivered with custom blouse stitching in Pune?';
     db.prepare(`
