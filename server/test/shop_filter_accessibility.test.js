@@ -120,7 +120,7 @@ async function testShopFilterAccessibility() {
     'Focus fallback: If document.activeElement is body or not usable, must fall back to mobileFilterTriggerRef'
   );
 
-  // Viewport resize & desktop breakpoint dismissal
+  // Desktop transition: Dismissal & visible focus restoration
   assert.ok(
     shopPageSource.includes('(min-width: 1024px)') &&
     shopPageSource.includes('handleDesktopTransition') &&
@@ -129,12 +129,37 @@ async function testShopFilterAccessibility() {
   );
 
   assert.ok(
+    shopPageSource.includes('desktopFilterSidebarRef') &&
+    shopPageSource.includes('wasDesktopDismissed') &&
+    shopPageSource.includes('isElementVisible') &&
+    shopPageSource.includes('visibleDesktopControl'),
+    'Desktop transition focus: Must restore focus to visible desktop filter landmark/control when dismissed at desktop breakpoint'
+  );
+
+  assert.ok(
     shopPageSource.includes("document.body.style.overflow = 'hidden'") &&
     shopPageSource.includes('document.body.style.overflow = originalOverflow'),
     'Scroll lock: Body scroll must be locked when dialog is open and cleanly restored on close'
   );
 
-  console.log('✅ PASS: [P2] Dialog focus entry, focus trapping, Escape-to-close, body focus fallback, and desktop breakpoint dismissal verified in code structure');
+  console.log('✅ PASS: [P2] Dialog focus entry, focus trapping, Escape-to-close, body focus fallback, desktop breakpoint dismissal, and visible desktop focus restoration verified in code structure');
+
+  // 3.5 Verify [P1] body-parser GHSA-27r3-jxmh-p828 Mitigation
+  const serverPackageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf8'));
+  const serverPackageLock = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package-lock.json'), 'utf8'));
+  const serverIndexSource = fs.readFileSync(path.resolve(__dirname, '../index.js'), 'utf8');
+
+  const bodyParserDep = serverPackageJson.dependencies?.['body-parser'] || serverPackageJson.overrides?.['body-parser'];
+  assert.ok(bodyParserDep && (bodyParserDep.includes('2.4') || bodyParserDep.includes('^2.4')), 'server/package.json must lock or override body-parser to ^2.4.0');
+
+  const bodyParserLockVer = serverPackageLock.packages?.['node_modules/body-parser']?.version;
+  assert.ok(bodyParserLockVer && !bodyParserLockVer.startsWith('2.3.') && !bodyParserLockVer.startsWith('2.2.'), 'server/package-lock.json must resolve body-parser to patched version >= 2.4.0');
+
+  assert.ok(
+    serverIndexSource.includes('express.json({ inflate: false })') || serverIndexSource.includes('inflate: false'),
+    'server/index.js must disable inflate to prevent compressed payload DoS (GHSA-27r3-jxmh-p828)'
+  );
+  console.log('✅ PASS: [P1] body-parser patched to >= 2.4.0 and express.json({ inflate: false }) prevents compressed payload crash');
 
   // 4. SSR Render & State Synchronization Test
   try {

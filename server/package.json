@@ -14,6 +14,7 @@
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
+    "body-parser": "^2.4.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.3",
     "express": "^5.2.1",
@@ -22,5 +23,8 @@
     "morgan": "^1.12.1",
     "razorpay": "^2.9.8",
     "uuid": "^14.0.2"
+  },
+  "overrides": {
+    "body-parser": "^2.4.0"
   }
 }

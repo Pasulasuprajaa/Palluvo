@@ -31,7 +31,8 @@ app.use(cors({
   origin: true,
   credentials: true
 }));
-app.use(express.json());
+// Disable inflation to prevent trailing-byte decoder exploits on compressed bodies (GHSA-27r3-jxmh-p828)
+app.use(express.json({ inflate: false }));
 app.use(morgan('dev'));
 
 // Global API rate limiting

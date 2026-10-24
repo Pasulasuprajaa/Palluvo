@@ -9,9 +9,12 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
 
   // Modal Dialog & Focus Management Refs
   const mobileFilterTriggerRef = useRef(null);
+  const desktopFilterSidebarRef = useRef(null);
+  const sortSelectRef = useRef(null);
   const dialogPanelRef = useRef(null);
   const closeButtonRef = useRef(null);
   const previouslyFocusedElementRef = useRef(null);
+  const desktopDismissalRef = useRef(false);
 
   // Filter States
   const [selectedCategory, setSelectedCategory] = useState(initialFilters.category || '');
@@ -137,9 +140,36 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
           typeof prevTarget.focus === 'function' &&
           document.contains(prevTarget);
 
-        const restoreTarget = isPrevUsable
+        let restoreTarget = isPrevUsable
           ? prevTarget
           : mobileFilterTriggerRef.current;
+
+        // Check if an element is currently visible in the DOM
+        const isElementVisible = (el) => {
+          if (!el || typeof el.focus !== 'function') return false;
+          if (el === document.body || el === document.documentElement) return false;
+          if (!document.contains(el)) return false;
+          if (typeof el.checkVisibility === 'function') {
+            return el.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true });
+          }
+          return el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0;
+        };
+
+        const wasDesktopDismissed = desktopDismissalRef.current || (typeof window !== 'undefined' && window.innerWidth >= 1024);
+        desktopDismissalRef.current = false;
+
+        // If sheet was dismissed due to desktop breakpoint or target is now hidden (e.g. mobile trigger is lg:hidden),
+        // restore focus to a visible desktop filter control or landmark
+        if (wasDesktopDismissed || !isElementVisible(restoreTarget)) {
+          const visibleDesktopControl =
+            desktopFilterSidebarRef.current?.querySelector('button:not([disabled]), [tabindex="0"]') ||
+            desktopFilterSidebarRef.current ||
+            sortSelectRef.current;
+
+          if (visibleDesktopControl) {
+            restoreTarget = visibleDesktopControl;
+          }
+        }
 
         if (restoreTarget && typeof restoreTarget.focus === 'function') {
           try {
@@ -166,12 +196,14 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
     const handleDesktopTransition = () => {
       const isDesktop = desktopMediaQuery ? desktopMediaQuery.matches : window.innerWidth >= 1024;
       if (isDesktop) {
+        desktopDismissalRef.current = true;
         setMobileFilterOpen(false);
       }
     };
 
     if (desktopMediaQuery) {
       if (desktopMediaQuery.matches) {
+        desktopDismissalRef.current = true;
         setMobileFilterOpen(false);
         return;
       }
@@ -181,6 +213,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
         desktopMediaQuery.addListener(handleDesktopTransition);
       }
     } else if (window.innerWidth >= 1024) {
+      desktopDismissalRef.current = true;
       setMobileFilterOpen(false);
       return;
     }
@@ -362,6 +395,7 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
           <div className="flex-1 sm:flex-none flex items-center justify-between gap-1.5 bg-white border border-[#EAE2D7] rounded-xl px-3 py-2 shadow-2xs">
             <SlidersHorizontal className="w-3.5 h-3.5 text-[#6E6467] shrink-0" />
             <select
+              ref={sortSelectRef}
               value={sortOption}
               onChange={(e) => setSortOption(e.target.value)}
               className="bg-transparent text-xs font-semibold text-[#1F1A1C] focus:outline-none cursor-pointer w-full truncate"
@@ -504,7 +538,12 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 sm:gap-8 items-start">
         
         {/* Desktop Sidebar Filters (Hidden on Mobile) */}
-        <aside className="hidden lg:block space-y-6 bg-white p-6 rounded-2xl border border-[#EAE2D7] sticky top-28 shadow-xs">
+        <aside
+          ref={desktopFilterSidebarRef}
+          tabIndex={-1}
+          aria-label="Filter Sarees"
+          className="hidden lg:block space-y-6 bg-white p-6 rounded-2xl border border-[#EAE2D7] sticky top-28 shadow-xs focus:outline-none"
+        >
           <div className="flex items-center justify-between pb-3 border-b border-[#EAE2D7]">
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-[#5B1425]" />
