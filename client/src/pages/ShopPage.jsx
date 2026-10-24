@@ -53,7 +53,19 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
   // Manage Mobile Filter Modal Dialog: Focus Entry, Trapping, Escape-to-close, and Focus Restoration
   useEffect(() => {
     if (mobileFilterOpen) {
-      previouslyFocusedElementRef.current = document.activeElement;
+      // Store previous active element, falling back to trigger if active element is body, html, or not a usable target
+      const activeEl = document.activeElement;
+      const isUsableTarget =
+        activeEl &&
+        activeEl !== document.body &&
+        activeEl !== document.documentElement &&
+        typeof activeEl.focus === 'function' &&
+        document.contains(activeEl);
+
+      previouslyFocusedElementRef.current = isUsableTarget
+        ? activeEl
+        : (mobileFilterTriggerRef.current || null);
+
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
 
@@ -76,6 +88,11 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
         if (event.key === 'Tab') {
           const dialogNode = dialogPanelRef.current;
           if (!dialogNode) return;
+
+          // If sheet is hidden (e.g. at desktop breakpoint), do not intercept Tab
+          if (dialogNode.offsetParent === null && typeof window !== 'undefined' && window.getComputedStyle(dialogNode).display === 'none') {
+            return;
+          }
 
           const focusableElements = Array.from(
             dialogNode.querySelectorAll(
@@ -112,7 +129,18 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
         document.body.style.overflow = originalOverflow;
         document.removeEventListener('keydown', handleKeyDown, true);
 
-        const restoreTarget = previouslyFocusedElementRef.current || mobileFilterTriggerRef.current;
+        const prevTarget = previouslyFocusedElementRef.current;
+        const isPrevUsable =
+          prevTarget &&
+          prevTarget !== document.body &&
+          prevTarget !== document.documentElement &&
+          typeof prevTarget.focus === 'function' &&
+          document.contains(prevTarget);
+
+        const restoreTarget = isPrevUsable
+          ? prevTarget
+          : mobileFilterTriggerRef.current;
+
         if (restoreTarget && typeof restoreTarget.focus === 'function') {
           try {
             restoreTarget.focus();
@@ -127,6 +155,48 @@ export default function ShopPage({ onNavigate, initialFilters = {} }) {
         }
       };
     }
+  }, [mobileFilterOpen]);
+
+  // Dismiss mobile filter sheet when viewport scales or rotates to desktop (lg: >= 1024px)
+  useEffect(() => {
+    if (!mobileFilterOpen || typeof window === 'undefined') return;
+
+    const desktopMediaQuery = window.matchMedia ? window.matchMedia('(min-width: 1024px)') : null;
+
+    const handleDesktopTransition = () => {
+      const isDesktop = desktopMediaQuery ? desktopMediaQuery.matches : window.innerWidth >= 1024;
+      if (isDesktop) {
+        setMobileFilterOpen(false);
+      }
+    };
+
+    if (desktopMediaQuery) {
+      if (desktopMediaQuery.matches) {
+        setMobileFilterOpen(false);
+        return;
+      }
+      if (desktopMediaQuery.addEventListener) {
+        desktopMediaQuery.addEventListener('change', handleDesktopTransition);
+      } else if (desktopMediaQuery.addListener) {
+        desktopMediaQuery.addListener(handleDesktopTransition);
+      }
+    } else if (window.innerWidth >= 1024) {
+      setMobileFilterOpen(false);
+      return;
+    }
+
+    window.addEventListener('resize', handleDesktopTransition);
+
+    return () => {
+      if (desktopMediaQuery) {
+        if (desktopMediaQuery.removeEventListener) {
+          desktopMediaQuery.removeEventListener('change', handleDesktopTransition);
+        } else if (desktopMediaQuery.removeListener) {
+          desktopMediaQuery.removeListener(handleDesktopTransition);
+        }
+      }
+      window.removeEventListener('resize', handleDesktopTransition);
+    };
   }, [mobileFilterOpen]);
 
   useEffect(() => {

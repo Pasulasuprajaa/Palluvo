@@ -113,13 +113,28 @@ async function testShopFilterAccessibility() {
     'Focus restoration: Closing modal must return focus to trigger element'
   );
 
+  // Fallback to trigger when previously focused element is body or not usable
+  assert.ok(
+    shopPageSource.includes('activeEl !== document.body') &&
+    shopPageSource.includes('mobileFilterTriggerRef.current'),
+    'Focus fallback: If document.activeElement is body or not usable, must fall back to mobileFilterTriggerRef'
+  );
+
+  // Viewport resize & desktop breakpoint dismissal
+  assert.ok(
+    shopPageSource.includes('(min-width: 1024px)') &&
+    shopPageSource.includes('handleDesktopTransition') &&
+    shopPageSource.includes('setMobileFilterOpen(false)'),
+    'Desktop transition: Viewport resizing/rotating to lg breakpoint (1024px) must dismiss mobile filter sheet'
+  );
+
   assert.ok(
     shopPageSource.includes("document.body.style.overflow = 'hidden'") &&
     shopPageSource.includes('document.body.style.overflow = originalOverflow'),
     'Scroll lock: Body scroll must be locked when dialog is open and cleanly restored on close'
   );
 
-  console.log('✅ PASS: [P2] Dialog focus entry, focus trapping, Escape-to-close, and focus restoration verified in code structure');
+  console.log('✅ PASS: [P2] Dialog focus entry, focus trapping, Escape-to-close, body focus fallback, and desktop breakpoint dismissal verified in code structure');
 
   // 4. SSR Render & State Synchronization Test
   try {
