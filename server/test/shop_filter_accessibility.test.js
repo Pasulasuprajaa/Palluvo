@@ -161,6 +161,47 @@ async function testShopFilterAccessibility() {
   );
   console.log('✅ PASS: [P1] body-parser patched to >= 2.4.0 and express.json({ inflate: false }) prevents compressed payload crash');
 
+  // 3.6 Verify [P2] Product Detail Customer Trust & Truthful Urgency/Popularity Metrics
+  const productDetailPagePath = path.resolve(__dirname, '../../client/src/pages/ProductDetailPage.jsx');
+  assert.ok(fs.existsSync(productDetailPagePath), 'ProductDetailPage.jsx must exist');
+  const productDetailSource = fs.readFileSync(productDetailPagePath, 'utf8');
+
+  // Must not have hardcoded orders count or viewer count literals
+  assert.ok(
+    !productDetailSource.includes('14 orders placed in last 24 hours'),
+    'ProductDetailPage must not contain hard-coded "14 orders placed in last 24 hours"'
+  );
+  assert.ok(
+    !productDetailSource.includes('8 people viewing right now'),
+    'ProductDetailPage must not contain hard-coded "8 people viewing right now"'
+  );
+
+  // Must not contain arbitrary cycling countdown timer or fake urgency claim
+  assert.ok(
+    !productDetailSource.includes('hours: 3, minutes: 42'),
+    'ProductDetailPage must not contain arbitrary looping countdown state'
+  );
+  assert.ok(
+    !productDetailSource.includes('Order within <strong'),
+    'ProductDetailPage must not display unsupported "Order within" urgency claim'
+  );
+
+  // Must condition sales badge on verified server metric
+  assert.ok(
+    productDetailSource.includes('product.recent_orders_24h > 0') &&
+    productDetailSource.includes('{product.recent_orders_24h}'),
+    'ProductDetailPage must conditionally render recent order badge only when product.recent_orders_24h > 0'
+  );
+
+  // Server product endpoint must calculate verified recent_orders_24h from database
+  const productsRouteSource = fs.readFileSync(path.resolve(__dirname, '../routes/products.js'), 'utf8');
+  assert.ok(
+    productsRouteSource.includes('recent_orders_24h') &&
+    productsRouteSource.includes("datetime('now', '-24 hours')"),
+    'server/routes/products.js must derive recent_orders_24h from verified orders in the last 24 hours'
+  );
+  console.log('✅ PASS: [P2] ProductDetailPage customer trust: fake countdown and unverified popularity badges eliminated, verified metrics properly gated');
+
   // 4. SSR Render & State Synchronization Test
   try {
     const React = require(path.resolve(__dirname, '../../client/node_modules/react'));

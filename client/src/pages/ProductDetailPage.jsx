@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Star, Heart, ShoppingBag, ShieldCheck, Truck, RotateCcw,
   Sparkles, Check, ChevronRight, Share2, ZoomIn, X, Plus, Minus, Tag, MapPin,
-  Scale, Clock, Flame, Eye, CreditCard, Ruler, Scissors, MessageCircle, ThumbsUp
+  Scale, Clock, Flame, CreditCard, Ruler, Scissors, MessageCircle, ThumbsUp
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
@@ -50,30 +50,11 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   const [pincodeResult, setPincodeResult] = useState(null);
   const [checkingPin, setCheckingPin] = useState(false);
 
-  // Live Urgency Countdown Timer (Flipkart / Amazon Lightning Deal & Express Delivery)
-  const [timeLeft, setTimeLeft] = useState({ hours: 3, minutes: 42, seconds: 19 });
-
   const { addToCart } = useCart();
   const { isWishlisted, toggleWishlist } = useWishlist();
   const { addToCompare, isInCompare } = useCompare();
   const { user } = useAuth();
   const { showToast } = useToast();
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev.seconds > 0) {
-          return { ...prev, seconds: prev.seconds - 1 };
-        } else if (prev.minutes > 0) {
-          return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
-        } else if (prev.hours > 0) {
-          return { hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        }
-        return { hours: 4, minutes: 0, seconds: 0 };
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   // Lightbox Focus Trapping, Escape Key Handling, and Scroll Lock
   useEffect(() => {
@@ -493,30 +474,26 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
               </button>
             </div>
 
-            {/* Live Delivery & Urgency Countdown (Amazon Style) */}
+            {/* Dispatch & Delivery Transparency */}
             <div className="p-3 bg-[#FAF0E6]/70 rounded-xl border border-[#C5A059]/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-2 text-[#5B1425] font-semibold">
-                <Clock className="w-4 h-4 text-[#C5A059]" />
-                <span>
-                  Order within <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-[#C5A059]/40">{String(timeLeft.hours).padStart(2, '0')}h : {String(timeLeft.minutes).padStart(2, '0')}m : {String(timeLeft.seconds).padStart(2, '0')}s</strong>
-                </span>
+                <Clock className="w-4 h-4 text-[#C5A059]" aria-hidden="true" />
+                <span>Standard Dispatch: Dispatched within 24–48 business hours</span>
               </div>
               <span className="text-emerald-800 font-medium">
-                Get delivery by <strong>Tomorrow, 4:00 PM</strong>
+                Insured Doorstep Delivery
               </span>
             </div>
 
-            {/* Live Viewers & Sales Pulse (Flipkart Style) */}
-            <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1">
-              <span className="flex items-center gap-1 text-red-700 font-medium">
-                <Flame className="w-3.5 h-3.5 fill-red-500 text-red-500" />
-                <span>14 orders placed in last 24 hours</span>
-              </span>
-              <span className="flex items-center gap-1 text-gray-600">
-                <Eye className="w-3.5 h-3.5 text-gray-400" />
-                <span>8 people viewing right now</span>
-              </span>
-            </div>
+            {/* Verified Sales Metric (Only rendered when sourced from verified order activity; omitted when unavailable) */}
+            {product.recent_orders_24h > 0 && (
+              <div className="flex items-center text-[11px] text-gray-500 pt-1">
+                <span className="flex items-center gap-1 text-red-700 font-medium">
+                  <Flame className="w-3.5 h-3.5 fill-red-500 text-red-500" aria-hidden="true" />
+                  <span>{product.recent_orders_24h} {product.recent_orders_24h === 1 ? 'order' : 'orders'} placed in last 24 hours</span>
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Color & Variant Selection */}

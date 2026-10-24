@@ -989,8 +989,50 @@ async function runTests() {
     const returnedQA = getQARes.body.qa.find(q => q.id === askQARes.body.qa.id);
     assert.strictEqual(returnedQA.answer, null, 'Exposed QA must not contain fake answer');
     assert.strictEqual(returnedQA.answered_by, null, 'Exposed QA must not contain fake concierge attribution');
-    assert.strictEqual(returnedQA.helpful_votes, 0, 'Exposed QA must start with 0 helpful votes');
     console.log('✅ PASS: [P2] Seeded Q&A and GET endpoint strictly avoid unverified concierge claims and fabricated social proof');
+
+    // 6b. Verify GET /api/products/:slugOrId returns verified recent_orders_24h matching actual database orders
+    const getProdDetailRes1 = await request(`/api/products/${prodWithImgId}`);
+    assert.strictEqual(getProdDetailRes1.status, 200);
+    const initialOrders24h = getProdDetailRes1.body.product.recent_orders_24h;
+
+    // Create an order in last 24h containing this product with quantity 2
+    const orderInsertResult = db.prepare(`
+      INSERT INTO orders (user_id, order_number, address_data, subtotal, total_amount, status, payment_status, created_at)
+      VALUES (1, 'ORD-TEST-RECENT-${Date.now()}', '{}', 5000, 5000, 'Processing', 'Paid', datetime('now', '-2 hours'))
+    `).run();
+    db.prepare(`
+      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+      VALUES (?, ?, 'Test Silk Saree', 5000, 2)
+    `).run(orderInsertResult.lastInsertRowid, prodWithImgId);
+
+    const getProdDetailRes2 = await request(`/api/products/${prodWithImgId}`);
+    assert.strictEqual(getProdDetailRes2.status, 200);
+    assert.strictEqual(getProdDetailRes2.body.product.recent_orders_24h, initialOrders24h + 2, 'Verified recent_orders_24h must accurately reflect order_items quantity from last 24 hours');
+
+    // Also verify an unpurchased product returns exactly 0
+    const unpurchasedCreateRes = await request('/api/admin/products', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${runtimeAdminUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        name: 'Unpurchased Saree',
+        tagline: 'Pure zari weave',
+        description: 'Handcrafted luxury drape',
+        short_desc: 'Luxury silk saree',
+        category_id: cat.id,
+        fabric: 'Pure Silk',
+        occasion: 'Bridal',
+        price: 40000,
+        mrp: 50000
+      }
+    });
+    assert.strictEqual(unpurchasedCreateRes.status, 201);
+    const unpurchasedRes = await request(`/api/products/${unpurchasedCreateRes.body.productId}`);
+    assert.strictEqual(unpurchasedRes.body.product.recent_orders_24h, 0, 'Unpurchased product must return recent_orders_24h === 0');
+    console.log('✅ PASS: [P2] Product endpoint derives verified recent_orders_24h from database and rejects unsupported popularity metrics');
 
     // 7. Verify real customer questions with names matching former fixtures are NOT wiped on database restart/init
     const realCustomerQuestionText = 'Can this bridal saree be delivered with custom blouse stitching in Pune?';

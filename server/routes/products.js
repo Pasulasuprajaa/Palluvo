@@ -535,6 +535,20 @@ router.get('/:slugOrId', async (req, res) => {
       LIMIT 4
     `).all(product.category_id, product.fabric, product.id);
 
+    // Verified product-specific order activity in last 24 hours
+    let recentOrders24h = 0;
+    try {
+      const recentOrdersRow = db.prepare(`
+        SELECT COALESCE(SUM(oi.quantity), 0) as count
+        FROM order_items oi
+        JOIN orders o ON oi.order_id = o.id
+        WHERE oi.product_id = ?
+          AND o.created_at >= datetime('now', '-24 hours')
+          AND (o.payment_status IS NULL OR o.payment_status != 'Failed')
+      `).get(product.id);
+      recentOrders24h = recentOrdersRow?.count || 0;
+    } catch (_) {}
+
     res.json({
       product: {
         ...product,
@@ -549,7 +563,8 @@ router.get('/:slugOrId', async (req, res) => {
         variants,
         reviews,
         qa,
-        related
+        related,
+        recent_orders_24h: recentOrders24h
       }
     });
   } catch (err) {
