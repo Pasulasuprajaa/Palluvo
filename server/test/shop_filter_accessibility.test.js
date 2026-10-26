@@ -596,6 +596,117 @@ async function testShopFilterAccessibility() {
     } catch (e) {}
   }
 
+  // 3.10 Corrective Migration Regression Test: Database ALREADY upgraded by commit ce02ddf
+  // (both 'cleanup_fabricated_courier_awb' and 'cleanup_legacy_default_carrier_no_awb' present)
+  // where a Placed/default-BlueDart/no-AWB row was previously misclassified with carrier_assigned_explicitly = 1.
+  // Must execute v3 migration (cleanup_misclassified_timestamp_carrier_defaults) to safely repair the misclassified row
+  // by resetting the flag to 0 and clearing the courier to null, while preserving genuine assignments.
+  const v2DbPath = path.resolve(__dirname, `../data/.v2_upgrade_test_${Date.now()}_${Math.random().toString(36).slice(2)}.db`);
+  const v2Db = new Database(v2DbPath);
+
+  try {
+    v2Db.exec(`
+      CREATE TABLE schema_migrations (
+        migration_name TEXT PRIMARY KEY,
+        applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_number TEXT UNIQUE NOT NULL,
+        status TEXT DEFAULT 'Placed',
+        tracking_number TEXT,
+        courier_partner TEXT,
+        carrier_assigned_explicitly INTEGER DEFAULT 0,
+        estimated_delivery TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Pre-populate BOTH old migration markers as if commit ce02ddf had already executed
+      INSERT INTO schema_migrations (migration_name) VALUES ('cleanup_fabricated_courier_awb');
+      INSERT INTO schema_migrations (migration_name) VALUES ('cleanup_legacy_default_carrier_no_awb');
+
+      -- Rows left in database from commit ce02ddf:
+      -- 1. Placed order with default BlueDart and no AWB that was misclassified as carrier_assigned_explicitly = 1
+      -- due to the old timestamp heuristic (created_at != updated_at from payment processing)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
+      VALUES ('PAL-CE-PLACED-FLAGGED', 'Placed', NULL, 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 10:05:00');
+
+      -- 2. Genuine/ambiguous fulfillment order in Processing without AWB (must be PRESERVED)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
+      VALUES ('PAL-CE-PROCESSING-PRESERVED', 'Processing', NULL, 'BlueDart Luxury Express', 0, '2026-09-01 10:00:00', '2026-09-01 11:30:00');
+
+      -- 3. Genuine custom carrier assignment without AWB (must be PRESERVED with flag = 1)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
+      VALUES ('PAL-CE-CUSTOM-PRESERVED', 'Placed', NULL, 'Delhivery', 1, '2026-09-01 10:00:00', '2026-09-01 10:00:00');
+
+      -- 4. Dispatched order with real AWB and courier (must be PRESERVED with flag = 1)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
+      VALUES ('PAL-CE-REAL-PRESERVED', 'Shipped', 'BD-REAL-AWB-9988', 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 12:00:00');
+    `);
+
+    // Verify pre-conditions: Both v1 and v2 markers exist, v3 marker does not, and misclassified row carries flag 1
+    const hasV1 = v2Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_fabricated_courier_awb'").get();
+    assert.ok(hasV1, 'Pre-condition: cleanup_fabricated_courier_awb must be present');
+
+    const hasV2 = v2Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_legacy_default_carrier_no_awb'").get();
+    assert.ok(hasV2, 'Pre-condition: cleanup_legacy_default_carrier_no_awb must be present');
+
+    const hasV3Pre = v2Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_misclassified_timestamp_carrier_defaults'").get();
+    assert.strictEqual(hasV3Pre, undefined, 'Pre-condition: cleanup_misclassified_timestamp_carrier_defaults must not be present initially');
+
+    const preFlagged = v2Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PLACED-FLAGGED'").get();
+    assert.strictEqual(preFlagged.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(preFlagged.carrier_assigned_explicitly, 1);
+
+    // Run applyCourierMigrations on the database upgraded by commit ce02ddf
+    dbModule.applyCourierMigrations(v2Db);
+
+    // Verify post-conditions:
+    // 1. v3 migration marker recorded
+    const hasV3Post = v2Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_misclassified_timestamp_carrier_defaults'").get();
+    assert.ok(hasV3Post, 'Post-condition: cleanup_misclassified_timestamp_carrier_defaults must be recorded in schema_migrations');
+
+    // 2. Previously misclassified Placed order has carrier_assigned_explicitly reset to 0 and courier_partner nulled
+    const postFlagged = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PLACED-FLAGGED'").get();
+    assert.strictEqual(postFlagged.courier_partner, null, 'Misclassified Placed order must have courier_partner cleared to null');
+    assert.strictEqual(postFlagged.status, 'Placed');
+    assert.strictEqual(postFlagged.carrier_assigned_explicitly, 0, 'Misclassified Placed order must have carrier_assigned_explicitly reset to 0');
+
+    // 3. Genuine/ambiguous fulfillment order in Processing is preserved
+    const postProcessing = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PROCESSING-PRESERVED'").get();
+    assert.strictEqual(postProcessing.courier_partner, 'BlueDart Luxury Express', 'Fulfillment order in Processing must be preserved');
+    assert.strictEqual(postProcessing.status, 'Processing');
+    assert.strictEqual(postProcessing.carrier_assigned_explicitly, 0);
+
+    // 4. Custom carrier assignment is preserved
+    const postCustom = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-CUSTOM-PRESERVED'").get();
+    assert.strictEqual(postCustom.courier_partner, 'Delhivery', 'Custom carrier assignment must be preserved');
+    assert.strictEqual(postCustom.carrier_assigned_explicitly, 1);
+
+    // 5. Real AWB order is preserved
+    const postReal = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-REAL-PRESERVED'").get();
+    assert.strictEqual(postReal.courier_partner, 'BlueDart Luxury Express', 'Real AWB order must be preserved');
+    assert.strictEqual(postReal.carrier_assigned_explicitly, 1);
+
+    // 6. Idempotency on repeat execution
+    dbModule.applyCourierMigrations(v2Db);
+    const postFlaggedRepeat = v2Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PLACED-FLAGGED'").get();
+    assert.strictEqual(postFlaggedRepeat.courier_partner, null);
+    assert.strictEqual(postFlaggedRepeat.carrier_assigned_explicitly, 0);
+
+    console.log('✅ PASS: [P2] Corrective migration repairs legacy rows misclassified by timestamp heuristic on databases already upgraded by commit ce02ddf');
+  } finally {
+    v2Db.close();
+    try {
+      if (fs.existsSync(v2DbPath)) fs.unlinkSync(v2DbPath);
+      const shm = `${v2DbPath}-shm`;
+      const wal = `${v2DbPath}-wal`;
+      if (fs.existsSync(shm)) fs.unlinkSync(shm);
+      if (fs.existsSync(wal)) fs.unlinkSync(wal);
+    } catch (e) {}
+  }
+
   // 4. SSR Render & State Synchronization Test
   try {
     const React = require(path.resolve(__dirname, '../../client/node_modules/react'));

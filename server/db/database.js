@@ -695,10 +695,35 @@ function cleanupFabricatedCourierAwb(targetDb = db) {
 }
 
 /**
+ * Corrective migration for databases upgraded during commit ce02ddf:
+ * Safely resets carrier_assigned_explicitly to 0 and clears courier_partner to NULL
+ * on legacy default BlueDart rows without an AWB in Placed (or non-fulfillment) status
+ * that were mistakenly flagged as explicit by the previous timestamp heuristic.
+ */
+function repairMisclassifiedCourierDefaults(targetDb = db) {
+  try {
+    targetDb.exec(`ALTER TABLE orders ADD COLUMN carrier_assigned_explicitly INTEGER DEFAULT 0;`);
+  } catch (e) {}
+
+  targetDb.prepare(`
+    UPDATE orders
+    SET carrier_assigned_explicitly = 0,
+        courier_partner = NULL
+    WHERE courier_partner = 'BlueDart Luxury Express'
+      AND tracking_number IS NULL
+      AND (status IS NULL OR status NOT IN ('Processing', 'Packed'))
+  `).run();
+
+  cleanupFabricatedCourierAwb(targetDb);
+}
+
+/**
  * Applies courier and AWB cleanup migrations idempotently:
  * - 'cleanup_fabricated_courier_awb': Initial migration clearing fake AWBs and undispatched defaults
  * - 'cleanup_legacy_default_carrier_no_awb': Corrective migration ensuring even databases that already ran
  *   the initial migration have legacy default 'BlueDart Luxury Express' cleared from no-AWB rows regardless of status.
+ * - 'cleanup_misclassified_timestamp_carrier_defaults': Corrective migration repairing orders mistakenly flagged
+ *   as explicit by the timestamp heuristic in commit ce02ddf.
  */
 function applyCourierMigrations(targetDb = db) {
   targetDb.exec(`
@@ -719,12 +744,20 @@ function applyCourierMigrations(targetDb = db) {
     cleanupFabricatedCourierAwb(targetDb);
     targetDb.prepare("INSERT OR IGNORE INTO schema_migrations (migration_name) VALUES ('cleanup_legacy_default_carrier_no_awb')").run();
   }
+
+  const v3Ran = targetDb.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_misclassified_timestamp_carrier_defaults'").get();
+  if (!v3Ran) {
+    repairMisclassifiedCourierDefaults(targetDb);
+    targetDb.prepare("INSERT OR IGNORE INTO schema_migrations (migration_name) VALUES ('cleanup_misclassified_timestamp_carrier_defaults')").run();
+  }
 }
 
 initSchema();
 
 db.initSchema = initSchema;
 db.cleanupFabricatedCourierAwb = cleanupFabricatedCourierAwb;
+db.repairMisclassifiedCourierDefaults = repairMisclassifiedCourierDefaults;
 db.applyCourierMigrations = applyCourierMigrations;
 
 module.exports = db;
+
