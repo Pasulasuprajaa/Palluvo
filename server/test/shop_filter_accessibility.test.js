@@ -393,10 +393,10 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(postRealDel.courier_partner, 'Delhivery', 'Verified Delhivery carrier must be preserved');
     assert.strictEqual(postRealDel.status, 'Shipped', 'Verified order status must be preserved');
 
-    // Row 6: PAL-2026-SHIPPED-NOAWB sanitized (unassigned default carrier cleared, Shipped status preserved)
+    // Row 6: PAL-2026-SHIPPED-NOAWB pre-AWB carrier preserved across Shipped status
     const postShippedNoAwb = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-SHIPPED-NOAWB'").get();
-    assert.strictEqual(postShippedNoAwb.courier_partner, null, 'Shipped order without AWB must have unassigned default carrier cleared');
-    assert.strictEqual(postShippedNoAwb.status, 'Shipped', 'Shipped status must be preserved when default carrier is cleared');
+    assert.strictEqual(postShippedNoAwb.courier_partner, 'BlueDart Luxury Express', 'Shipped order without AWB must have ambiguous historical carrier preserved');
+    assert.strictEqual(postShippedNoAwb.status, 'Shipped', 'Shipped status must be preserved');
 
     // 6. Test edge case: Real shipment data subsequently assigned to sample order PAL-2026-98124
     // Admin assigns real verified tracking number and courier
@@ -548,19 +548,19 @@ async function testShopFilterAccessibility() {
     const postCols = v1Db.pragma('table_info(orders)').map(c => c.name);
     assert.ok(postCols.includes('carrier_assigned_explicitly'), 'Post-condition: carrier_assigned_explicitly column must be added by migration');
 
-    // 2. Dispatched / Out for Delivery / Delivered rows with no AWB and unassigned defaults have courier_partner cleared
+    // 2. Dispatched / Out for Delivery / Delivered rows with pre-AWB assignments strictly PRESERVE courier_partner without claiming verification
     const postShipped = v1Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V1-SHIPPED-NOAWB'").get();
-    assert.strictEqual(postShipped.courier_partner, null, 'Shipped row without AWB must have legacy default carrier cleared');
+    assert.strictEqual(postShipped.courier_partner, 'BlueDart Luxury Express', 'Shipped row without AWB must have pre-AWB carrier preserved');
     assert.strictEqual(postShipped.status, 'Shipped', 'Shipped status must be preserved');
     assert.strictEqual(postShipped.carrier_assigned_explicitly, 0);
 
     const postOfd = v1Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V1-OFD-NOAWB'").get();
-    assert.strictEqual(postOfd.courier_partner, null, 'Out for Delivery row without AWB must have legacy default carrier cleared');
+    assert.strictEqual(postOfd.courier_partner, 'BlueDart Luxury Express', 'Out for Delivery row without AWB must have pre-AWB carrier preserved');
     assert.strictEqual(postOfd.status, 'Out for Delivery', 'Out for Delivery status must be preserved');
     assert.strictEqual(postOfd.carrier_assigned_explicitly, 0);
 
     const postDelivered = v1Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V1-DELIVERED-NOAWB'").get();
-    assert.strictEqual(postDelivered.courier_partner, null, 'Delivered row without AWB must have legacy default carrier cleared');
+    assert.strictEqual(postDelivered.courier_partner, 'BlueDart Luxury Express', 'Delivered row without AWB must have pre-AWB carrier preserved');
     assert.strictEqual(postDelivered.status, 'Delivered', 'Delivered status must be preserved');
     assert.strictEqual(postDelivered.carrier_assigned_explicitly, 0);
 
@@ -606,7 +606,7 @@ async function testShopFilterAccessibility() {
     // 9. Idempotency on repeat execution
     dbModule.applyCourierMigrations(v1Db);
     const postShippedRepeat = v1Db.prepare("SELECT courier_partner FROM orders WHERE order_number = 'PAL-V1-SHIPPED-NOAWB'").get();
-    assert.strictEqual(postShippedRepeat.courier_partner, null);
+    assert.strictEqual(postShippedRepeat.courier_partner, 'BlueDart Luxury Express');
 
     const postPlacedAssignedRepeat = v1Db.prepare("SELECT courier_partner FROM orders WHERE order_number = 'PAL-V1-PLACED-ASSIGNED-NOAWB'").get();
     assert.strictEqual(postPlacedAssignedRepeat.courier_partner, 'BlueDart Luxury Express');
@@ -628,10 +628,10 @@ async function testShopFilterAccessibility() {
 
   // 3.10 Corrective Migration Regression Test: Database ALREADY upgraded by commit ce02ddf
   // (both 'cleanup_fabricated_courier_awb' and 'cleanup_legacy_default_carrier_no_awb' present)
-  // where a Placed/default-BlueDart/no-AWB row was previously misclassified with carrier_assigned_explicitly = 1.
+  // where a Placed or Shipped default-BlueDart/no-AWB row was previously misclassified with carrier_assigned_explicitly = 1.
   // Must execute v3 migration (cleanup_misclassified_timestamp_carrier_defaults) to safely repair the misclassified row
   // by resetting carrier_assigned_explicitly to 0 while PRESERVING the ambiguous courier_partner,
-  // and clearing unverified courier_partner only where reliable audit evidence exists (e.g. dispatched without AWB or unpaid).
+  // and clearing unverified courier_partner only where reliable audit evidence exists (e.g. unpaid checkout reservations).
   const v2DbPath = path.resolve(__dirname, `../data/.v2_upgrade_test_${Date.now()}_${Math.random().toString(36).slice(2)}.db`);
   const v2Db = new Database(v2DbPath);
 
@@ -667,8 +667,9 @@ async function testShopFilterAccessibility() {
       VALUES ('PAL-CE-PLACED-FLAGGED', 'Placed', 'Paid', NULL, 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 10:05:00');
 
       -- 2. Dispatched order with no AWB that was misclassified with carrier_assigned_explicitly = 1.
-      -- Reliable audit evidence: Dispatched without AWB -> unassigned default leftover.
-      -- Must have courier_partner cleared to NULL and carrier_assigned_explicitly reset to 0.
+      -- Genuine admin assignment made in Shipped status while AWB is pending:
+      -- Ambiguous pre-AWB assignment in Shipped status must have carrier_assigned_explicitly reset to 0
+      -- while strictly PRESERVING courier_partner = 'BlueDart Luxury Express'!
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
       VALUES ('PAL-CE-SHIPPED-FLAGGED', 'Shipped', 'Paid', NULL, 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 10:05:00');
 
@@ -723,9 +724,9 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(postFlagged.status, 'Placed');
     assert.strictEqual(postFlagged.carrier_assigned_explicitly, 0, 'Misclassified Placed order must have carrier_assigned_explicitly reset to 0');
 
-    // 3. Dispatched order without AWB has reliable audit evidence: courier cleared to null and flag reset to 0
+    // 3. Dispatched order without AWB is preserved: carrier kept intact, flag reset to 0
     const postShippedFlagged = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-SHIPPED-FLAGGED'").get();
-    assert.strictEqual(postShippedFlagged.courier_partner, null, 'Dispatched order without AWB must have courier_partner cleared to null');
+    assert.strictEqual(postShippedFlagged.courier_partner, 'BlueDart Luxury Express', 'Dispatched order without AWB must have pre-AWB courier preserved');
     assert.strictEqual(postShippedFlagged.status, 'Shipped');
     assert.strictEqual(postShippedFlagged.carrier_assigned_explicitly, 0);
 
@@ -757,10 +758,10 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(postFlaggedRepeat.carrier_assigned_explicitly, 0);
 
     const postShippedRepeat = v2Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-SHIPPED-FLAGGED'").get();
-    assert.strictEqual(postShippedRepeat.courier_partner, null);
+    assert.strictEqual(postShippedRepeat.courier_partner, 'BlueDart Luxury Express');
     assert.strictEqual(postShippedRepeat.carrier_assigned_explicitly, 0);
 
-    console.log('✅ PASS: [P2] Corrective migration repairs legacy rows misclassified by timestamp heuristic, preserves ambiguous Placed assignments, and clears unverified couriers where audit evidence exists');
+    console.log('✅ PASS: [P2] Corrective migration repairs legacy rows misclassified by timestamp heuristic, preserves ambiguous assignments across all statuses, and clears unverified couriers where audit evidence exists');
   } finally {
     v2Db.close();
     try {

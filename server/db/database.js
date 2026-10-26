@@ -681,35 +681,31 @@ function cleanupFabricatedCourierAwb(targetDb = db) {
   }
 
   // 3. Clear legacy unverified courier defaults on orders without an AWB where reliable evidence exists:
-  // - Dispatched or delivered orders lacking an AWB (status in 'Shipped', 'Out for Delivery', 'Delivered')
   // - Unpaid / abandoned checkout reservations (payment_status = 'Pending')
-  // Ambiguous pre-AWB historical assignments on orders (in 'Placed', 'Processing', or 'Packed')
+  // Ambiguous pre-AWB historical assignments across all lifecycle statuses
+  // (Placed, Processing, Packed, Shipped, Out for Delivery, Delivered)
   // are strictly preserved so genuine admin carrier selections are never deleted.
   const columns = targetDb.pragma('table_info(orders)').map(c => c.name);
   const hasPaymentStatus = columns.includes('payment_status');
-  const pendingPaymentClause = hasPaymentStatus
-    ? "OR payment_status = 'Pending'"
-    : "";
 
-  targetDb.prepare(`
-    UPDATE orders
-    SET courier_partner = NULL
-    WHERE courier_partner = 'BlueDart Luxury Express'
-      AND tracking_number IS NULL
-      AND (carrier_assigned_explicitly IS NULL OR carrier_assigned_explicitly = 0)
-      AND (
-        status IN ('Shipped', 'Out for Delivery', 'Delivered')
-        ${pendingPaymentClause}
-      )
-  `).run();
+  if (hasPaymentStatus) {
+    targetDb.prepare(`
+      UPDATE orders
+      SET courier_partner = NULL
+      WHERE courier_partner = 'BlueDart Luxury Express'
+        AND tracking_number IS NULL
+        AND (carrier_assigned_explicitly IS NULL OR carrier_assigned_explicitly = 0)
+        AND payment_status = 'Pending'
+    `).run();
+  }
 }
 
 /**
  * Corrective migration for databases upgraded during commit ce02ddf:
  * Safely repairs rows misclassified by the previous timestamp heuristic.
- * - For unverified no-AWB rows in dispatched/delivered states or unpaid reservations,
+ * - For unverified no-AWB rows on unpaid reservations (payment_status = 'Pending'),
  *   resets carrier_assigned_explicitly to 0 and clears courier_partner to NULL.
- * - For ambiguous pre-AWB rows in Placed, Processing, or Packed status,
+ * - For ambiguous pre-AWB rows across all order statuses (Placed, Processing, Packed, Shipped, etc.),
  *   preserves courier_partner intact while resetting carrier_assigned_explicitly to 0
  *   (ensuring genuine admin assignments are kept without falsely claiming verification).
  */
@@ -720,31 +716,26 @@ function repairMisclassifiedCourierDefaults(targetDb = db) {
 
   const columns = targetDb.pragma('table_info(orders)').map(c => c.name);
   const hasPaymentStatus = columns.includes('payment_status');
-  const pendingPaymentClause = hasPaymentStatus
-    ? "OR payment_status = 'Pending'"
-    : "";
 
-  // 1. Clear unverified no-AWB dispatched/delivered rows and unpaid reservations
-  targetDb.prepare(`
-    UPDATE orders
-    SET carrier_assigned_explicitly = 0,
-        courier_partner = NULL
-    WHERE courier_partner = 'BlueDart Luxury Express'
-      AND tracking_number IS NULL
-      AND (
-        status IN ('Shipped', 'Out for Delivery', 'Delivered')
-        ${pendingPaymentClause}
-      )
-  `).run();
+  // 1. Clear unverified no-AWB rows on unpaid checkout reservations where reliable audit evidence exists
+  if (hasPaymentStatus) {
+    targetDb.prepare(`
+      UPDATE orders
+      SET carrier_assigned_explicitly = 0,
+          courier_partner = NULL
+      WHERE courier_partner = 'BlueDart Luxury Express'
+        AND tracking_number IS NULL
+        AND payment_status = 'Pending'
+    `).run();
+  }
 
-  // 2. For ambiguous pre-AWB historical rows in Placed / Processing / Packed lacking real tracking,
-  // reset carrier_assigned_explicitly to 0 (so we do not claim verification) while strictly PRESERVING courier_partner
+  // 2. For ambiguous pre-AWB historical rows across all order statuses lacking real tracking,
+  // reset carrier_assigned_explicitly to 0 (so we do not claim verification) while strictly PRESERVING courier_partner intact!
   targetDb.prepare(`
     UPDATE orders
     SET carrier_assigned_explicitly = 0
     WHERE courier_partner = 'BlueDart Luxury Express'
       AND tracking_number IS NULL
-      AND (status IS NULL OR status IN ('Placed', 'Processing', 'Packed'))
   `).run();
 
   cleanupFabricatedCourierAwb(targetDb);
