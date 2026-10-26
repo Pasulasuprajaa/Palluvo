@@ -339,6 +339,61 @@ async function testShopFilterAccessibility() {
     assert.ok(!categoryHydratedHtml.includes('Product not found'), 'Direct-loaded category view must not display product-not-found');
     console.log('✅ PASS: [P2] Category deep links (/sarees/category/:slug and /category/:slug) route to collection page with direct-load support');
 
+    // [P2] Trailing slash normalization tests
+    // Direct /sarees/ load must route to shop (not product with empty slug)
+    const rSareesSlash = getRouteFromPath('/sarees/');
+    assert.strictEqual(rSareesSlash.page, 'shop', '/sarees/ must route to shop page');
+    assert.deepStrictEqual(rSareesSlash.params, {}, '/sarees/ must have empty params');
+
+    // Direct /shop/ load must route to shop (not not-found)
+    const rShopSlash = getRouteFromPath('/shop/');
+    assert.strictEqual(rShopSlash.page, 'shop', '/shop/ must route to shop page');
+    assert.deepStrictEqual(rShopSlash.params, {}, '/shop/ must have empty params');
+
+    // Trailing slash with query params
+    const rShopSlashQuery = getRouteFromPath('/sarees/', '?color=Red');
+    assert.strictEqual(rShopSlashQuery.page, 'shop', '/sarees/?color=Red must route to shop page');
+    assert.strictEqual(rShopSlashQuery.params.color, 'Red');
+
+    // Root slash '/' preserved
+    const rRoot = getRouteFromPath('/');
+    assert.strictEqual(rRoot.page, 'home', '/ must route to home page');
+
+    // Trailing slash on category routes
+    const rCatSlash = getRouteFromPath('/sarees/category/banarasi/');
+    assert.strictEqual(rCatSlash.page, 'shop', '/sarees/category/banarasi/ must route to shop page');
+    assert.strictEqual(rCatSlash.params.category, 'banarasi');
+
+    const rCat2Slash = getRouteFromPath('/category/kanjivaram/');
+    assert.strictEqual(rCat2Slash.page, 'shop', '/category/kanjivaram/ must route to shop page');
+    assert.strictEqual(rCat2Slash.params.category, 'kanjivaram');
+
+    // Trailing slash on product routes
+    const rProdSlash = getRouteFromPath('/sarees/samrajni-grand-muhurtham-24k-gold-korvai-kanjivaram/');
+    assert.strictEqual(rProdSlash.page, 'product', '/sarees/:slug/ must route to product page');
+    assert.strictEqual(rProdSlash.params.slug, 'samrajni-grand-muhurtham-24k-gold-korvai-kanjivaram');
+
+    const rProd2Slash = getRouteFromPath('/product/samrajni-grand-muhurtham-24k-gold-korvai-kanjivaram/');
+    assert.strictEqual(rProd2Slash.page, 'product', '/product/:slug/ must route to product page');
+    assert.strictEqual(rProd2Slash.params.slug, 'samrajni-grand-muhurtham-24k-gold-korvai-kanjivaram');
+
+    // Direct-load hydration for /sarees/ and /shop/
+    const directSareesSlashHtml = ReactDOMServer.renderToString(React.createElement(ShopPage, {
+      onNavigate: () => {},
+      initialFilters: rSareesSlash.params
+    }));
+    assert.ok(directSareesSlashHtml.includes('aria-controls="mobile-filter-dialog"'), 'Direct /sarees/ load renders collection controls');
+    assert.ok(!directSareesSlashHtml.includes('Product not found'), 'Direct /sarees/ load must not display product-not-found');
+
+    const directShopSlashHtml = ReactDOMServer.renderToString(React.createElement(ShopPage, {
+      onNavigate: () => {},
+      initialFilters: rShopSlash.params
+    }));
+    assert.ok(directShopSlashHtml.includes('aria-controls="mobile-filter-dialog"'), 'Direct /shop/ load renders collection controls');
+    assert.ok(!directShopSlashHtml.includes('Product not found'), 'Direct /shop/ load must not display product-not-found');
+
+    console.log('✅ PASS: [P2] Trailing slash normalization (/sarees/, /shop/, category, product) routes correctly with direct-load collection support');
+
     // 6. Verify [P2] Lightweight generated thumbnails in catalog cards
     const productCardSource = fs.readFileSync(path.resolve(__dirname, '../../client/src/components/ProductCard.jsx'), 'utf8');
     assert.ok(
@@ -512,6 +567,301 @@ async function testShopFilterAccessibility() {
       'SearchModal handleSelectProduct must preserve original full-size image when navigating to product detail'
     );
     console.log('✅ PASS: [P2] Instant-search results and imageUtils utilize lightweight thumbnails for local and remote assets');
+
+    // 9. Verify [P2] Quick View Dialog Naming & Keyboard Focus Management
+    const quickViewModalPath = path.resolve(__dirname, '../../client/src/components/QuickViewModal.jsx');
+    assert.ok(fs.existsSync(quickViewModalPath), 'QuickViewModal.jsx must exist');
+    const quickViewSource = fs.readFileSync(quickViewModalPath, 'utf8');
+
+    // Dialog naming: aria-labelledby="quickview-title" matches heading with id="quickview-title"
+    assert.ok(
+      quickViewSource.includes('aria-labelledby="quickview-title"'),
+      'QuickViewModal must specify aria-labelledby="quickview-title"'
+    );
+    assert.ok(
+      quickViewSource.includes('id="quickview-title"'),
+      'QuickViewModal must define referenced heading with id="quickview-title"'
+    );
+    assert.ok(
+      quickViewSource.includes('<h2 id="quickview-title"') &&
+      quickViewSource.includes('{quickViewProduct.name}'),
+      'QuickViewModal heading with id="quickview-title" must contain product name for screen readers'
+    );
+
+    // Focus entry: moves focus into modal on open
+    assert.ok(
+      quickViewSource.includes('closeButtonRef.current.focus()'),
+      'QuickViewModal must move focus into modal on open'
+    );
+
+    // Escape-to-close handling
+    assert.ok(
+      (quickViewSource.includes("e.key === 'Escape'") || quickViewSource.includes("event.key === 'Escape'")) &&
+      quickViewSource.includes('setQuickViewProduct(null)'),
+      'QuickViewModal must dismiss when Escape key is pressed'
+    );
+
+    // Focus trapping (Tab & Shift+Tab)
+    assert.ok(
+      (quickViewSource.includes("e.key === 'Tab'") || quickViewSource.includes("event.key === 'Tab'")) &&
+      (quickViewSource.includes('e.shiftKey') || quickViewSource.includes('event.shiftKey')) &&
+      quickViewSource.includes('firstElement.focus()') &&
+      quickViewSource.includes('lastElement.focus()'),
+      'QuickViewModal must trap Tab and Shift+Tab navigation within the dialog'
+    );
+
+    // Focus restoration on close
+    assert.ok(
+      quickViewSource.includes('previouslyFocusedElementRef.current') &&
+      quickViewSource.includes('prevTarget.focus()'),
+      'QuickViewModal must restore focus to trigger element on close'
+    );
+
+    // Scroll lock on open and restore on close
+    assert.ok(
+      quickViewSource.includes("document.body.style.overflow = 'hidden'") &&
+      quickViewSource.includes('document.body.style.overflow = originalOverflow'),
+      'QuickViewModal must lock body scroll when open and restore on close'
+    );
+
+    // Compile QuickViewModal via Vite to verify dialog semantics
+    const quickViewBuildResult = await vite.build({
+      root: path.resolve(__dirname, '../../client'),
+      logLevel: 'silent',
+      build: {
+        write: false,
+        lib: {
+          entry: quickViewModalPath,
+          formats: ['cjs'],
+          fileName: 'quickViewModal'
+        },
+        rollupOptions: {
+          external: ['react', 'react-dom', 'lucide-react', '../context/CartContext', '../context/WishlistContext', '../utils/imageUtils']
+        }
+      }
+    });
+
+    const quickViewCode = quickViewBuildResult[0].output[0].code;
+    const quickViewMod = { exports: {} };
+    const quickViewFn = new Function('require', 'module', 'exports', quickViewCode);
+    const mockQuickProduct = {
+      id: 101,
+      name: 'Samrajni Grand Muhurtham Silk Saree',
+      slug: 'samrajni-grand-muhurtham',
+      price: 65000,
+      primary_image: '/images/sarees/kanjivaram.jpg',
+      fabric: 'Pure Kanjivaram Silk',
+      occasion: 'Bridal Muhurtham',
+      review_count: 12,
+      rating: 4.9
+    };
+
+    let closedModal = false;
+
+    quickViewFn((id) => {
+      if (id === 'react') return React;
+      if (id.includes('CartContext')) {
+        return {
+          useCart: () => ({
+            quickViewProduct: mockQuickProduct,
+            setQuickViewProduct: (val) => {
+              if (val === null) closedModal = true;
+            },
+            addToCart: () => {}
+          })
+        };
+      }
+      if (id.includes('WishlistContext')) {
+        return {
+          useWishlist: () => ({
+            isWishlisted: () => false,
+            toggleWishlist: () => {}
+          })
+        };
+      }
+      if (id.includes('imageUtils')) {
+        return {
+          getThumbnailUrl: (url) => url
+        };
+      }
+      return mockLucide;
+    }, quickViewMod, quickViewMod.exports);
+
+    const QuickViewModalComponent = quickViewMod.exports.default || quickViewMod.exports;
+    const quickViewRenderedHtml = ReactDOMServer.renderToString(React.createElement(QuickViewModalComponent, {
+      onNavigate: () => {}
+    }));
+
+    assert.ok(quickViewRenderedHtml.includes('role="dialog"'), 'QuickViewModal must render role="dialog"');
+    assert.ok(quickViewRenderedHtml.includes('aria-modal="true"'), 'QuickViewModal must render aria-modal="true"');
+    assert.ok(quickViewRenderedHtml.includes('aria-labelledby="quickview-title"'), 'QuickViewModal must reference quickview-title');
+    assert.ok(quickViewRenderedHtml.includes('id="quickview-title"'), 'QuickViewModal must contain element with id="quickview-title"');
+    assert.ok(quickViewRenderedHtml.includes('Samrajni Grand Muhurtham Silk Saree'), 'QuickViewModal heading must contain product name');
+    assert.ok(quickViewRenderedHtml.includes('aria-label="Close quick view"'), 'Close button must have accessible label');
+
+    // Behavioral Keyboard Regression Test:
+    // Execute QuickViewModal with mock hooks to invoke useEffect and test keyboard behavior
+    let effectFn = null;
+    const prevGlobalDoc = global.document;
+    const prevGlobalWin = global.window;
+
+    const mockTriggerEl = {
+      id: 'product-card-quick-view-button',
+      focusCalls: 0,
+      focus() { this.focusCalls++; }
+    };
+
+    const mockCloseBtnEl = {
+      id: 'modal-close-button',
+      focusCalls: 0,
+      focus() { this.focusCalls++; },
+      hasAttribute: () => false,
+      getAttribute: () => null
+    };
+
+    const mockLastBtnEl = {
+      id: 'modal-last-button',
+      focusCalls: 0,
+      focus() { this.focusCalls++; },
+      hasAttribute: () => false,
+      getAttribute: () => null
+    };
+
+    const mockModalContainer = {
+      contains: (el) => el === mockCloseBtnEl || el === mockLastBtnEl,
+      querySelectorAll: () => [mockCloseBtnEl, mockLastBtnEl]
+    };
+
+    const registeredListeners = {};
+    const testDoc = {
+      body: { style: { overflow: '' } },
+      documentElement: {},
+      activeElement: mockTriggerEl,
+      contains: (el) => el === mockTriggerEl || el === mockCloseBtnEl || el === mockLastBtnEl
+    };
+
+    const testWin = {
+      addEventListener: (evt, fn) => { registeredListeners[evt] = fn; },
+      removeEventListener: (evt, fn) => { if (registeredListeners[evt] === fn) delete registeredListeners[evt]; }
+    };
+
+    global.document = testDoc;
+    global.window = testWin;
+
+    try {
+      const refs = [];
+      const mockReact = {
+        ...React,
+        useState: (initial) => [initial, () => {}],
+        useRef: (initial) => {
+          const ref = { current: initial };
+          refs.push(ref);
+          return ref;
+        },
+        useEffect: (fn) => {
+          effectFn = fn;
+        }
+      };
+
+      const testMod = { exports: {} };
+      quickViewFn((id) => {
+        if (id === 'react') return mockReact;
+        if (id.includes('CartContext')) {
+          return {
+            useCart: () => ({
+              quickViewProduct: mockQuickProduct,
+              setQuickViewProduct: (val) => {
+                if (val === null) closedModal = true;
+              },
+              addToCart: () => {}
+            })
+          };
+        }
+        if (id.includes('WishlistContext')) {
+          return { useWishlist: () => ({ isWishlisted: () => false, toggleWishlist: () => {} }) };
+        }
+        if (id.includes('imageUtils')) return { getThumbnailUrl: (u) => u };
+        return mockLucide;
+      }, testMod, testMod.exports);
+
+      const Component = testMod.exports.default || testMod.exports;
+      Component({ onNavigate: () => {} });
+
+      // Populate refs that React would assign upon DOM mounting
+      // refs[0] is modalRef, refs[1] is closeButtonRef, refs[2] is previouslyFocusedElementRef
+      refs[0].current = mockModalContainer;
+      refs[1].current = mockCloseBtnEl;
+
+      assert.strictEqual(typeof effectFn, 'function', 'QuickViewModal must register a focus management useEffect');
+      const effectCleanup = effectFn();
+
+      // Verify scroll lock
+      assert.strictEqual(testDoc.body.style.overflow, 'hidden', 'Opening modal must lock document.body.style.overflow to hidden');
+
+      // Verify keydown listener is registered on window
+      assert.strictEqual(typeof registeredListeners['keydown'], 'function', 'Modal must register keydown listener on window');
+
+      // Test 1: Escape keydown closes the modal
+      closedModal = false;
+      let escPrevented = false;
+      registeredListeners['keydown']({
+        key: 'Escape',
+        preventDefault: () => { escPrevented = true; },
+        stopPropagation: () => {}
+      });
+      assert.strictEqual(escPrevented, true, 'Escape keydown must call preventDefault');
+      assert.strictEqual(closedModal, true, 'Escape keydown must trigger setQuickViewProduct(null)');
+
+      // Test 2: Shift+Tab on first element wraps focus to last element
+      testDoc.activeElement = mockCloseBtnEl;
+      let shiftTabPrevented = false;
+      mockLastBtnEl.focusCalls = 0;
+      registeredListeners['keydown']({
+        key: 'Tab',
+        shiftKey: true,
+        preventDefault: () => { shiftTabPrevented = true; }
+      });
+      assert.strictEqual(shiftTabPrevented, true, 'Shift+Tab on firstElement must call preventDefault');
+      assert.strictEqual(mockLastBtnEl.focusCalls, 1, 'Shift+Tab on firstElement must wrap focus to lastElement');
+
+      // Test 3: Tab on last element wraps focus to first element
+      testDoc.activeElement = mockLastBtnEl;
+      let tabPrevented = false;
+      mockCloseBtnEl.focusCalls = 0;
+      registeredListeners['keydown']({
+        key: 'Tab',
+        shiftKey: false,
+        preventDefault: () => { tabPrevented = true; }
+      });
+      assert.strictEqual(tabPrevented, true, 'Tab on lastElement must call preventDefault');
+      assert.strictEqual(mockCloseBtnEl.focusCalls, 1, 'Tab on lastElement must wrap focus to firstElement');
+
+      // Test 4: Tab when focus is outside dialog pulls focus into first element
+      testDoc.activeElement = testDoc.body;
+      let outsideTabPrevented = false;
+      mockCloseBtnEl.focusCalls = 0;
+      registeredListeners['keydown']({
+        key: 'Tab',
+        shiftKey: false,
+        preventDefault: () => { outsideTabPrevented = true; }
+      });
+      assert.strictEqual(outsideTabPrevented, true, 'Tab outside dialog must call preventDefault');
+      assert.strictEqual(mockCloseBtnEl.focusCalls, 1, 'Tab outside dialog must focus firstElement');
+
+      // Test 5: Focus restoration on unmount / cleanup
+      assert.strictEqual(typeof effectCleanup, 'function', 'Effect must return a cleanup function');
+      mockTriggerEl.focusCalls = 0;
+      effectCleanup();
+
+      assert.strictEqual(testDoc.body.style.overflow, '', 'Closing modal must restore document.body.style.overflow');
+      assert.strictEqual(registeredListeners['keydown'], undefined, 'Closing modal must remove keydown listener');
+      assert.strictEqual(mockTriggerEl.focusCalls, 1, 'Closing modal must restore focus to trigger element');
+
+      console.log('✅ PASS: [P2] QuickViewModal named with id="quickview-title" and keyboard focus trap, Escape dismissal, and restoration verified with regression tests');
+    } finally {
+      global.document = prevGlobalDoc;
+      global.window = prevGlobalWin;
+    }
   } catch (renderErr) {
     console.error('SSR test error:', renderErr);
     throw renderErr;

@@ -23,7 +23,7 @@ import { getThumbnailUrl } from '../utils/imageUtils';
 
 export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   const [product, setProduct] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(slug));
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [quantity, setQuantity] = useState(1);

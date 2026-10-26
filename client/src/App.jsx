@@ -47,8 +47,11 @@ export function getRouteFromPath(
   pathname = typeof window !== 'undefined' ? window.location.pathname : '/',
   search = typeof window !== 'undefined' ? window.location.search : ''
 ) {
-  const path = pathname.toLowerCase();
-  const searchParams = new URLSearchParams(search);
+  const cleanPath = (pathname || '/').split('?')[0].trim();
+  const normalizedPath = cleanPath.replace(/\/+$/, '') || '/';
+  const path = normalizedPath.toLowerCase();
+  const queryStr = search || (pathname && pathname.includes('?') ? pathname.slice(pathname.indexOf('?')) : '');
+  const searchParams = new URLSearchParams(queryStr);
 
   if (path === '/' || path === '') {
     return { page: 'home', params: {} };
@@ -58,7 +61,7 @@ export function getRouteFromPath(
     path === '/category' ||
     path.startsWith('/category/')
   ) {
-    const parts = pathname.split('/').filter(Boolean);
+    const parts = normalizedPath.split('/').filter(Boolean);
     const isSareesPrefix = path.startsWith('/sarees/category');
     const categorySlug = isSareesPrefix ? parts[2] : parts[1];
     const filters = {};
@@ -70,7 +73,7 @@ export function getRouteFromPath(
     }
     return { page: 'shop', params: filters };
   } else if ((path.startsWith('/sarees/') && !path.startsWith('/sarees/category/')) || path.startsWith('/product/')) {
-    const parts = pathname.split('/').filter(Boolean);
+    const parts = normalizedPath.split('/').filter(Boolean);
     const slug = parts[1];
     return { page: 'product', params: { slug: slug ? decodeURIComponent(slug) : '' } };
   } else if (path === '/sarees' || path === '/shop') {
@@ -108,7 +111,7 @@ export function getRouteFromPath(
     const tab = path === '/policies' || path === '/policy' ? (searchParams.get('tab') || 'privacy') : path.replace('/', '');
     return { page: 'policy', params: { tab } };
   }
-  return { page: 'not-found', params: { path: pathname } };
+  return { page: 'not-found', params: { path: normalizedPath } };
 }
 
 function AppContent() {

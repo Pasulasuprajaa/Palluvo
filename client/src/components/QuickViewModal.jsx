@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Star, ShoppingBag, Heart, ArrowRight, Check, ShieldCheck } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
@@ -11,6 +11,107 @@ export default function QuickViewModal({ onNavigate }) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [quantity, setQuantity] = useState(1);
+
+  const modalRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const previouslyFocusedElementRef = useRef(null);
+
+  useEffect(() => {
+    if (quickViewProduct) {
+      // Store the active element before opening
+      const activeEl = typeof document !== 'undefined' ? document.activeElement : null;
+      const isUsableTarget =
+        activeEl &&
+        activeEl !== document.body &&
+        activeEl !== document.documentElement &&
+        typeof activeEl.focus === 'function' &&
+        document.contains(activeEl);
+
+      previouslyFocusedElementRef.current = isUsableTarget ? activeEl : null;
+
+      const originalOverflow = typeof document !== 'undefined' ? document.body.style.overflow : '';
+      if (typeof document !== 'undefined') {
+        document.body.style.overflow = 'hidden';
+      }
+
+      // Move focus into modal (close button or first focusable element)
+      const focusTimer = setTimeout(() => {
+        if (closeButtonRef.current && typeof closeButtonRef.current.focus === 'function') {
+          closeButtonRef.current.focus();
+        } else if (modalRef.current) {
+          const focusable = modalRef.current.querySelectorAll(
+            'button:not([disabled]), [href]:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusable.length > 0 && typeof focusable[0].focus === 'function') {
+            focusable[0].focus();
+          }
+        }
+      }, 0);
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape' || e.key === 'Esc') {
+          e.preventDefault();
+          e.stopPropagation();
+          setQuickViewProduct(null);
+          return;
+        }
+
+        if (e.key === 'Tab') {
+          const dialogNode = modalRef.current;
+          if (!dialogNode) return;
+
+          const focusableElements = Array.from(
+            dialogNode.querySelectorAll(
+              'button:not([disabled]), [href]:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )
+          ).filter((el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
+
+          if (focusableElements.length === 0) {
+            e.preventDefault();
+            return;
+          }
+
+          const firstElement = focusableElements[0];
+          const lastElement = focusableElements[focusableElements.length - 1];
+
+          if (e.shiftKey) {
+            if (document.activeElement === firstElement || !dialogNode.contains(document.activeElement)) {
+              e.preventDefault();
+              lastElement.focus();
+            }
+          } else {
+            if (document.activeElement === lastElement || !dialogNode.contains(document.activeElement)) {
+              e.preventDefault();
+              firstElement.focus();
+            }
+          }
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        clearTimeout(focusTimer);
+        if (typeof document !== 'undefined') {
+          document.body.style.overflow = originalOverflow;
+        }
+        window.removeEventListener('keydown', handleKeyDown);
+
+        const prevTarget = previouslyFocusedElementRef.current;
+        if (
+          prevTarget &&
+          prevTarget !== document.body &&
+          prevTarget !== document.documentElement &&
+          typeof prevTarget.focus === 'function' &&
+          document.contains(prevTarget)
+        ) {
+          try {
+            prevTarget.focus();
+          } catch (e) {}
+        }
+      };
+    }
+  }, [quickViewProduct, setQuickViewProduct]);
 
   if (!quickViewProduct) return null;
 
@@ -37,6 +138,7 @@ export default function QuickViewModal({ onNavigate }) {
 
   return (
     <div
+      ref={modalRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="quickview-title"
@@ -48,6 +150,7 @@ export default function QuickViewModal({ onNavigate }) {
       <div className="bg-[#FAF7F2] w-full max-w-4xl rounded-2xl shadow-2xl border border-[#EAE2D7] overflow-hidden relative flex flex-col md:flex-row max-h-[90vh]">
         {/* Close Button */}
         <button
+          ref={closeButtonRef}
           onClick={() => setQuickViewProduct(null)}
           aria-label="Close quick view"
           className="absolute top-4 right-4 z-20 p-2 rounded-full bg-white/80 text-[#1F1A1C] hover:bg-white hover:text-[#5B1425] transition shadow-md cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none"
@@ -119,7 +222,7 @@ export default function QuickViewModal({ onNavigate }) {
               {quickViewProduct.fabric} • {quickViewProduct.occasion}
             </div>
 
-            <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#1F1A1C] leading-snug">
+            <h2 id="quickview-title" className="font-serif text-xl sm:text-2xl font-bold text-[#1F1A1C] leading-snug">
               {quickViewProduct.name}
             </h2>
 
