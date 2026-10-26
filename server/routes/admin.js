@@ -469,15 +469,18 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
       return res.status(400).json({ error: 'Order status is required.' });
     }
 
+    const isExplicitCarrier = courier_partner !== undefined && courier_partner !== null && String(courier_partner).trim() !== '';
+
     db.prepare(`
       UPDATE orders SET
         status = ?,
         tracking_number = COALESCE(?, tracking_number),
         courier_partner = COALESCE(?, courier_partner),
         estimated_delivery = COALESCE(?, estimated_delivery),
+        carrier_assigned_explicitly = CASE WHEN ? = 1 THEN 1 ELSE carrier_assigned_explicitly END,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(status, tracking_number, courier_partner, estimated_delivery, req.params.id);
+    `).run(status, tracking_number, courier_partner, estimated_delivery, isExplicitCarrier ? 1 : 0, req.params.id);
 
     const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
     res.json({ message: `Order status updated to "${status}".`, order: updated });

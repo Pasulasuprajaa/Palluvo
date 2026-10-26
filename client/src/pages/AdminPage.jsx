@@ -51,7 +51,7 @@ export default function AdminPage({ onNavigate }) {
 
   // Order Status Update State
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
-  const [orderStatusForm, setOrderStatusForm] = useState({ status: 'Shipped', tracking_number: '', courier_partner: 'BlueDart Luxury Express', estimated_delivery: '' });
+  const [orderStatusForm, setOrderStatusForm] = useState({ status: 'Shipped', tracking_number: '', courier_partner: '', estimated_delivery: '' });
 
   useEffect(() => {
     if (isAdmin && token) {
@@ -542,7 +542,7 @@ export default function AdminPage({ onNavigate }) {
                       setOrderStatusForm({
                         status: order.status,
                         tracking_number: order.tracking_number || '',
-                        courier_partner: order.courier_partner || 'BlueDart Luxury Express',
+                        courier_partner: order.courier_partner || '',
                         estimated_delivery: order.estimated_delivery || '3-4 Business Days'
                       });
                     }}

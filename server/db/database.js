@@ -349,6 +349,7 @@ function initSchema() {
       refund_claim_token TEXT,
       tracking_number TEXT,
       courier_partner TEXT,
+      carrier_assigned_explicitly INTEGER DEFAULT 0,
       estimated_delivery TEXT,
       expires_at INTEGER, -- Unix timestamp in milliseconds when pending checkout reservation expires
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -493,6 +494,9 @@ function initSchema() {
     db.exec(`ALTER TABLE orders ADD COLUMN refund_claim_token TEXT DEFAULT NULL;`);
   } catch (e) {}
   try {
+    db.exec(`ALTER TABLE orders ADD COLUMN carrier_assigned_explicitly INTEGER DEFAULT 0;`);
+  } catch (e) {}
+  try {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_orders_pending_expiry ON orders(payment_status, expires_at);`);
   } catch (e) {}
   try {
@@ -596,12 +600,16 @@ function initSchema() {
  * from existing databases while preserving verified courier-issued references.
  */
 function cleanupFabricatedCourierAwb(targetDb = db) {
+  try {
+    targetDb.exec(`ALTER TABLE orders ADD COLUMN carrier_assigned_explicitly INTEGER DEFAULT 0;`);
+  } catch (e) {}
+
   const placeholderAwbRegex = /^BLR-BD-[0-9A-Fa-f]{24}$/;
 
   // 1. Isolate and sanitize known sample order PAL-2026-98124 ONLY if it still holds fabricated values.
   // If an admin has since updated this order with real shipment tracking, preserve that data.
   const sampleOrder = targetDb.prepare(
-    "SELECT id, tracking_number, courier_partner, status, estimated_delivery FROM orders WHERE order_number = 'PAL-2026-98124'"
+    "SELECT id, tracking_number, courier_partner, status, estimated_delivery, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-2026-98124'"
   ).get();
 
   if (sampleOrder) {
@@ -619,23 +627,26 @@ function cleanupFabricatedCourierAwb(targetDb = db) {
     }
 
     // Only clear BlueDart courier if tracking is missing or was a fabricated placeholder
-    if (sampleOrder.courier_partner === 'BlueDart Luxury Express' && (isPlaceholderAwb || !sampleOrder.tracking_number)) {
+    // AND the carrier was not explicitly assigned by an admin
+    const isExplicitCarrier = sampleOrder.carrier_assigned_explicitly === 1;
+    if (!isExplicitCarrier && sampleOrder.courier_partner === 'BlueDart Luxury Express' && (isPlaceholderAwb || !sampleOrder.tracking_number)) {
       targetDb.prepare("UPDATE orders SET courier_partner = NULL WHERE id = ?").run(sampleOrder.id);
     }
 
-    // Only reset estimated delivery if it still carries the fixed fabricated "Tomorrow" promise
-    if (sampleOrder.estimated_delivery && sampleOrder.estimated_delivery.includes('Tomorrow')) {
+    // Only reset estimated delivery if the order still carries the exact legacy fixture state
+    // (i.e. while the fake placeholder AWB is still present). Never reset a legitimate next-day estimate.
+    if (isPlaceholderAwb && sampleOrder.estimated_delivery && sampleOrder.estimated_delivery.includes('Tomorrow')) {
       targetDb.prepare("UPDATE orders SET estimated_delivery = '3-4 business days' WHERE id = ?").run(sampleOrder.id);
     }
   }
 
   // 2. Clear exact generated placeholder tracking numbers (BLR-BD-<24 hex> and BLR-BD-889921)
   // and their associated placeholder courier_partner across all orders, preserving real references
-  const ordersWithTracking = targetDb.prepare("SELECT id, tracking_number, courier_partner FROM orders WHERE tracking_number IS NOT NULL").all();
+  const ordersWithTracking = targetDb.prepare("SELECT id, tracking_number, courier_partner, carrier_assigned_explicitly FROM orders WHERE tracking_number IS NOT NULL").all();
   const updateOrderAwb = targetDb.prepare(`
     UPDATE orders
     SET tracking_number = NULL,
-        courier_partner = CASE WHEN courier_partner = 'BlueDart Luxury Express' THEN NULL ELSE courier_partner END
+        courier_partner = CASE WHEN courier_partner = 'BlueDart Luxury Express' AND (carrier_assigned_explicitly IS NULL OR carrier_assigned_explicitly = 0) THEN NULL ELSE courier_partner END
     WHERE id = ?
   `);
 
@@ -645,14 +656,14 @@ function cleanupFabricatedCourierAwb(targetDb = db) {
     }
   }
 
-  // 3. Clear legacy default 'BlueDart Luxury Express' on any order without an AWB regardless of status.
-  // Legacy schemas defaulted courier_partner to 'BlueDart Luxury Express'. Dispatched orders without
-  // an AWB cannot verify this carrier, so clearing unassigned defaults prevents presenting fake telemetry.
+  // 3. Clear legacy default 'BlueDart Luxury Express' on any order without an AWB
+  // UNLESS the carrier was explicitly assigned by an admin while an AWB is pending.
   targetDb.prepare(`
     UPDATE orders
     SET courier_partner = NULL
     WHERE courier_partner = 'BlueDart Luxury Express'
       AND tracking_number IS NULL
+      AND (carrier_assigned_explicitly IS NULL OR carrier_assigned_explicitly = 0)
   `).run();
 }
 
