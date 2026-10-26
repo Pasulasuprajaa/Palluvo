@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
 export default function OrderTrackingPage({ trackingId: initialId, onNavigate }) {
-  const [searchInput, setSearchInput] = useState(initialId || 'PAL-2026-98124');
+  const [searchInput, setSearchInput] = useState(initialId || '');
   const [orderInfo, setOrderInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -15,8 +15,6 @@ export default function OrderTrackingPage({ trackingId: initialId, onNavigate })
   useEffect(() => {
     if (initialId) {
       handleTrack(initialId);
-    } else {
-      handleTrack('PAL-2026-98124'); // sample tracked order from seed
     }
   }, [initialId]);
 

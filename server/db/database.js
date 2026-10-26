@@ -348,7 +348,7 @@ function initSchema() {
       refund_claimed_at INTEGER,
       refund_claim_token TEXT,
       tracking_number TEXT,
-      courier_partner TEXT DEFAULT 'BlueDart Luxury Express',
+      courier_partner TEXT,
       estimated_delivery TEXT,
       expires_at INTEGER, -- Unix timestamp in milliseconds when pending checkout reservation expires
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

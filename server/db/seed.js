@@ -1223,14 +1223,14 @@ function seedDatabase(options = {}) {
         0,
         0,
         11700,
-        'Shipped',
+        'Confirmed',
         'Paid',
         'Razorpay (UPI / GooglePay)',
         'order_PAL_seed_001',
         'pay_PAL_seed_001',
-        'BLR-BD-889921',
-        'BlueDart Luxury Express',
-        'Tomorrow, by 4:00 PM',
+        null,
+        null,
+        '3-4 business days',
         '2026-09-22 14:30:00'
       );
 

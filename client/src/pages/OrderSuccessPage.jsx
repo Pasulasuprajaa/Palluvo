@@ -126,7 +126,7 @@ export default function OrderSuccessPage({ order: initialOrder, orderId, onNavig
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-[#FAF7F2] rounded-xl border border-[#EAE2D7] text-xs">
           <div>
             <span className="text-[#6E6467] block text-[10px] uppercase font-bold">Order ID</span>
-            <span className="font-mono font-bold text-[#5B1425]">{order.order_number || 'PAL-2026-98124'}</span>
+            <span className="font-mono font-bold text-[#5B1425]">{order.order_number || order.id || ''}</span>
           </div>
           <div>
             <span className="text-[#6E6467] block text-[10px] uppercase font-bold">Payment Status</span>

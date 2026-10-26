@@ -246,7 +246,25 @@ async function testShopFilterAccessibility() {
     orderTrackingSource.includes('orderInfo.tracking_number &&'),
     'OrderTrackingPage must only render Tracking AWB row when tracking_number exists'
   );
-  console.log('✅ PASS: [P2] Courier AWB and dispatch telemetry strictly gated on actual shipment dispatch without fabricated values');
+
+  const seedSource = fs.readFileSync(path.resolve(__dirname, '../db/seed.js'), 'utf8');
+  assert.ok(
+    !seedSource.includes("'BLR-BD-889921'") &&
+    !seedSource.includes('BlueDart Luxury Express'),
+    'server/db/seed.js must not seed fabricated courier or AWB data for sample orders'
+  );
+
+  const invoiceModalSource = fs.readFileSync(path.resolve(__dirname, '../../client/src/components/InvoiceModal.jsx'), 'utf8');
+  assert.ok(
+    !invoiceModalSource.includes("'BlueDart Luxury Express'") &&
+    !invoiceModalSource.includes("'BLR-BD-889921'"),
+    'client/src/components/InvoiceModal.jsx must not assert an unassigned carrier or fallback AWB'
+  );
+  assert.ok(
+    invoiceModalSource.includes('order.courier_partner &&'),
+    'client/src/components/InvoiceModal.jsx must only render courier partner when order.courier_partner is assigned'
+  );
+  console.log('✅ PASS: [P2] Courier AWB and dispatch telemetry strictly gated on actual shipment dispatch without fabricated values in payments, orders, seed, or invoice');
 
   // 4. SSR Render & State Synchronization Test
   try {

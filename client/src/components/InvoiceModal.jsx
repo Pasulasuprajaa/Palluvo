@@ -86,7 +86,9 @@ export default function InvoiceModal({ isOpen, onClose, order }) {
               <div className="font-bold uppercase text-gray-700 mb-1">
                 Courier & Logistics Details:
               </div>
-              <div><strong>Partner:</strong> {order.courier_partner || 'BlueDart Luxury Express'}</div>
+              {order.courier_partner && (
+                <div><strong>Partner:</strong> {order.courier_partner}</div>
+              )}
               <div><strong>Handled By:</strong> PALLUVO Warangal Master Vault</div>
               <div><strong>Delivery Type:</strong> Insured Tamper-Evident Luxury Packaging</div>
               <div><strong>Authenticity:</strong> Certified Handloom Quality & SMOI Verified (Where Applicable)</div>
