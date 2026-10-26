@@ -608,20 +608,42 @@ function initSchema() {
  * from existing databases while preserving verified courier-issued references.
  */
 function cleanupFabricatedCourierAwb(targetDb = db) {
-  // 1. Isolate and sanitize known sample order PAL-2026-98124
-  targetDb.prepare(`
-    UPDATE orders
-    SET tracking_number = NULL,
-        courier_partner = NULL,
-        status = CASE WHEN status = 'Shipped' THEN 'Confirmed' ELSE status END,
-        estimated_delivery = CASE WHEN estimated_delivery LIKE '%Tomorrow%' THEN '3-4 business days' ELSE estimated_delivery END
-    WHERE order_number = 'PAL-2026-98124'
-  `).run();
+  const placeholderAwbRegex = /^BLR-BD-[0-9A-Fa-f]{24}$/;
+
+  // 1. Isolate and sanitize known sample order PAL-2026-98124 ONLY if it still holds fabricated values.
+  // If an admin has since updated this order with real shipment tracking, preserve that data.
+  const sampleOrder = targetDb.prepare(
+    "SELECT id, tracking_number, courier_partner, status, estimated_delivery FROM orders WHERE order_number = 'PAL-2026-98124'"
+  ).get();
+
+  if (sampleOrder) {
+    const isPlaceholderAwb = sampleOrder.tracking_number === 'BLR-BD-889921' ||
+      (sampleOrder.tracking_number && placeholderAwbRegex.test(sampleOrder.tracking_number));
+
+    // Only clear tracking and reset 'Shipped' to 'Confirmed' if it carries the fabricated AWB
+    if (isPlaceholderAwb) {
+      targetDb.prepare(`
+        UPDATE orders
+        SET tracking_number = NULL,
+            status = CASE WHEN status = 'Shipped' THEN 'Confirmed' ELSE status END
+        WHERE id = ?
+      `).run(sampleOrder.id);
+    }
+
+    // Only clear BlueDart courier if tracking is missing or was a fabricated placeholder
+    if (sampleOrder.courier_partner === 'BlueDart Luxury Express' && (isPlaceholderAwb || !sampleOrder.tracking_number)) {
+      targetDb.prepare("UPDATE orders SET courier_partner = NULL WHERE id = ?").run(sampleOrder.id);
+    }
+
+    // Only reset estimated delivery if it still carries the fixed fabricated "Tomorrow" promise
+    if (sampleOrder.estimated_delivery && sampleOrder.estimated_delivery.includes('Tomorrow')) {
+      targetDb.prepare("UPDATE orders SET estimated_delivery = '3-4 business days' WHERE id = ?").run(sampleOrder.id);
+    }
+  }
 
   // 2. Clear exact generated placeholder tracking numbers (BLR-BD-<24 hex> and BLR-BD-889921)
   // and their associated placeholder courier_partner across all orders, preserving real references
   const ordersWithTracking = targetDb.prepare("SELECT id, tracking_number, courier_partner FROM orders WHERE tracking_number IS NOT NULL").all();
-  const placeholderAwbRegex = /^BLR-BD-[0-9A-Fa-f]{24}$/;
   const updateOrderAwb = targetDb.prepare(`
     UPDATE orders
     SET tracking_number = NULL,
@@ -635,13 +657,14 @@ function cleanupFabricatedCourierAwb(targetDb = db) {
     }
   }
 
-  // 3. Clear legacy default 'BlueDart Luxury Express' on orders that have not been dispatched
+  // 3. Clear legacy default 'BlueDart Luxury Express' on any order without an AWB regardless of status.
+  // Legacy schemas defaulted courier_partner to 'BlueDart Luxury Express'. Dispatched orders without
+  // an AWB cannot verify this carrier, so clearing unassigned defaults prevents presenting fake telemetry.
   targetDb.prepare(`
     UPDATE orders
     SET courier_partner = NULL
     WHERE courier_partner = 'BlueDart Luxury Express'
       AND tracking_number IS NULL
-      AND status NOT IN ('Shipped', 'Out for Delivery', 'Delivered')
   `).run();
 }
 

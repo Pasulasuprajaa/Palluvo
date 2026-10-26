@@ -336,6 +336,12 @@ async function testShopFilterAccessibility() {
       VALUES ('PAL-2026-REAL-DEL', 30000, 30000, 'Shipped', 'Paid', 'DEL123456789', 'Delhivery', 'In 3 days')
     `).run();
 
+    // Row 6: Legacy order marked Shipped without an AWB, having inherited default carrier
+    legacyDb.prepare(`
+      INSERT INTO orders (order_number, subtotal, total_amount, status, payment_status, tracking_number, courier_partner, estimated_delivery)
+      VALUES ('PAL-2026-SHIPPED-NOAWB', 9500, 9500, 'Shipped', 'Paid', NULL, 'BlueDart Luxury Express', '3-4 Business Days')
+    `).run();
+
     // 3. Confirm that pre-fix database DOES expose fabricated values prior to migration
     const preSample = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-98124'").get();
     assert.strictEqual(preSample.tracking_number, 'BLR-BD-889921');
@@ -349,11 +355,15 @@ async function testShopFilterAccessibility() {
     const preDef = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-OLDDEF2'").get();
     assert.strictEqual(preDef.courier_partner, 'BlueDart Luxury Express');
 
+    const preShippedNoAwb = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-SHIPPED-NOAWB'").get();
+    assert.strictEqual(preShippedNoAwb.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(preShippedNoAwb.status, 'Shipped');
+
     // 4. Run the upgrade migration
     dbModule.cleanupFabricatedCourierAwb(legacyDb);
 
     // 5. Verify post-migration database state
-    // Row 1: PAL-2026-98124 sanitized
+    // Row 1: PAL-2026-98124 sanitized when holding placeholder values
     const postSample = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-98124'").get();
     assert.strictEqual(postSample.tracking_number, null, 'Sample order tracking_number must be null after migration');
     assert.strictEqual(postSample.courier_partner, null, 'Sample order courier_partner must be null after migration');
@@ -381,13 +391,31 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(postRealDel.courier_partner, 'Delhivery', 'Verified Delhivery carrier must be preserved');
     assert.strictEqual(postRealDel.status, 'Shipped', 'Verified order status must be preserved');
 
-    // 6. Idempotency check: running migration again produces the same clean state
-    dbModule.cleanupFabricatedCourierAwb(legacyDb);
-    const postSampleAgain = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-98124'").get();
-    assert.strictEqual(postSampleAgain.tracking_number, null);
-    assert.strictEqual(postSampleAgain.courier_partner, null);
+    // Row 6: PAL-2026-SHIPPED-NOAWB sanitized (unassigned default carrier cleared, Shipped status preserved)
+    const postShippedNoAwb = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-SHIPPED-NOAWB'").get();
+    assert.strictEqual(postShippedNoAwb.courier_partner, null, 'Shipped order without AWB must have unassigned default carrier cleared');
+    assert.strictEqual(postShippedNoAwb.status, 'Shipped', 'Shipped status must be preserved when default carrier is cleared');
 
-    console.log('✅ PASS: [P2] Upgrade-path migration safely eliminates fabricated AWB and carrier defaults from pre-fix databases while preserving verified references');
+    // 6. Test edge case: Real shipment data subsequently assigned to sample order PAL-2026-98124
+    // Admin assigns real verified tracking number and courier
+    legacyDb.prepare(`
+      UPDATE orders
+      SET tracking_number = 'BD-REAL-SAMPLE-99',
+          courier_partner = 'BlueDart Luxury Express',
+          status = 'Shipped',
+          estimated_delivery = 'In 2 business days'
+      WHERE order_number = 'PAL-2026-98124'
+    `).run();
+
+    // Re-run migration: must NOT erase valid shipment data assigned to sample order
+    dbModule.cleanupFabricatedCourierAwb(legacyDb);
+    const postSampleAdmin = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-98124'").get();
+    assert.strictEqual(postSampleAdmin.tracking_number, 'BD-REAL-SAMPLE-99', 'Real tracking number assigned to sample order must be preserved');
+    assert.strictEqual(postSampleAdmin.courier_partner, 'BlueDart Luxury Express', 'Assigned courier on sample order must be preserved');
+    assert.strictEqual(postSampleAdmin.status, 'Shipped', 'Shipped status on sample order with real AWB must be preserved');
+    assert.strictEqual(postSampleAdmin.estimated_delivery, 'In 2 business days', 'Custom estimated delivery on sample order must be preserved');
+
+    console.log('✅ PASS: [P2] Upgrade-path migration safely eliminates fabricated AWB and carrier defaults from pre-fix databases while preserving verified references and real sample order updates');
   } finally {
     legacyDb.close();
     try {
