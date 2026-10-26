@@ -604,6 +604,37 @@ function cleanupFabricatedCourierAwb(targetDb = db) {
     targetDb.exec(`ALTER TABLE orders ADD COLUMN carrier_assigned_explicitly INTEGER DEFAULT 0;`);
   } catch (e) {}
 
+  // Backfill carrier_assigned_explicitly = 1 for historical orders with trustworthy evidence
+  // of explicit carrier assignment before this flag was introduced in newer schemas:
+  // - Non-default courier partner (e.g. 'Delhivery', 'FedEx', 'DTDC', etc.)
+  // - Real, non-placeholder tracking number already assigned
+  // - Pre-dispatch fulfillment state (status in 'Processing', 'Packed') with a courier partner assigned
+  // - Order was updated after placement (updated_at != created_at) with a courier partner assigned
+  try {
+    const columns = targetDb.pragma('table_info(orders)').map(c => c.name);
+    const hasTimestamps = columns.includes('created_at') && columns.includes('updated_at');
+    const timestampCondition = hasTimestamps
+      ? "OR (status NOT IN ('Shipped', 'Out for Delivery', 'Delivered') AND updated_at IS NOT NULL AND created_at IS NOT NULL AND updated_at != created_at)"
+      : "";
+
+    targetDb.prepare(`
+      UPDATE orders
+      SET carrier_assigned_explicitly = 1
+      WHERE (carrier_assigned_explicitly IS NULL OR carrier_assigned_explicitly = 0)
+        AND courier_partner IS NOT NULL
+        AND (
+          courier_partner != 'BlueDart Luxury Express'
+          OR (
+            tracking_number IS NOT NULL
+            AND tracking_number != 'BLR-BD-889921'
+            AND tracking_number NOT GLOB 'BLR-BD-[0-9A-Fa-f][0-9A-Fa-f]*'
+          )
+          OR (status IN ('Processing', 'Packed') AND tracking_number IS NULL)
+          ${timestampCondition}
+        )
+    `).run();
+  } catch (e) {}
+
   const placeholderAwbRegex = /^BLR-BD-[0-9A-Fa-f]{24}$/;
 
   // 1. Isolate and sanitize known sample order PAL-2026-98124 ONLY if it still holds fabricated values.

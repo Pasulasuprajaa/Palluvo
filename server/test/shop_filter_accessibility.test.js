@@ -464,41 +464,49 @@ async function testShopFilterAccessibility() {
         status TEXT DEFAULT 'Placed',
         tracking_number TEXT,
         courier_partner TEXT,
-        carrier_assigned_explicitly INTEGER DEFAULT 0,
-        estimated_delivery TEXT
+        estimated_delivery TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
       -- Pre-populate old migration marker as if commit 37501ea had already executed
       INSERT INTO schema_migrations (migration_name) VALUES ('cleanup_fabricated_courier_awb');
 
-      -- Rows left in database from commit 37501ea:
-      -- 1. Dispatched order with no AWB and legacy default courier (which 37501ea skipped, never explicitly assigned)
-      INSERT INTO orders (order_number, status, tracking_number, courier_partner, carrier_assigned_explicitly)
-      VALUES ('PAL-V1-SHIPPED-NOAWB', 'Shipped', NULL, 'BlueDart Luxury Express', 0);
+      -- Authentic rows from older schema without carrier_assigned_explicitly flag:
+      -- 1. Dispatched order with no AWB and legacy default courier (must have unverified courier cleared)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner, created_at, updated_at)
+      VALUES ('PAL-V1-SHIPPED-NOAWB', 'Shipped', NULL, 'BlueDart Luxury Express', '2026-09-01 10:00:00', '2026-09-01 10:00:00');
 
-      -- 2. Out for delivery order with no AWB and legacy default courier (which 37501ea skipped, never explicitly assigned)
-      INSERT INTO orders (order_number, status, tracking_number, courier_partner, carrier_assigned_explicitly)
-      VALUES ('PAL-V1-OFD-NOAWB', 'Out for Delivery', NULL, 'BlueDart Luxury Express', 0);
+      -- 2. Out for delivery order with no AWB and legacy default courier (must have unverified courier cleared)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner, created_at, updated_at)
+      VALUES ('PAL-V1-OFD-NOAWB', 'Out for Delivery', NULL, 'BlueDart Luxury Express', '2026-09-01 10:00:00', '2026-09-01 10:00:00');
 
-      -- 3. Delivered order with no AWB and legacy default courier (which 37501ea skipped, never explicitly assigned)
-      INSERT INTO orders (order_number, status, tracking_number, courier_partner, carrier_assigned_explicitly)
-      VALUES ('PAL-V1-DELIVERED-NOAWB', 'Delivered', NULL, 'BlueDart Luxury Express', 0);
+      -- 3. Delivered order with no AWB and legacy default courier (must have unverified courier cleared)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner, created_at, updated_at)
+      VALUES ('PAL-V1-DELIVERED-NOAWB', 'Delivered', NULL, 'BlueDart Luxury Express', '2026-09-01 10:00:00', '2026-09-01 10:00:00');
 
       -- 4. Dispatched order with real AWB and courier (must be PRESERVED)
-      INSERT INTO orders (order_number, status, tracking_number, courier_partner, carrier_assigned_explicitly)
-      VALUES ('PAL-V1-SHIPPED-REAL', 'Shipped', 'BD-REAL-AWB-9988', 'BlueDart Luxury Express', 1);
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner, created_at, updated_at)
+      VALUES ('PAL-V1-SHIPPED-REAL', 'Shipped', 'BD-REAL-AWB-9988', 'BlueDart Luxury Express', '2026-09-01 10:00:00', '2026-09-01 12:00:00');
 
-      -- 5. Genuine carrier assignment made by admin while an AWB is pending (must be PRESERVED)
-      INSERT INTO orders (order_number, status, tracking_number, courier_partner, carrier_assigned_explicitly)
-      VALUES ('PAL-V1-ASSIGNED-NOAWB', 'Processing', NULL, 'BlueDart Luxury Express', 1);
+      -- 5. Genuine carrier assignment made by admin in old schema while an AWB is pending (must be PRESERVED)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner, created_at, updated_at)
+      VALUES ('PAL-V1-ASSIGNED-NOAWB', 'Processing', NULL, 'BlueDart Luxury Express', '2026-09-01 10:00:00', '2026-09-01 11:30:00');
+
+      -- 6. Genuine custom carrier assignment without AWB in old schema (must be PRESERVED)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner, created_at, updated_at)
+      VALUES ('PAL-V1-CUSTOM-NOAWB', 'Placed', NULL, 'Delhivery', '2026-09-01 10:00:00', '2026-09-01 10:00:00');
     `);
 
-    // Verify pre-conditions: Old marker exists, new marker does not, and no-AWB rows still have BlueDart
+    // Verify pre-conditions: Old marker exists, new marker does not, and old-schema table has no carrier_assigned_explicitly column
     const hasV1 = v1Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_fabricated_courier_awb'").get();
     assert.ok(hasV1, 'Pre-condition: cleanup_fabricated_courier_awb must be pre-populated');
 
     const hasV2Pre = v1Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_legacy_default_carrier_no_awb'").get();
     assert.strictEqual(hasV2Pre, undefined, 'Pre-condition: cleanup_legacy_default_carrier_no_awb must not be present initially');
+
+    const preCols = v1Db.pragma('table_info(orders)').map(c => c.name);
+    assert.ok(!preCols.includes('carrier_assigned_explicitly'), 'Pre-condition: old-schema orders table must not have carrier_assigned_explicitly column');
 
     const preShipped = v1Db.prepare("SELECT courier_partner FROM orders WHERE order_number = 'PAL-V1-SHIPPED-NOAWB'").get();
     assert.strictEqual(preShipped.courier_partner, 'BlueDart Luxury Express');
@@ -506,40 +514,53 @@ async function testShopFilterAccessibility() {
     const preAssignedNoAwb = v1Db.prepare("SELECT courier_partner FROM orders WHERE order_number = 'PAL-V1-ASSIGNED-NOAWB'").get();
     assert.strictEqual(preAssignedNoAwb.courier_partner, 'BlueDart Luxury Express');
 
-    // Run applyCourierMigrations on the database that already has the old marker
+    // Run applyCourierMigrations on the old-schema database that already has the v1 marker
     dbModule.applyCourierMigrations(v1Db);
 
     // Verify post-conditions:
-    // 1. New migration marker recorded
+    // 1. New migration marker recorded and column successfully added by migration
     const hasV2Post = v1Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_legacy_default_carrier_no_awb'").get();
     assert.ok(hasV2Post, 'Post-condition: cleanup_legacy_default_carrier_no_awb must be recorded in schema_migrations');
 
+    const postCols = v1Db.pragma('table_info(orders)').map(c => c.name);
+    assert.ok(postCols.includes('carrier_assigned_explicitly'), 'Post-condition: carrier_assigned_explicitly column must be added by migration');
+
     // 2. Dispatched / Out for Delivery / Delivered rows with no AWB and unassigned defaults have courier_partner cleared
-    const postShipped = v1Db.prepare("SELECT courier_partner, status FROM orders WHERE order_number = 'PAL-V1-SHIPPED-NOAWB'").get();
+    const postShipped = v1Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V1-SHIPPED-NOAWB'").get();
     assert.strictEqual(postShipped.courier_partner, null, 'Shipped row without AWB must have legacy default carrier cleared');
     assert.strictEqual(postShipped.status, 'Shipped', 'Shipped status must be preserved');
+    assert.strictEqual(postShipped.carrier_assigned_explicitly, 0);
 
-    const postOfd = v1Db.prepare("SELECT courier_partner, status FROM orders WHERE order_number = 'PAL-V1-OFD-NOAWB'").get();
+    const postOfd = v1Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V1-OFD-NOAWB'").get();
     assert.strictEqual(postOfd.courier_partner, null, 'Out for Delivery row without AWB must have legacy default carrier cleared');
     assert.strictEqual(postOfd.status, 'Out for Delivery', 'Out for Delivery status must be preserved');
+    assert.strictEqual(postOfd.carrier_assigned_explicitly, 0);
 
-    const postDelivered = v1Db.prepare("SELECT courier_partner, status FROM orders WHERE order_number = 'PAL-V1-DELIVERED-NOAWB'").get();
+    const postDelivered = v1Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V1-DELIVERED-NOAWB'").get();
     assert.strictEqual(postDelivered.courier_partner, null, 'Delivered row without AWB must have legacy default carrier cleared');
     assert.strictEqual(postDelivered.status, 'Delivered', 'Delivered status must be preserved');
+    assert.strictEqual(postDelivered.carrier_assigned_explicitly, 0);
 
     // 3. Verified order with real AWB is preserved
-    const postReal = v1Db.prepare("SELECT courier_partner, tracking_number, status FROM orders WHERE order_number = 'PAL-V1-SHIPPED-REAL'").get();
+    const postReal = v1Db.prepare("SELECT courier_partner, tracking_number, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V1-SHIPPED-REAL'").get();
     assert.strictEqual(postReal.tracking_number, 'BD-REAL-AWB-9988');
     assert.strictEqual(postReal.courier_partner, 'BlueDart Luxury Express');
     assert.strictEqual(postReal.status, 'Shipped');
+    assert.strictEqual(postReal.carrier_assigned_explicitly, 1);
 
-    // 4. Genuine carrier assignment made by admin while AWB is pending is strictly PRESERVED
-    const postAssignedNoAwb = v1Db.prepare("SELECT courier_partner, tracking_number, status FROM orders WHERE order_number = 'PAL-V1-ASSIGNED-NOAWB'").get();
-    assert.strictEqual(postAssignedNoAwb.courier_partner, 'BlueDart Luxury Express', 'Explicitly assigned carrier without AWB must be preserved');
+    // 4. Genuine carrier assignment made by admin in old schema while AWB is pending is strictly PRESERVED
+    const postAssignedNoAwb = v1Db.prepare("SELECT courier_partner, tracking_number, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V1-ASSIGNED-NOAWB'").get();
+    assert.strictEqual(postAssignedNoAwb.courier_partner, 'BlueDart Luxury Express', 'Explicitly assigned carrier without AWB must be preserved on upgrade from old schema');
     assert.strictEqual(postAssignedNoAwb.tracking_number, null, 'Tracking number should remain null while pending');
     assert.strictEqual(postAssignedNoAwb.status, 'Processing');
+    assert.strictEqual(postAssignedNoAwb.carrier_assigned_explicitly, 1);
 
-    // 5. Idempotency on repeat execution
+    // 5. Genuine custom carrier assignment without AWB in old schema is strictly PRESERVED
+    const postCustomNoAwb = v1Db.prepare("SELECT courier_partner, tracking_number, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V1-CUSTOM-NOAWB'").get();
+    assert.strictEqual(postCustomNoAwb.courier_partner, 'Delhivery', 'Custom carrier assignment without AWB must be preserved on upgrade from old schema');
+    assert.strictEqual(postCustomNoAwb.carrier_assigned_explicitly, 1);
+
+    // 6. Idempotency on repeat execution
     dbModule.applyCourierMigrations(v1Db);
     const postShippedRepeat = v1Db.prepare("SELECT courier_partner FROM orders WHERE order_number = 'PAL-V1-SHIPPED-NOAWB'").get();
     assert.strictEqual(postShippedRepeat.courier_partner, null);
