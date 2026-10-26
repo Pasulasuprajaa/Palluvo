@@ -580,21 +580,9 @@ function initSchema() {
       console.log('Legacy QA fixture migration note:', e.message);
     }
 
-    // One-time Migration: Remove exact generated placeholder tracking numbers (BLR-BD-<24 hex> and BLR-BD-889921)
-    // and isolate seeded sample order tracking telemetry, while preserving verified courier references.
+    // Courier migrations: Remove fabricated tracking numbers and unverified carrier defaults
     try {
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS schema_migrations (
-          migration_name TEXT PRIMARY KEY,
-          applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
-
-      const courierMigrationRan = db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_fabricated_courier_awb'").get();
-      if (!courierMigrationRan) {
-        cleanupFabricatedCourierAwb(db);
-        db.prepare("INSERT OR IGNORE INTO schema_migrations (migration_name) VALUES ('cleanup_fabricated_courier_awb')").run();
-      }
+      applyCourierMigrations(db);
     } catch (e) {
       console.log('Fabricated courier migration note:', e.message);
     }
@@ -668,9 +656,37 @@ function cleanupFabricatedCourierAwb(targetDb = db) {
   `).run();
 }
 
+/**
+ * Applies courier and AWB cleanup migrations idempotently:
+ * - 'cleanup_fabricated_courier_awb': Initial migration clearing fake AWBs and undispatched defaults
+ * - 'cleanup_legacy_default_carrier_no_awb': Corrective migration ensuring even databases that already ran
+ *   the initial migration have legacy default 'BlueDart Luxury Express' cleared from no-AWB rows regardless of status.
+ */
+function applyCourierMigrations(targetDb = db) {
+  targetDb.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      migration_name TEXT PRIMARY KEY,
+      applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  const v1Ran = targetDb.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_fabricated_courier_awb'").get();
+  if (!v1Ran) {
+    cleanupFabricatedCourierAwb(targetDb);
+    targetDb.prepare("INSERT OR IGNORE INTO schema_migrations (migration_name) VALUES ('cleanup_fabricated_courier_awb')").run();
+  }
+
+  const v2Ran = targetDb.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_legacy_default_carrier_no_awb'").get();
+  if (!v2Ran) {
+    cleanupFabricatedCourierAwb(targetDb);
+    targetDb.prepare("INSERT OR IGNORE INTO schema_migrations (migration_name) VALUES ('cleanup_legacy_default_carrier_no_awb')").run();
+  }
+}
+
 initSchema();
 
 db.initSchema = initSchema;
 db.cleanupFabricatedCourierAwb = cleanupFabricatedCourierAwb;
+db.applyCourierMigrations = applyCourierMigrations;
 
 module.exports = db;

@@ -360,7 +360,9 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(preShippedNoAwb.status, 'Shipped');
 
     // 4. Run the upgrade migration
-    dbModule.cleanupFabricatedCourierAwb(legacyDb);
+    dbModule.applyCourierMigrations(legacyDb);
+    assert.ok(legacyDb.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_fabricated_courier_awb'").get());
+    assert.ok(legacyDb.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_legacy_default_carrier_no_awb'").get());
 
     // 5. Verify post-migration database state
     // Row 1: PAL-2026-98124 sanitized when holding placeholder values
@@ -422,6 +424,101 @@ async function testShopFilterAccessibility() {
       if (fs.existsSync(upgradeDbPath)) fs.unlinkSync(upgradeDbPath);
       const shm = `${upgradeDbPath}-shm`;
       const wal = `${upgradeDbPath}-wal`;
+      if (fs.existsSync(shm)) fs.unlinkSync(shm);
+      if (fs.existsSync(wal)) fs.unlinkSync(wal);
+    } catch (e) {}
+  }
+
+  // 3.9 Upgrade-Path Regression Test: Database that ALREADY ran old migration (cleanup_fabricated_courier_awb)
+  // must apply broadened migration (cleanup_legacy_default_carrier_no_awb) to clear unverified carrier defaults on no-AWB rows
+  const v1DbPath = path.resolve(__dirname, `../data/.v1_upgrade_test_${Date.now()}_${Math.random().toString(36).slice(2)}.db`);
+  const v1Db = new Database(v1DbPath);
+
+  try {
+    v1Db.exec(`
+      CREATE TABLE schema_migrations (
+        migration_name TEXT PRIMARY KEY,
+        applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_number TEXT UNIQUE NOT NULL,
+        status TEXT DEFAULT 'Placed',
+        tracking_number TEXT,
+        courier_partner TEXT,
+        estimated_delivery TEXT
+      );
+
+      -- Pre-populate old migration marker as if commit 37501ea had already executed
+      INSERT INTO schema_migrations (migration_name) VALUES ('cleanup_fabricated_courier_awb');
+
+      -- Rows left in database from commit 37501ea:
+      -- 1. Dispatched order with no AWB and legacy default courier (which 37501ea skipped)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner)
+      VALUES ('PAL-V1-SHIPPED-NOAWB', 'Shipped', NULL, 'BlueDart Luxury Express');
+
+      -- 2. Out for delivery order with no AWB and legacy default courier (which 37501ea skipped)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner)
+      VALUES ('PAL-V1-OFD-NOAWB', 'Out for Delivery', NULL, 'BlueDart Luxury Express');
+
+      -- 3. Delivered order with no AWB and legacy default courier (which 37501ea skipped)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner)
+      VALUES ('PAL-V1-DELIVERED-NOAWB', 'Delivered', NULL, 'BlueDart Luxury Express');
+
+      -- 4. Dispatched order with real AWB and courier (must be PRESERVED)
+      INSERT INTO orders (order_number, status, tracking_number, courier_partner)
+      VALUES ('PAL-V1-SHIPPED-REAL', 'Shipped', 'BD-REAL-AWB-9988', 'BlueDart Luxury Express');
+    `);
+
+    // Verify pre-conditions: Old marker exists, new marker does not, and no-AWB rows still have BlueDart
+    const hasV1 = v1Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_fabricated_courier_awb'").get();
+    assert.ok(hasV1, 'Pre-condition: cleanup_fabricated_courier_awb must be pre-populated');
+
+    const hasV2Pre = v1Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_legacy_default_carrier_no_awb'").get();
+    assert.strictEqual(hasV2Pre, undefined, 'Pre-condition: cleanup_legacy_default_carrier_no_awb must not be present initially');
+
+    const preShipped = v1Db.prepare("SELECT courier_partner FROM orders WHERE order_number = 'PAL-V1-SHIPPED-NOAWB'").get();
+    assert.strictEqual(preShipped.courier_partner, 'BlueDart Luxury Express');
+
+    // Run applyCourierMigrations on the database that already has the old marker
+    dbModule.applyCourierMigrations(v1Db);
+
+    // Verify post-conditions:
+    // 1. New migration marker recorded
+    const hasV2Post = v1Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_legacy_default_carrier_no_awb'").get();
+    assert.ok(hasV2Post, 'Post-condition: cleanup_legacy_default_carrier_no_awb must be recorded in schema_migrations');
+
+    // 2. Dispatched / Out for Delivery / Delivered rows with no AWB have courier_partner cleared
+    const postShipped = v1Db.prepare("SELECT courier_partner, status FROM orders WHERE order_number = 'PAL-V1-SHIPPED-NOAWB'").get();
+    assert.strictEqual(postShipped.courier_partner, null, 'Shipped row without AWB must have legacy default carrier cleared');
+    assert.strictEqual(postShipped.status, 'Shipped', 'Shipped status must be preserved');
+
+    const postOfd = v1Db.prepare("SELECT courier_partner, status FROM orders WHERE order_number = 'PAL-V1-OFD-NOAWB'").get();
+    assert.strictEqual(postOfd.courier_partner, null, 'Out for Delivery row without AWB must have legacy default carrier cleared');
+    assert.strictEqual(postOfd.status, 'Out for Delivery', 'Out for Delivery status must be preserved');
+
+    const postDelivered = v1Db.prepare("SELECT courier_partner, status FROM orders WHERE order_number = 'PAL-V1-DELIVERED-NOAWB'").get();
+    assert.strictEqual(postDelivered.courier_partner, null, 'Delivered row without AWB must have legacy default carrier cleared');
+    assert.strictEqual(postDelivered.status, 'Delivered', 'Delivered status must be preserved');
+
+    // 3. Verified order with real AWB is preserved
+    const postReal = v1Db.prepare("SELECT courier_partner, tracking_number, status FROM orders WHERE order_number = 'PAL-V1-SHIPPED-REAL'").get();
+    assert.strictEqual(postReal.tracking_number, 'BD-REAL-AWB-9988');
+    assert.strictEqual(postReal.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(postReal.status, 'Shipped');
+
+    // 4. Idempotency on repeat execution
+    dbModule.applyCourierMigrations(v1Db);
+    const postShippedRepeat = v1Db.prepare("SELECT courier_partner FROM orders WHERE order_number = 'PAL-V1-SHIPPED-NOAWB'").get();
+    assert.strictEqual(postShippedRepeat.courier_partner, null);
+
+    console.log('✅ PASS: [P2] Broadened migration executes on databases with pre-populated v1 marker and clears unverified carrier defaults on no-AWB rows');
+  } finally {
+    v1Db.close();
+    try {
+      if (fs.existsSync(v1DbPath)) fs.unlinkSync(v1DbPath);
+      const shm = `${v1DbPath}-shm`;
+      const wal = `${v1DbPath}-wal`;
       if (fs.existsSync(shm)) fs.unlinkSync(shm);
       if (fs.existsSync(wal)) fs.unlinkSync(wal);
     } catch (e) {}
