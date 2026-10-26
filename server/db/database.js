@@ -604,19 +604,14 @@ function cleanupFabricatedCourierAwb(targetDb = db) {
     targetDb.exec(`ALTER TABLE orders ADD COLUMN carrier_assigned_explicitly INTEGER DEFAULT 0;`);
   } catch (e) {}
 
-  // Backfill carrier_assigned_explicitly = 1 for historical orders with trustworthy evidence
-  // of explicit carrier assignment before this flag was introduced in newer schemas:
-  // - Non-default courier partner (e.g. 'Delhivery', 'FedEx', 'DTDC', etc.)
+  // Backfill carrier_assigned_explicitly = 1 ONLY from trustworthy, carrier-specific evidence:
+  // - Non-default courier partner (anything other than the legacy column default 'BlueDart Luxury Express')
   // - Real, non-placeholder tracking number already assigned
-  // - Pre-dispatch fulfillment state (status in 'Processing', 'Packed') with a courier partner assigned
-  // - Order was updated after placement (updated_at != created_at) with a courier partner assigned
+  //
+  // Note: Order timestamps (created_at / updated_at) are NOT used to infer explicit carrier assignment,
+  // because updated_at is mutated by unrelated non-carrier events (payment confirmation, refunds, notes)
+  // on orders that merely inherited the column default.
   try {
-    const columns = targetDb.pragma('table_info(orders)').map(c => c.name);
-    const hasTimestamps = columns.includes('created_at') && columns.includes('updated_at');
-    const timestampCondition = hasTimestamps
-      ? "OR (status NOT IN ('Shipped', 'Out for Delivery', 'Delivered') AND updated_at IS NOT NULL AND created_at IS NOT NULL AND updated_at != created_at)"
-      : "";
-
     targetDb.prepare(`
       UPDATE orders
       SET carrier_assigned_explicitly = 1
@@ -629,8 +624,6 @@ function cleanupFabricatedCourierAwb(targetDb = db) {
             AND tracking_number != 'BLR-BD-889921'
             AND tracking_number NOT GLOB 'BLR-BD-[0-9A-Fa-f][0-9A-Fa-f]*'
           )
-          OR (status IN ('Processing', 'Packed') AND tracking_number IS NULL)
-          ${timestampCondition}
         )
     `).run();
   } catch (e) {}
@@ -687,14 +680,17 @@ function cleanupFabricatedCourierAwb(targetDb = db) {
     }
   }
 
-  // 3. Clear legacy default 'BlueDart Luxury Express' on any order without an AWB
-  // UNLESS the carrier was explicitly assigned by an admin while an AWB is pending.
+  // 3. Clear legacy default 'BlueDart Luxury Express' on unverified orders without an AWB
+  // (e.g. 'Placed' orders that received the schema default, or dispatched/delivered rows with no AWB),
+  // while preserving ambiguous pre-AWB fulfillment assignments in 'Processing' or 'Packed'
+  // (without claiming they are verified) as well as explicitly assigned carriers.
   targetDb.prepare(`
     UPDATE orders
     SET courier_partner = NULL
     WHERE courier_partner = 'BlueDart Luxury Express'
       AND tracking_number IS NULL
       AND (carrier_assigned_explicitly IS NULL OR carrier_assigned_explicitly = 0)
+      AND (status IS NULL OR status NOT IN ('Processing', 'Packed'))
   `).run();
 }
 
