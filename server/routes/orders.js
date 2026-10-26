@@ -101,7 +101,13 @@ router.get('/track/:identifier', trackOrderLimiter, optionalAuth, (req, res) => 
       {
         stage: 'Handed to Courier Partner',
         status: currentStageIndex >= 3 ? 'completed' : (order.status === 'Cancelled' ? 'cancelled' : (currentStageIndex === 2 ? 'current' : 'pending')),
-        description: `Dispatched with ${order.courier_partner || 'BlueDart Luxury Express'} (AWB: ${order.tracking_number || 'BLR-BD-' + order.id * 117})`,
+        description: currentStageIndex >= 3
+          ? (order.tracking_number
+              ? `Dispatched with ${order.courier_partner || 'courier partner'} (AWB: ${order.tracking_number}).`
+              : `Handed over to ${order.courier_partner || 'courier partner'}.`)
+          : (order.status === 'Cancelled'
+              ? 'Shipment cancelled prior to courier dispatch.'
+              : 'Package will be handed over to courier partner upon packing.'),
         timestamp: currentStageIndex >= 3 ? 'In Transit' : null
       },
       {

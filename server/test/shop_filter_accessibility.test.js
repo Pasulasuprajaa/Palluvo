@@ -213,6 +213,41 @@ async function testShopFilterAccessibility() {
   );
   console.log('✅ PASS: [P2] ProductDetailPage customer trust: fake countdown and unverified popularity badges eliminated, verified metrics properly gated');
 
+  // 3.7 Verify [P2] Courier AWB & Dispatch Telemetry Truthfulness
+  const paymentsRouteSource = fs.readFileSync(path.resolve(__dirname, '../routes/payments.js'), 'utf8');
+  assert.ok(
+    !paymentsRouteSource.includes('trackingNumber = `BLR-BD-') &&
+    !paymentsRouteSource.includes('BLR-BD-${crypto'),
+    'server/routes/payments.js must not mint fabricated BLR-BD tracking numbers on pending order creation'
+  );
+  assert.ok(
+    /rzpOrder\.id,\s*null,\s*null,/.test(paymentsRouteSource),
+    'server/routes/payments.js must leave tracking_number and courier_partner NULL until dispatched'
+  );
+
+  const ordersRouteSource = fs.readFileSync(path.resolve(__dirname, '../routes/orders.js'), 'utf8');
+  assert.ok(
+    !ordersRouteSource.includes("'BLR-BD-' + order.id * 117") &&
+    !ordersRouteSource.includes('order.id * 117'),
+    'server/routes/orders.js must not synthesize fallback tracking numbers from internal order id'
+  );
+  assert.ok(
+    ordersRouteSource.includes('currentStageIndex >= 3') &&
+    ordersRouteSource.includes('Package will be handed over to courier partner upon packing'),
+    'server/routes/orders.js must gate courier dispatch copy on stage >= 3 being reached'
+  );
+
+  const orderTrackingSource = fs.readFileSync(path.resolve(__dirname, '../../client/src/pages/OrderTrackingPage.jsx'), 'utf8');
+  assert.ok(
+    !orderTrackingSource.includes("'BLR-BD-889921'"),
+    'OrderTrackingPage must not hard-code fallback BLR-BD-889921 tracking number'
+  );
+  assert.ok(
+    orderTrackingSource.includes('orderInfo.tracking_number &&'),
+    'OrderTrackingPage must only render Tracking AWB row when tracking_number exists'
+  );
+  console.log('✅ PASS: [P2] Courier AWB and dispatch telemetry strictly gated on actual shipment dispatch without fabricated values');
+
   // 4. SSR Render & State Synchronization Test
   try {
     const React = require(path.resolve(__dirname, '../../client/node_modules/react'));
@@ -393,6 +428,22 @@ async function testShopFilterAccessibility() {
     assert.ok(!directShopSlashHtml.includes('Product not found'), 'Direct /shop/ load must not display product-not-found');
 
     console.log('✅ PASS: [P2] Trailing slash normalization (/sarees/, /shop/, category, product) routes correctly with direct-load collection support');
+
+    // [P2] Malformed percent-escape routing tests
+    // Ensure malformed percent-escaped URLs don't throw URIError and route safely to not-found view
+    const rMalformedSarees = getRouteFromPath('/sarees/100%');
+    assert.strictEqual(rMalformedSarees.page, 'not-found', '/sarees/100% with malformed percent-escape must route to not-found');
+    assert.strictEqual(rMalformedSarees.params.path, '/sarees/100%');
+
+    const rMalformedProduct = getRouteFromPath('/product/%E0%A4%A');
+    assert.strictEqual(rMalformedProduct.page, 'not-found', '/product/%E0%A4%A with truncated UTF-8 percent-escape must route to not-found');
+    assert.strictEqual(rMalformedProduct.params.path, '/product/%E0%A4%A');
+
+    const rMalformedCategory = getRouteFromPath('/sarees/category/%E0%A4%A');
+    assert.strictEqual(rMalformedCategory.page, 'not-found', '/sarees/category/%E0%A4%A with malformed percent-escape must route to not-found');
+    assert.strictEqual(rMalformedCategory.params.path, '/sarees/category/%E0%A4%A');
+
+    console.log('✅ PASS: [P2] Malformed percent-escaped routes (/sarees/100%, /product/%E0%A4%A) route safely to not-found without crashing');
 
     // 6. Verify [P2] Lightweight generated thumbnails in catalog cards
     const productCardSource = fs.readFileSync(path.resolve(__dirname, '../../client/src/components/ProductCard.jsx'), 'utf8');

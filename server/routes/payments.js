@@ -970,7 +970,6 @@ router.post('/create-order', authenticateToken, requireDurableStorage, async (re
 
     const totalAmount = Math.max(0, subtotal - discountAmount + deliveryFee);
     const orderNumber = `PAL-${new Date().getFullYear()}-${crypto.randomBytes(12).toString('hex').toUpperCase()}`;
-    const trackingNumber = `BLR-BD-${crypto.randomBytes(12).toString('hex').toUpperCase()}`;
 
     // 4. Create Razorpay Order
     const rzpOrder = await createRazorpayOrder({
@@ -1061,8 +1060,8 @@ router.post('/create-order', authenticateToken, requireDurableStorage, async (re
         'Pending',
         'Razorpay',
         rzpOrder.id,
-        trackingNumber,
-        'BlueDart Luxury Express',
+        null,
+        null,
         '3-4 Business Days',
         expiresAt
       );

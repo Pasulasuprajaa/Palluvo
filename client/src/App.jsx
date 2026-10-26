@@ -43,40 +43,61 @@ function PageLoader() {
   );
 }
 
+function safeDecodeURIComponent(str) {
+  if (!str) return '';
+  try {
+    return decodeURIComponent(str);
+  } catch (e) {
+    return null;
+  }
+}
+
 export function getRouteFromPath(
   pathname = typeof window !== 'undefined' ? window.location.pathname : '/',
   search = typeof window !== 'undefined' ? window.location.search : ''
 ) {
-  const cleanPath = (pathname || '/').split('?')[0].trim();
-  const normalizedPath = cleanPath.replace(/\/+$/, '') || '/';
-  const path = normalizedPath.toLowerCase();
-  const queryStr = search || (pathname && pathname.includes('?') ? pathname.slice(pathname.indexOf('?')) : '');
-  const searchParams = new URLSearchParams(queryStr);
+  try {
+    const cleanPath = (pathname || '/').split('?')[0].trim();
+    const normalizedPath = cleanPath.replace(/\/+$/, '') || '/';
+    const path = normalizedPath.toLowerCase();
+    const queryStr = search || (pathname && pathname.includes('?') ? pathname.slice(pathname.indexOf('?')) : '');
+    const searchParams = new URLSearchParams(queryStr);
 
-  if (path === '/' || path === '') {
-    return { page: 'home', params: {} };
-  } else if (
-    path === '/sarees/category' ||
-    path.startsWith('/sarees/category/') ||
-    path === '/category' ||
-    path.startsWith('/category/')
-  ) {
-    const parts = normalizedPath.split('/').filter(Boolean);
-    const isSareesPrefix = path.startsWith('/sarees/category');
-    const categorySlug = isSareesPrefix ? parts[2] : parts[1];
-    const filters = {};
-    for (const [key, value] of searchParams.entries()) {
-      if (value) filters[key] = value;
-    }
-    if (categorySlug) {
-      filters.category = decodeURIComponent(categorySlug);
-    }
-    return { page: 'shop', params: filters };
-  } else if ((path.startsWith('/sarees/') && !path.startsWith('/sarees/category/')) || path.startsWith('/product/')) {
-    const parts = normalizedPath.split('/').filter(Boolean);
-    const slug = parts[1];
-    return { page: 'product', params: { slug: slug ? decodeURIComponent(slug) : '' } };
-  } else if (path === '/sarees' || path === '/shop') {
+    if (path === '/' || path === '') {
+      return { page: 'home', params: {} };
+    } else if (
+      path === '/sarees/category' ||
+      path.startsWith('/sarees/category/') ||
+      path === '/category' ||
+      path.startsWith('/category/')
+    ) {
+      const parts = normalizedPath.split('/').filter(Boolean);
+      const isSareesPrefix = path.startsWith('/sarees/category');
+      const rawCategorySlug = isSareesPrefix ? parts[2] : parts[1];
+      const filters = {};
+      for (const [key, value] of searchParams.entries()) {
+        if (value) filters[key] = value;
+      }
+      if (rawCategorySlug) {
+        const decodedCategory = safeDecodeURIComponent(rawCategorySlug);
+        if (decodedCategory === null) {
+          return { page: 'not-found', params: { path: normalizedPath } };
+        }
+        filters.category = decodedCategory;
+      }
+      return { page: 'shop', params: filters };
+    } else if ((path.startsWith('/sarees/') && !path.startsWith('/sarees/category/')) || path.startsWith('/product/')) {
+      const parts = normalizedPath.split('/').filter(Boolean);
+      const rawSlug = parts[1];
+      if (rawSlug) {
+        const decodedSlug = safeDecodeURIComponent(rawSlug);
+        if (decodedSlug === null) {
+          return { page: 'not-found', params: { path: normalizedPath } };
+        }
+        return { page: 'product', params: { slug: decodedSlug } };
+      }
+      return { page: 'product', params: { slug: '' } };
+    } else if (path === '/sarees' || path === '/shop') {
     const filters = {};
     for (const [key, value] of searchParams.entries()) {
       if (value) filters[key] = value;
@@ -111,7 +132,10 @@ export function getRouteFromPath(
     const tab = path === '/policies' || path === '/policy' ? (searchParams.get('tab') || 'privacy') : path.replace('/', '');
     return { page: 'policy', params: { tab } };
   }
-  return { page: 'not-found', params: { path: normalizedPath } };
+    return { page: 'not-found', params: { path: normalizedPath } };
+  } catch (err) {
+    return { page: 'not-found', params: { path: typeof pathname === 'string' ? pathname : '/' } };
+  }
 }
 
 function AppContent() {

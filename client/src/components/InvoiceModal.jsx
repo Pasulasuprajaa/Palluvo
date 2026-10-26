@@ -64,7 +64,9 @@ export default function InvoiceModal({ isOpen, onClose, order }) {
               <div><strong>Invoice No:</strong> INV-{order.order_number || order.id}</div>
               <div><strong>Order Date:</strong> {new Date(order.created_at || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
               <div><strong>Payment Status:</strong> <span className="text-emerald-700 font-bold">{order.payment_status || 'Paid'} ({order.payment_method || 'Razorpay'})</span></div>
-              <div><strong>AWB / Tracking:</strong> {order.tracking_number || 'BLR-BD-889921'}</div>
+              {order.tracking_number && (
+                <div><strong>AWB / Tracking:</strong> {order.tracking_number}</div>
+              )}
             </div>
           </div>
 

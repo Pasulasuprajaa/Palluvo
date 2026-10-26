@@ -55,7 +55,7 @@ export default function OrderTrackingPage({ trackingId: initialId, onNavigate })
           Track Your Saree Shipment
         </h1>
         <p className="text-xs sm:text-sm text-[#6E6467]">
-          Enter your PALLUVO Order ID or BlueDart Tracking AWB Number.
+          Enter your PALLUVO Order ID or Tracking Number.
         </p>
       </div>
 
@@ -73,7 +73,7 @@ export default function OrderTrackingPage({ trackingId: initialId, onNavigate })
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="e.g. PAL-2026-98124 or BLR-BD-889921"
+            placeholder="e.g. PAL-2026-98124"
             className="w-full bg-white border border-[#EAE2D7] rounded-xl pl-10 pr-4 py-3 text-xs text-[#1F1A1C] focus:outline-none focus:border-[#5B1425] shadow-sm font-mono"
           />
         </div>
@@ -108,17 +108,21 @@ export default function OrderTrackingPage({ trackingId: initialId, onNavigate })
               <span className="text-[#6E6467] block text-[10px] uppercase font-bold">Order Number</span>
               <span className="font-mono font-bold text-[#5B1425]">{orderInfo.order_number}</span>
             </div>
-            <div>
-              <span className="text-[#6E6467] block text-[10px] uppercase font-bold">Courier Partner</span>
-              <span className="font-bold text-[#1F1A1C]">{orderInfo.courier_partner || 'BlueDart Luxury Express'}</span>
-            </div>
-            <div>
-              <span className="text-[#6E6467] block text-[10px] uppercase font-bold">Tracking AWB</span>
-              <span className="font-mono text-[#1F1A1C]">{orderInfo.tracking_number || 'BLR-BD-889921'}</span>
-            </div>
+            {orderInfo.courier_partner && (
+              <div>
+                <span className="text-[#6E6467] block text-[10px] uppercase font-bold">Courier Partner</span>
+                <span className="font-bold text-[#1F1A1C]">{orderInfo.courier_partner}</span>
+              </div>
+            )}
+            {orderInfo.tracking_number && (
+              <div>
+                <span className="text-[#6E6467] block text-[10px] uppercase font-bold">Tracking AWB</span>
+                <span className="font-mono text-[#1F1A1C]">{orderInfo.tracking_number}</span>
+              </div>
+            )}
             <div>
               <span className="text-[#6E6467] block text-[10px] uppercase font-bold">Estimated Delivery</span>
-              <span className="font-bold text-green-800">{orderInfo.estimated_delivery || 'Tomorrow, by 4 PM'}</span>
+              <span className="font-bold text-green-800">{orderInfo.estimated_delivery || '3-4 business days'}</span>
             </div>
           </div>
 
