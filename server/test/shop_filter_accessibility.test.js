@@ -266,6 +266,139 @@ async function testShopFilterAccessibility() {
   );
   console.log('✅ PASS: [P2] Courier AWB and dispatch telemetry strictly gated on actual shipment dispatch without fabricated values in payments, orders, seed, or invoice');
 
+  // 3.8 Upgrade-Path Regression Test: Pre-fix database with fabricated values upgraded safely
+  const Database = require('better-sqlite3');
+  const dbModule = require('../db/database');
+  const upgradeDbPath = path.resolve(__dirname, `../data/.upgrade_test_${Date.now()}_${Math.random().toString(36).slice(2)}.db`);
+  const legacyDb = new Database(upgradeDbPath);
+
+  try {
+    // 1. Initialize pre-fix schema (with old DEFAULT 'BlueDart Luxury Express')
+    legacyDb.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        email TEXT UNIQUE,
+        password_hash TEXT
+      );
+      CREATE TABLE orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_number TEXT UNIQUE NOT NULL,
+        user_id INTEGER,
+        address_data TEXT,
+        subtotal INTEGER NOT NULL,
+        discount_amount INTEGER DEFAULT 0,
+        coupon_code TEXT,
+        delivery_fee INTEGER DEFAULT 0,
+        tax_amount INTEGER DEFAULT 0,
+        total_amount INTEGER NOT NULL,
+        status TEXT DEFAULT 'Placed',
+        payment_status TEXT DEFAULT 'Pending',
+        payment_method TEXT DEFAULT 'Razorpay',
+        razorpay_order_id TEXT,
+        razorpay_payment_id TEXT,
+        tracking_number TEXT,
+        courier_partner TEXT DEFAULT 'BlueDart Luxury Express',
+        estimated_delivery TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 2. Insert pre-fix rows representing legacy states:
+    // Row 1: The old sample seeded order (Shipped with fake AWB and fixed 'Tomorrow' delivery)
+    legacyDb.prepare(`
+      INSERT INTO orders (order_number, subtotal, total_amount, status, payment_status, tracking_number, courier_partner, estimated_delivery)
+      VALUES ('PAL-2026-98124', 12999, 11700, 'Shipped', 'Paid', 'BLR-BD-889921', 'BlueDart Luxury Express', 'Tomorrow, by 4:00 PM')
+    `).run();
+
+    // Row 2: Legacy payment-creation order with 24-hex fake tracking number
+    legacyDb.prepare(`
+      INSERT INTO orders (order_number, subtotal, total_amount, status, payment_status, tracking_number, courier_partner, estimated_delivery)
+      VALUES ('PAL-2026-OLDHEX1', 15000, 15000, 'Placed', 'Pending', 'BLR-BD-ABCD1234EF567890ABCD1234', 'BlueDart Luxury Express', '3-4 Business Days')
+    `).run();
+
+    // Row 3: Legacy order created with schema default carrier, unassigned tracking
+    legacyDb.prepare(`
+      INSERT INTO orders (order_number, subtotal, total_amount, status, payment_status, tracking_number, courier_partner, estimated_delivery)
+      VALUES ('PAL-2026-OLDDEF2', 8000, 8000, 'Placed', 'Pending', NULL, 'BlueDart Luxury Express', '3-4 Business Days')
+    `).run();
+
+    // Row 4: Verified real order with BlueDart (must be PRESERVED)
+    legacyDb.prepare(`
+      INSERT INTO orders (order_number, subtotal, total_amount, status, payment_status, tracking_number, courier_partner, estimated_delivery)
+      VALUES ('PAL-2026-REAL-BD', 25000, 25000, 'Shipped', 'Paid', 'BD-991122', 'BlueDart Luxury Express', 'In 2 days')
+    `).run();
+
+    // Row 5: Verified real order with Delhivery (must be PRESERVED)
+    legacyDb.prepare(`
+      INSERT INTO orders (order_number, subtotal, total_amount, status, payment_status, tracking_number, courier_partner, estimated_delivery)
+      VALUES ('PAL-2026-REAL-DEL', 30000, 30000, 'Shipped', 'Paid', 'DEL123456789', 'Delhivery', 'In 3 days')
+    `).run();
+
+    // 3. Confirm that pre-fix database DOES expose fabricated values prior to migration
+    const preSample = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-98124'").get();
+    assert.strictEqual(preSample.tracking_number, 'BLR-BD-889921');
+    assert.strictEqual(preSample.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(preSample.status, 'Shipped');
+
+    const preHex = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-OLDHEX1'").get();
+    assert.strictEqual(preHex.tracking_number, 'BLR-BD-ABCD1234EF567890ABCD1234');
+    assert.strictEqual(preHex.courier_partner, 'BlueDart Luxury Express');
+
+    const preDef = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-OLDDEF2'").get();
+    assert.strictEqual(preDef.courier_partner, 'BlueDart Luxury Express');
+
+    // 4. Run the upgrade migration
+    dbModule.cleanupFabricatedCourierAwb(legacyDb);
+
+    // 5. Verify post-migration database state
+    // Row 1: PAL-2026-98124 sanitized
+    const postSample = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-98124'").get();
+    assert.strictEqual(postSample.tracking_number, null, 'Sample order tracking_number must be null after migration');
+    assert.strictEqual(postSample.courier_partner, null, 'Sample order courier_partner must be null after migration');
+    assert.strictEqual(postSample.status, 'Confirmed', 'Sample order status must be reset to Confirmed');
+    assert.strictEqual(postSample.estimated_delivery, '3-4 business days', 'Sample order delivery promise must be standardized');
+
+    // Row 2: PAL-2026-OLDHEX1 sanitized
+    const postHex = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-OLDHEX1'").get();
+    assert.strictEqual(postHex.tracking_number, null, 'Generated 24-hex tracking number must be cleared to null');
+    assert.strictEqual(postHex.courier_partner, null, 'Associated placeholder courier_partner must be cleared to null');
+
+    // Row 3: PAL-2026-OLDDEF2 sanitized
+    const postDef = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-OLDDEF2'").get();
+    assert.strictEqual(postDef.courier_partner, null, 'Default carrier on undispatched order must be cleared to null');
+
+    // Row 4: PAL-2026-REAL-BD preserved
+    const postRealBd = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-REAL-BD'").get();
+    assert.strictEqual(postRealBd.tracking_number, 'BD-991122', 'Verified BlueDart tracking number must be preserved');
+    assert.strictEqual(postRealBd.courier_partner, 'BlueDart Luxury Express', 'Verified BlueDart carrier must be preserved');
+    assert.strictEqual(postRealBd.status, 'Shipped', 'Verified order status must be preserved');
+
+    // Row 5: PAL-2026-REAL-DEL preserved
+    const postRealDel = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-REAL-DEL'").get();
+    assert.strictEqual(postRealDel.tracking_number, 'DEL123456789', 'Verified Delhivery tracking number must be preserved');
+    assert.strictEqual(postRealDel.courier_partner, 'Delhivery', 'Verified Delhivery carrier must be preserved');
+    assert.strictEqual(postRealDel.status, 'Shipped', 'Verified order status must be preserved');
+
+    // 6. Idempotency check: running migration again produces the same clean state
+    dbModule.cleanupFabricatedCourierAwb(legacyDb);
+    const postSampleAgain = legacyDb.prepare("SELECT * FROM orders WHERE order_number = 'PAL-2026-98124'").get();
+    assert.strictEqual(postSampleAgain.tracking_number, null);
+    assert.strictEqual(postSampleAgain.courier_partner, null);
+
+    console.log('✅ PASS: [P2] Upgrade-path migration safely eliminates fabricated AWB and carrier defaults from pre-fix databases while preserving verified references');
+  } finally {
+    legacyDb.close();
+    try {
+      if (fs.existsSync(upgradeDbPath)) fs.unlinkSync(upgradeDbPath);
+      const shm = `${upgradeDbPath}-shm`;
+      const wal = `${upgradeDbPath}-wal`;
+      if (fs.existsSync(shm)) fs.unlinkSync(shm);
+      if (fs.existsSync(wal)) fs.unlinkSync(wal);
+    } catch (e) {}
+  }
+
   // 4. SSR Render & State Synchronization Test
   try {
     const React = require(path.resolve(__dirname, '../../client/node_modules/react'));
