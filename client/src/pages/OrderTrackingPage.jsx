@@ -109,7 +109,14 @@ export default function OrderTrackingPage({ trackingId: initialId, onNavigate })
             {orderInfo.courier_partner && (
               <div>
                 <span className="text-[#6E6467] block text-[10px] uppercase font-bold">Courier Partner</span>
-                <span className="font-bold text-[#1F1A1C]">{orderInfo.courier_partner}</span>
+                <span className="font-bold text-[#1F1A1C]">
+                  {orderInfo.courier_partner}
+                  {(!orderInfo.carrier_assigned_explicitly && !orderInfo.tracking_number) && (
+                    <span className="ml-1.5 text-[10px] font-normal text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      Unverified
+                    </span>
+                  )}
+                </span>
               </div>
             )}
             {orderInfo.tracking_number && (

@@ -50,7 +50,7 @@ router.get('/track/:identifier', trackOrderLimiter, optionalAuth, (req, res) => 
 
     // High-entropy lookup only (do not allow auto-increment numeric id enumeration)
     const order = db.prepare(`
-      SELECT id, order_number, tracking_number, courier_partner, estimated_delivery, status, payment_status, created_at
+      SELECT id, order_number, tracking_number, courier_partner, carrier_assigned_explicitly, estimated_delivery, status, payment_status, created_at
       FROM orders
       WHERE order_number = ? OR tracking_number = ?
     `).get(cleanId, cleanId);
@@ -64,6 +64,12 @@ router.get('/track/:identifier', trackOrderLimiter, optionalAuth, (req, res) => 
       FROM order_items 
       WHERE order_id = ?
     `).all(order.id);
+
+    // Determine carrier verification state: explicit admin assignment or verified courier-issued AWB
+    const isCarrierVerified = Boolean(
+      order.tracking_number ||
+      order.carrier_assigned_explicitly === 1
+    );
 
     // Map current order status to milestone index
     const statusMap = {
@@ -104,7 +110,9 @@ router.get('/track/:identifier', trackOrderLimiter, optionalAuth, (req, res) => 
         description: currentStageIndex >= 3
           ? (order.tracking_number
               ? `Dispatched with ${order.courier_partner || 'courier partner'} (AWB: ${order.tracking_number}).`
-              : `Handed over to ${order.courier_partner || 'courier partner'}.`)
+              : (isCarrierVerified && order.courier_partner
+                  ? `Handed over to ${order.courier_partner}.`
+                  : 'Handed over to courier partner.'))
           : (order.status === 'Cancelled'
               ? 'Shipment cancelled prior to courier dispatch.'
               : 'Package will be handed over to courier partner upon packing.'),
@@ -129,7 +137,9 @@ router.get('/track/:identifier', trackOrderLimiter, optionalAuth, (req, res) => 
       order: {
         order_number: order.order_number,
         tracking_number: order.tracking_number,
-        courier_partner: order.courier_partner,
+        courier_partner: isCarrierVerified ? order.courier_partner : null,
+        carrier_assigned_explicitly: order.carrier_assigned_explicitly ? 1 : 0,
+        is_carrier_verified: isCarrierVerified,
         estimated_delivery: order.estimated_delivery,
         status: order.status,
         timeline,
