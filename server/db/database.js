@@ -351,6 +351,7 @@ function initSchema() {
       courier_partner TEXT,
       carrier_assigned_explicitly INTEGER DEFAULT 0,
       estimated_delivery TEXT,
+      version INTEGER DEFAULT 1,
       expires_at INTEGER, -- Unix timestamp in milliseconds when pending checkout reservation expires
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -511,6 +512,12 @@ function initSchema() {
   } catch (e) {}
   try {
     db.exec(`ALTER TABLE orders ADD COLUMN carrier_assigned_explicitly INTEGER DEFAULT 0;`);
+  } catch (e) {}
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN version INTEGER DEFAULT 1;`);
+  } catch (e) {}
+  try {
+    db.exec(`UPDATE orders SET version = 1 WHERE version IS NULL;`);
   } catch (e) {}
   try {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_orders_pending_expiry ON orders(payment_status, expires_at);`);

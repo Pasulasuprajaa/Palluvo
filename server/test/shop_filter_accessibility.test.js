@@ -1250,7 +1250,7 @@ async function testShopFilterAccessibility() {
 
     // 5. Finding 2 test: Atomic status update with carrier audit
     // Reset test order to Placed, carrier_assigned_explicitly = 0, no audit
-    dbModule.prepare("UPDATE orders SET status = 'Placed', carrier_assigned_explicitly = 0, courier_partner = NULL WHERE id = ?").run(testOrderId);
+    dbModule.prepare("UPDATE orders SET status = 'Placed', carrier_assigned_explicitly = 0, courier_partner = NULL, version = 1 WHERE id = ?").run(testOrderId);
     dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
 
     // 5a. Successful status update commits both order changes and audit record atomically
@@ -1263,14 +1263,17 @@ async function testShopFilterAccessibility() {
       body: JSON.stringify({
         status: 'Shipped',
         courier_partner: 'BlueDart Luxury Express',
+        loaded_courier_partner: '',
+        expected_version: 1,
         tracking_number: 'BD-STATUS-TX-1001',
         estimated_delivery: '2026-11-01'
       })
     });
     assert.strictEqual(statusUpdateRes.status, 200, 'Status update must succeed');
-    const orderAfterStatus = dbModule.prepare("SELECT status, carrier_assigned_explicitly, courier_partner FROM orders WHERE id = ?").get(testOrderId);
+    const orderAfterStatus = dbModule.prepare("SELECT status, carrier_assigned_explicitly, courier_partner, version FROM orders WHERE id = ?").get(testOrderId);
     assert.strictEqual(orderAfterStatus.status, 'Shipped');
     assert.strictEqual(orderAfterStatus.carrier_assigned_explicitly, 1);
+    assert.strictEqual(orderAfterStatus.version, 2, 'Monotonic row version must increment from 1 to 2');
     const auditAfterStatus = dbModule.prepare("SELECT assigned_by, evidence_source FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get();
     assert.ok(auditAfterStatus, 'Audit row must be created with status update');
     assert.strictEqual(auditAfterStatus.assigned_by, String(adminUser.id));
@@ -1278,7 +1281,7 @@ async function testShopFilterAccessibility() {
 
     // 5b. Verify that prefilled carrier does NOT mark unverified defaults as explicit on ordinary lifecycle status updates
     // Set order to an unverified legacy default: courier_partner is 'BlueDart Luxury Express', but carrier_assigned_explicitly = 0, no audit row
-    dbModule.prepare("UPDATE orders SET status = 'Placed', carrier_assigned_explicitly = 0, courier_partner = 'BlueDart Luxury Express' WHERE id = ?").run(testOrderId);
+    dbModule.prepare("UPDATE orders SET status = 'Placed', carrier_assigned_explicitly = 0, courier_partner = 'BlueDart Luxury Express', version = 2 WHERE id = ?").run(testOrderId);
     dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
 
     const prefilledUpdateRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
@@ -1290,13 +1293,16 @@ async function testShopFilterAccessibility() {
       body: JSON.stringify({
         status: 'Packed',
         courier_partner: 'BlueDart Luxury Express', // Prepopulated from DB
+        loaded_courier_partner: 'BlueDart Luxury Express',
+        expected_version: 2,
         estimated_delivery: '3-4 Business Days'
       })
     });
     assert.strictEqual(prefilledUpdateRes.status, 200, 'Prefilled status update must succeed');
-    const orderAfterPrefilled = dbModule.prepare("SELECT status, carrier_assigned_explicitly, courier_partner FROM orders WHERE id = ?").get(testOrderId);
+    const orderAfterPrefilled = dbModule.prepare("SELECT status, carrier_assigned_explicitly, courier_partner, version FROM orders WHERE id = ?").get(testOrderId);
     assert.strictEqual(orderAfterPrefilled.status, 'Packed');
     assert.strictEqual(orderAfterPrefilled.carrier_assigned_explicitly, 0, 'Prefilled unverified carrier must NOT be marked explicit on ordinary status update');
+    assert.strictEqual(orderAfterPrefilled.version, 3, 'Monotonic row version must increment from 2 to 3');
     const auditCountPrefilled = dbModule.prepare("SELECT COUNT(*) as count FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get().count;
     assert.strictEqual(auditCountPrefilled, 0, 'No carrier audit row should be created for prefilled unchanged carrier');
 
@@ -1311,6 +1317,7 @@ async function testShopFilterAccessibility() {
     `);
 
     try {
+      const orderBeforeFail = dbModule.prepare("SELECT version FROM orders WHERE id = ?").get(testOrderId);
       const failStatusRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
         method: 'PUT',
         headers: {
@@ -1320,15 +1327,18 @@ async function testShopFilterAccessibility() {
         body: JSON.stringify({
           status: 'Delivered',
           courier_partner: 'Delhivery',
+          loaded_courier_partner: 'BlueDart Luxury Express',
+          expected_version: orderBeforeFail.version,
           tracking_number: 'DL-FAIL-9999'
         })
       });
       assert.strictEqual(failStatusRes.status, 500, 'Must return 500 when carrier audit fails');
 
       // Verify transaction rollback: status must still be 'Packed', courier must still be 'BlueDart Luxury Express'
-      const orderAfterFail = dbModule.prepare("SELECT status, courier_partner FROM orders WHERE id = ?").get(testOrderId);
+      const orderAfterFail = dbModule.prepare("SELECT status, courier_partner, version FROM orders WHERE id = ?").get(testOrderId);
       assert.strictEqual(orderAfterFail.status, 'Packed', 'Order status must NOT be modified when audit insert fails');
       assert.strictEqual(orderAfterFail.courier_partner, 'BlueDart Luxury Express', 'Order courier must NOT be modified when audit insert fails');
+      assert.strictEqual(orderAfterFail.version, orderBeforeFail.version, 'Order version must NOT be modified when transaction rolls back');
     } finally {
       dbModule.exec(`DROP TRIGGER IF EXISTS test_fail_carrier_audit;`);
     }
@@ -1393,10 +1403,45 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(auditCountTotal, 2, 'Total audit rows must be exactly 2 (original assignment + single recovery event)');
 
     // 7. Finding 2 test: Reject stale status forms before treating carrier as newly assigned
-    // Reset order: courier is 'Delhivery', updated_at is recorded
-    dbModule.prepare("UPDATE orders SET status = 'Shipped', courier_partner = 'Delhivery', carrier_assigned_explicitly = 1, updated_at = '2026-10-28 12:00:00' WHERE id = ?").run(testOrderId);
+    // Reset order: courier is 'Delhivery', updated_at is recorded, version = 5
+    dbModule.prepare("UPDATE orders SET status = 'Shipped', courier_partner = 'Delhivery', carrier_assigned_explicitly = 1, updated_at = '2026-10-28 12:00:00', version = 5 WHERE id = ?").run(testOrderId);
 
-    // 7a. Reject stale status form where order was updated concurrently (version mismatch)
+    // 7a. Require concurrency baseline for carrier-changing requests (400 Bad Request if missing baseline or version)
+    const noBaselineRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Delivered',
+        courier_partner: 'BlueDart Luxury Express' // Changed carrier without expected_version or loaded_courier_partner
+      })
+    });
+    assert.strictEqual(noBaselineRes.status, 400, 'Must reject carrier update without concurrency baseline with 400 Bad Request');
+    const noBaselineData = await noBaselineRes.json();
+    assert.ok(noBaselineData.error.includes('Concurrency baseline'));
+
+    // 7b. Reject stale status form where updated_at timestamp does not match
+    const staleTimestampRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Delivered',
+        courier_partner: 'Delhivery',
+        loaded_courier_partner: 'Delhivery',
+        expected_version: 5,
+        expected_updated_at: '2026-10-28 10:00:00' // Stale timestamp
+      })
+    });
+    assert.strictEqual(staleTimestampRes.status, 409, 'Must reject stale timestamp with 409 Conflict');
+    const staleTimestampData = await staleTimestampRes.json();
+    assert.ok(staleTimestampData.error.includes('modified by another session'));
+
+    // 7c. Reject stale status form where monotonic version token does not match (finer resolution than CURRENT_TIMESTAMP)
     const staleVersionRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
       method: 'PUT',
       headers: {
@@ -1405,15 +1450,16 @@ async function testShopFilterAccessibility() {
       },
       body: JSON.stringify({
         status: 'Delivered',
-        courier_partner: 'BlueDart Luxury Express',
-        expected_updated_at: '2026-10-28 10:00:00' // Stale version
+        courier_partner: 'Delhivery',
+        loaded_courier_partner: 'Delhivery',
+        expected_version: 4 // Stale monotonic version (DB has 5)
       })
     });
-    assert.strictEqual(staleVersionRes.status, 409, 'Must reject stale status form with 409 Conflict');
+    assert.strictEqual(staleVersionRes.status, 409, 'Must reject stale version with 409 Conflict');
     const staleVersionData = await staleVersionRes.json();
-    assert.ok(staleVersionData.error.includes('modified by another session'));
+    assert.ok(staleVersionData.error.includes('version conflict'));
 
-    // 7b. Reject stale status form where carrier in DB changed while form was open
+    // 7d. Reject stale status form where carrier in DB changed while form was open
     const staleCarrierRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
       method: 'PUT',
       headers: {
@@ -1422,14 +1468,15 @@ async function testShopFilterAccessibility() {
       },
       body: JSON.stringify({
         status: 'Delivered',
-        courier_partner: 'BlueDart Luxury Express', // Pre-filled stale carrier from before DB change to Delhivery
-        loaded_courier_partner: 'BlueDart Luxury Express'
+        courier_partner: 'BlueDart Luxury Express', // Form submits changed carrier
+        loaded_courier_partner: 'BlueDart Luxury Express', // Pre-filled carrier from before DB change to Delhivery
+        expected_version: 5
       })
     });
     assert.strictEqual(staleCarrierRes.status, 409, 'Must reject when loaded carrier differs from DB carrier');
 
-    // 7c. Avoid updating carrier fields when operator did not change it from the version they loaded
-    const orderCurrent = dbModule.prepare("SELECT updated_at FROM orders WHERE id = ?").get(testOrderId);
+    // 7e. Avoid updating carrier fields when operator did not change it from the version they loaded
+    const orderCurrent = dbModule.prepare("SELECT updated_at, version FROM orders WHERE id = ?").get(testOrderId);
     const unchangedCarrierRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
       method: 'PUT',
       headers: {
@@ -1440,13 +1487,47 @@ async function testShopFilterAccessibility() {
         status: 'Delivered',
         courier_partner: 'Delhivery',
         loaded_courier_partner: 'Delhivery',
+        expected_version: orderCurrent.version,
         expected_updated_at: orderCurrent.updated_at
       })
     });
     assert.strictEqual(unchangedCarrierRes.status, 200, 'Status update must succeed');
-    const orderFinal = dbModule.prepare("SELECT status, courier_partner, carrier_assigned_explicitly FROM orders WHERE id = ?").get(testOrderId);
+    const orderFinal = dbModule.prepare("SELECT status, courier_partner, carrier_assigned_explicitly, version FROM orders WHERE id = ?").get(testOrderId);
     assert.strictEqual(orderFinal.status, 'Delivered');
     assert.strictEqual(orderFinal.courier_partner, 'Delhivery');
+    assert.strictEqual(orderFinal.version, orderCurrent.version + 1, 'Version must be incremented monotonically');
+
+    // 7f. Atomic compare-and-swap: Two updates with same expected_version in same second; only one succeeds
+    const orderBeforeCas = dbModule.prepare("SELECT version FROM orders WHERE id = ?").get(testOrderId);
+    const cas1 = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Out for Delivery',
+        courier_partner: 'Delhivery',
+        loaded_courier_partner: 'Delhivery',
+        expected_version: orderBeforeCas.version
+      })
+    });
+    assert.strictEqual(cas1.status, 200, 'First CAS update must succeed');
+
+    const cas2 = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Shipped',
+        courier_partner: 'Delhivery',
+        loaded_courier_partner: 'Delhivery',
+        expected_version: orderBeforeCas.version // Same version that was just incremented!
+      })
+    });
+    assert.strictEqual(cas2.status, 409, 'Second concurrent CAS update must be rejected with 409 Conflict');
 
     console.log('✅ PASS: [P2] Admin recovery endpoints strictly attribute recovery to authenticated admin ID and enforce atomic, idempotent batches');
   } finally {

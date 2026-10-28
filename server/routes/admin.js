@@ -468,6 +468,8 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
       tracking_number,
       courier_partner,
       estimated_delivery,
+      expected_version,
+      version: clientVersion,
       expected_updated_at,
       updated_at: clientUpdatedAt,
       loaded_courier_partner,
@@ -478,14 +480,26 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
       return res.status(400).json({ error: 'Order status is required.' });
     }
 
-    const ord = db.prepare('SELECT id, order_number, courier_partner, carrier_assigned_explicitly, updated_at FROM orders WHERE id = ?').get(req.params.id);
+    const ord = db.prepare('SELECT id, order_number, courier_partner, carrier_assigned_explicitly, version, updated_at FROM orders WHERE id = ?').get(req.params.id);
     if (!ord) {
       return res.status(404).json({ error: 'Order not found.' });
     }
 
-    // Optimistic concurrency control: reject stale status forms before treating a carrier as newly assigned
-    const expectedVersion = expected_updated_at || clientUpdatedAt;
-    if (expectedVersion && ord.updated_at && String(expectedVersion).trim() !== String(ord.updated_at).trim()) {
+    const currentVersion = ord.version != null ? Number(ord.version) : 1;
+    const providedVersion = expected_version !== undefined ? expected_version : clientVersion;
+
+    // Check version token (monotonic row version with finer resolution than SQLite CURRENT_TIMESTAMP)
+    if (providedVersion !== undefined && providedVersion !== null) {
+      if (Number(providedVersion) !== currentVersion) {
+        return res.status(409).json({
+          error: 'Order was modified by another session (version conflict). Please reload and retry.'
+        });
+      }
+    }
+
+    // Check timestamp token if provided
+    const expectedVersionTs = expected_updated_at || clientUpdatedAt;
+    if (expectedVersionTs && ord.updated_at && String(expectedVersionTs).trim() !== String(ord.updated_at).trim()) {
       return res.status(409).json({
         error: 'Order was modified by another session while this form was open. Please reload and retry.'
       });
@@ -495,24 +509,35 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
     const trimmedCarrier = courier_partner !== undefined && courier_partner !== null ? String(courier_partner).trim() : null;
     const submittedCarrier = trimmedCarrier !== null ? trimmedCarrier : '';
 
-    // Baseline carrier check: if caller supplied the carrier loaded into their form, verify it hasn't changed concurrently
+    const hasCarrierBaseline = loaded_courier_partner !== undefined || expected_courier_partner !== undefined;
     const baselineCarrier = loaded_courier_partner !== undefined
       ? (loaded_courier_partner !== null ? String(loaded_courier_partner).trim() : '')
       : (expected_courier_partner !== undefined
         ? (expected_courier_partner !== null ? String(expected_courier_partner).trim() : '')
         : null);
 
-    if (baselineCarrier !== null && baselineCarrier !== currentCarrier) {
-      return res.status(409).json({
-        error: 'Order carrier was modified by another session while this form was open. Please reload and retry.'
-      });
+    const isCarrierDifferentFromDb = trimmedCarrier !== null && trimmedCarrier !== currentCarrier;
+
+    // Concurrency baseline required for carrier-changing requests (no unguarded fallback)
+    if (isCarrierDifferentFromDb) {
+      if (!hasCarrierBaseline || providedVersion === undefined || providedVersion === null) {
+        return res.status(400).json({
+          error: 'Concurrency baseline (expected_version and loaded_courier_partner) is required for carrier updates to prevent stale overwrite.'
+        });
+      }
+
+      if (baselineCarrier !== null && baselineCarrier !== currentCarrier) {
+        return res.status(409).json({
+          error: 'Order carrier was modified by another session while this form was open. Please reload and retry.'
+        });
+      }
     }
 
     // Avoid updating carrier fields unless the operator changed them from the version they loaded
     let isCarrierChanged = false;
-    let finalCarrier = null;
+    let finalCarrier = currentCarrier ? currentCarrier : null;
 
-    if (baselineCarrier !== null) {
+    if (hasCarrierBaseline && baselineCarrier !== null) {
       if (submittedCarrier !== baselineCarrier) {
         // Operator actively changed the carrier in the form
         isCarrierChanged = submittedCarrier !== '';
@@ -523,28 +548,30 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
         finalCarrier = currentCarrier ? currentCarrier : null;
       }
     } else {
-      // Direct API caller without baseline: compare submitted against current
-      isCarrierChanged = submittedCarrier !== '' && submittedCarrier !== currentCarrier;
-      finalCarrier = isCarrierChanged
-        ? submittedCarrier
-        : (trimmedCarrier !== null ? trimmedCarrier : (currentCarrier ? currentCarrier : null));
+      isCarrierChanged = false;
+      finalCarrier = currentCarrier ? currentCarrier : null;
     }
 
     const isExplicitCarrier = isCarrierChanged;
     const operatorId = req.user && req.user.id != null ? String(req.user.id) : (req.user?.email || 'admin');
 
-    // Wrap status update and carrier audit in one atomic transaction; fail closed if audit insert fails
-    const updateOrderStatusAndAudit = db.transaction((orderId, statusVal, trackingVal, carrierVal, estDeliveryVal, isExplicit, existingExplicit, orderNum, opId) => {
-      db.prepare(`
+    // Atomic compare-and-swap update: increment monotonic row version and ensure version match in WHERE clause
+    const updateOrderStatusAndAudit = db.transaction((orderId, statusVal, trackingVal, carrierVal, estDeliveryVal, isExplicit, existingExplicit, expectedVer, orderNum, opId) => {
+      const updateResult = db.prepare(`
         UPDATE orders SET
           status = ?,
           tracking_number = COALESCE(?, tracking_number),
           courier_partner = ?,
           estimated_delivery = COALESCE(?, estimated_delivery),
           carrier_assigned_explicitly = CASE WHEN ? = 1 THEN 1 ELSE ? END,
+          version = COALESCE(version, 1) + 1,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(statusVal, trackingVal, carrierVal, estDeliveryVal, isExplicit ? 1 : 0, existingExplicit, orderId);
+        WHERE id = ? AND (version = ? OR (version IS NULL AND ? = 1))
+      `).run(statusVal, trackingVal, carrierVal, estDeliveryVal, isExplicit ? 1 : 0, existingExplicit, orderId, expectedVer, expectedVer);
+
+      if (updateResult.changes === 0) {
+        throw new Error('CONCURRENCY_CONFLICT');
+      }
 
       if (isExplicit) {
         db.prepare(`
@@ -554,17 +581,27 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
       }
     });
 
-    updateOrderStatusAndAudit(
-      req.params.id,
-      status,
-      tracking_number !== undefined ? tracking_number : null,
-      finalCarrier,
-      estimated_delivery !== undefined ? estimated_delivery : null,
-      isExplicitCarrier,
-      ord.carrier_assigned_explicitly || 0,
-      ord.order_number,
-      operatorId
-    );
+    try {
+      updateOrderStatusAndAudit(
+        req.params.id,
+        status,
+        tracking_number !== undefined ? tracking_number : null,
+        finalCarrier,
+        estimated_delivery !== undefined ? estimated_delivery : null,
+        isExplicitCarrier,
+        ord.carrier_assigned_explicitly || 0,
+        currentVersion,
+        ord.order_number,
+        operatorId
+      );
+    } catch (txErr) {
+      if (txErr.message === 'CONCURRENCY_CONFLICT') {
+        return res.status(409).json({
+          error: 'Order was updated by another session (atomic version conflict). Please reload and retry.'
+        });
+      }
+      throw txErr;
+    }
 
     const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
     res.json({ message: `Order status updated to "${status}".`, order: updated });

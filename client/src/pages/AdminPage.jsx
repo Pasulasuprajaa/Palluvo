@@ -544,6 +544,7 @@ export default function AdminPage({ onNavigate }) {
                         tracking_number: order.tracking_number || '',
                         courier_partner: order.courier_partner || '',
                         loaded_courier_partner: order.courier_partner || '',
+                        expected_version: order.version != null ? order.version : 1,
                         expected_updated_at: order.updated_at,
                         estimated_delivery: order.estimated_delivery || '3-4 Business Days'
                       });
