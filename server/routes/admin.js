@@ -482,6 +482,18 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
       WHERE id = ?
     `).run(status, tracking_number, courier_partner, estimated_delivery, isExplicitCarrier ? 1 : 0, req.params.id);
 
+    if (isExplicitCarrier) {
+      try {
+        const ord = db.prepare('SELECT order_number FROM orders WHERE id = ?').get(req.params.id);
+        if (ord && ord.order_number) {
+          db.prepare(`
+            INSERT INTO carrier_assignment_audit (order_number, courier_partner, assigned_by)
+            VALUES (?, ?, 'admin')
+          `).run(ord.order_number, courier_partner);
+        }
+      } catch (e) {}
+    }
+
     const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
     res.json({ message: `Order status updated to "${status}".`, order: updated });
   } catch (err) {

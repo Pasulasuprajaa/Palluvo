@@ -457,6 +457,17 @@ function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_rot_ledger_ip ON anonymous_vote_rotation_ledger(client_ip);
     CREATE INDEX IF NOT EXISTS idx_rot_ledger_expiry ON anonymous_vote_rotation_ledger(expires_at);
+
+    -- Carrier Assignment Audit Table (Durable verified audit source for explicit admin carrier assignments)
+    CREATE TABLE IF NOT EXISTS carrier_assignment_audit (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_number TEXT NOT NULL,
+      courier_partner TEXT NOT NULL,
+      assigned_by TEXT DEFAULT 'admin',
+      assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_carrier_assignment_audit_order ON carrier_assignment_audit(order_number);
   `);
 
   // Migration: Add return columns to orders if not exist
@@ -745,19 +756,51 @@ function repairMisclassifiedCourierDefaults(targetDb = db) {
 
 /**
  * Corrective migration for databases that already recorded v3 (cleanup_misclassified_timestamp_carrier_defaults):
- * Ensures explicit carrier assignments are restored/preserved ONLY when durable evidence exists,
- * while keeping ambiguous pre-AWB rows (such as paid checkout defaults carrying legacy default 'BlueDart Luxury Express')
- * strictly unverified (carrier_assigned_explicitly = 0).
- * - For orders with durable carrier-specific evidence (non-default courier or verified real tracking number),
- *   backfills/restores carrier_assigned_explicitly = 1 via cleanupFabricatedCourierAwb.
- * - Ambiguous BlueDart/no-AWB rows lacking durable admin-assignment evidence are kept unverified (flag = 0)
- *   so customer tracking suppresses unconfirmed carriers.
+ * Safely restores explicit carrier assignments damaged by the earlier v3 implementation ONLY when durable
+ * assignment evidence is available, while strictly keeping ambiguous defaults unverified:
+ *
+ * 1. Verified Audit Source: If a durable admin-assignment audit table exists (e.g. carrier_assignment_audit or
+ *    order_carrier_assignments), recovers carrier_assigned_explicitly = 1 for orders with recorded admin assignments.
+ * 2. Carrier-Specific Evidence: Restores carrier_assigned_explicitly = 1 for non-default carriers (courier_partner != 'BlueDart Luxury Express')
+ *    or verified courier-issued AWBs (real tracking numbers) via cleanupFabricatedCourierAwb.
+ * 3. Explicitly Handled Unrecoverable State: For BlueDart/no-AWB rows where NO durable evidence or verified audit source
+ *    exists, the true historical assignment state is unrecoverable from the orders table alone. These rows are explicitly
+ *    handled by keeping them unverified (carrier_assigned_explicitly = 0) and preserving courier_partner intact in the database,
+ *    ensuring customer tracking suppresses unconfirmed carriers without erasing database records.
  */
 function restorePaidOrderExplicitCarrierAssignments(targetDb = db) {
   try {
     targetDb.exec(`ALTER TABLE orders ADD COLUMN carrier_assigned_explicitly INTEGER DEFAULT 0;`);
   } catch (e) {}
 
+  // 1. Recover from durable assignment evidence if a verified audit source is present:
+  const tables = targetDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(t => t.name);
+
+  if (tables.includes('carrier_assignment_audit')) {
+    try {
+      targetDb.prepare(`
+        UPDATE orders
+        SET carrier_assigned_explicitly = 1
+        WHERE order_number IN (
+          SELECT DISTINCT order_number FROM carrier_assignment_audit WHERE courier_partner IS NOT NULL
+        )
+      `).run();
+    } catch (e) {}
+  }
+
+  if (tables.includes('order_carrier_assignments')) {
+    try {
+      targetDb.prepare(`
+        UPDATE orders
+        SET carrier_assigned_explicitly = 1
+        WHERE order_number IN (
+          SELECT DISTINCT order_number FROM order_carrier_assignments WHERE courier_partner IS NOT NULL
+        )
+      `).run();
+    } catch (e) {}
+  }
+
+  // 2. Recover from carrier-specific evidence (custom carrier or real AWB) and sanitize placeholder AWBs:
   cleanupFabricatedCourierAwb(targetDb);
 }
 

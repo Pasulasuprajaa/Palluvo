@@ -857,10 +857,21 @@ async function testShopFilterAccessibility() {
       INSERT INTO schema_migrations (migration_name) VALUES ('cleanup_legacy_default_carrier_no_awb');
       INSERT INTO schema_migrations (migration_name) VALUES ('cleanup_misclassified_timestamp_carrier_defaults');
 
+      -- Verified audit source recording durable admin assignment evidence:
+      CREATE TABLE IF NOT EXISTS carrier_assignment_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_number TEXT NOT NULL,
+        courier_partner TEXT NOT NULL,
+        assigned_by TEXT DEFAULT 'admin',
+        assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO carrier_assignment_audit (order_number, courier_partner)
+      VALUES ('PAL-V3-PAID-PROCESSING-EXPLICIT', 'BlueDart Luxury Express');
+
       -- Fixtures on database that already recorded v3:
-      -- 1. Explicit-assignment fixture: Paid Processing order with durable admin carrier assignment
+      -- 1. Explicit-assignment fixture damaged by earlier v3: Real post-v3 flag value is 0, but durable evidence exists in verified audit source
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
-      VALUES ('PAL-V3-PAID-PROCESSING-EXPLICIT', 'Processing', 'Paid', NULL, 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 10:30:00');
+      VALUES ('PAL-V3-PAID-PROCESSING-EXPLICIT', 'Processing', 'Paid', NULL, 'BlueDart Luxury Express', 0, '2026-09-01 10:00:00', '2026-09-01 10:30:00');
 
       -- 2. Explicit-assignment fixture: Paid Placed order with durable admin carrier assignment
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
@@ -882,7 +893,7 @@ async function testShopFilterAccessibility() {
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
       VALUES ('PAL-V3-PAID-LEGACY-DEFAULT', 'Placed', 'Paid', NULL, 'BlueDart Luxury Express', 0, '2026-09-01 10:00:00', '2026-09-01 10:00:00');
 
-      -- 7. Negative fixture: Paid legacy default on Processing fulfillment order (ambiguous pre-AWB row without durable admin evidence)
+      -- 7. Negative fixture: Paid legacy default on Processing fulfillment order (ambiguous pre-AWB row without durable admin evidence, unrecoverable state)
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
       VALUES ('PAL-V3-PAID-PROCESSING-DEFAULT', 'Processing', 'Paid', NULL, 'BlueDart Luxury Express', 0, '2026-09-01 10:00:00', '2026-09-01 10:15:00');
 
@@ -891,12 +902,15 @@ async function testShopFilterAccessibility() {
       VALUES ('PAL-V3-UNPAID-DEFAULT', 'Placed', 'Pending', NULL, 'BlueDart Luxury Express', 0, '2026-09-01 10:00:00', '2026-09-01 10:00:00');
     `);
 
-    // Verify pre-conditions: v3 marker IS present, v4 marker is not, and negative fixtures have flag 0
+    // Verify pre-conditions: v3 marker IS present, v4 marker is not, and damaged explicit row has real post-v3 flag = 0
     const hasV3Pre = v3Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_misclassified_timestamp_carrier_defaults'").get();
     assert.ok(hasV3Pre, 'Pre-condition: cleanup_misclassified_timestamp_carrier_defaults must be present');
 
     const hasV4Pre = v3Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'restore_paid_order_explicit_carrier_assignments'").get();
     assert.strictEqual(hasV4Pre, undefined, 'Pre-condition: restore_paid_order_explicit_carrier_assignments must not be present initially');
+
+    const preProcExplicit = v3Db.prepare("SELECT carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-PROCESSING-EXPLICIT'").get();
+    assert.strictEqual(preProcExplicit.carrier_assigned_explicitly, 0, 'Pre-condition: damaged explicit order has real post-v3 flag = 0');
 
     const preLegacyDefault = v3Db.prepare("SELECT carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-LEGACY-DEFAULT'").get();
     assert.strictEqual(preLegacyDefault.carrier_assigned_explicitly, 0, 'Pre-condition: paid legacy default has carrier_assigned_explicitly = 0');
@@ -921,7 +935,7 @@ async function testShopFilterAccessibility() {
     // 3. Explicit assignment fixtures: durable admin evidence is preserved or restored
     const postProcExplicit = v3Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-PROCESSING-EXPLICIT'").get();
     assert.strictEqual(postProcExplicit.courier_partner, 'BlueDart Luxury Express');
-    assert.strictEqual(postProcExplicit.carrier_assigned_explicitly, 1, 'Paid Processing order with durable explicit assignment must preserve flag 1');
+    assert.strictEqual(postProcExplicit.carrier_assigned_explicitly, 1, 'Damaged paid Processing order with verified audit source must safely recover flag 1');
 
     const postPlacedExplicit = v3Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-PLACED-EXPLICIT'").get();
     assert.strictEqual(postPlacedExplicit.courier_partner, 'BlueDart Luxury Express');
