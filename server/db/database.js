@@ -745,31 +745,18 @@ function repairMisclassifiedCourierDefaults(targetDb = db) {
 
 /**
  * Corrective migration for databases that already recorded v3 (cleanup_misclassified_timestamp_carrier_defaults):
- * Safely recovers paid orders where carrier_assigned_explicitly was mistakenly reset to 0
- * by the earlier v3 implementation.
- * - For paid orders across lifecycle statuses (Placed, Processing, Packed, Shipped) where an
- *   explicit BlueDart carrier was assigned without an AWB, restores carrier_assigned_explicitly = 1
- *   so that customer tracking continues to surface the admin-assigned carrier.
+ * Ensures explicit carrier assignments are restored/preserved ONLY when durable evidence exists,
+ * while keeping ambiguous pre-AWB rows (such as paid checkout defaults carrying legacy default 'BlueDart Luxury Express')
+ * strictly unverified (carrier_assigned_explicitly = 0).
+ * - For orders with durable carrier-specific evidence (non-default courier or verified real tracking number),
+ *   backfills/restores carrier_assigned_explicitly = 1 via cleanupFabricatedCourierAwb.
+ * - Ambiguous BlueDart/no-AWB rows lacking durable admin-assignment evidence are kept unverified (flag = 0)
+ *   so customer tracking suppresses unconfirmed carriers.
  */
 function restorePaidOrderExplicitCarrierAssignments(targetDb = db) {
   try {
     targetDb.exec(`ALTER TABLE orders ADD COLUMN carrier_assigned_explicitly INTEGER DEFAULT 0;`);
   } catch (e) {}
-
-  const columns = targetDb.pragma('table_info(orders)').map(c => c.name);
-  const hasPaymentStatus = columns.includes('payment_status');
-
-  const paidFilter = hasPaymentStatus
-    ? "AND (payment_status IS NULL OR payment_status != 'Pending')"
-    : "";
-
-  targetDb.prepare(`
-    UPDATE orders
-    SET carrier_assigned_explicitly = 1
-    WHERE courier_partner = 'BlueDart Luxury Express'
-      AND tracking_number IS NULL
-      ${paidFilter}
-  `).run();
 
   cleanupFabricatedCourierAwb(targetDb);
 }
