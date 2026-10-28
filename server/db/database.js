@@ -744,12 +744,45 @@ function repairMisclassifiedCourierDefaults(targetDb = db) {
 }
 
 /**
+ * Corrective migration for databases that already recorded v3 (cleanup_misclassified_timestamp_carrier_defaults):
+ * Safely recovers paid orders where carrier_assigned_explicitly was mistakenly reset to 0
+ * by the earlier v3 implementation.
+ * - For paid orders across lifecycle statuses (Placed, Processing, Packed, Shipped) where an
+ *   explicit BlueDart carrier was assigned without an AWB, restores carrier_assigned_explicitly = 1
+ *   so that customer tracking continues to surface the admin-assigned carrier.
+ */
+function restorePaidOrderExplicitCarrierAssignments(targetDb = db) {
+  try {
+    targetDb.exec(`ALTER TABLE orders ADD COLUMN carrier_assigned_explicitly INTEGER DEFAULT 0;`);
+  } catch (e) {}
+
+  const columns = targetDb.pragma('table_info(orders)').map(c => c.name);
+  const hasPaymentStatus = columns.includes('payment_status');
+
+  const paidFilter = hasPaymentStatus
+    ? "AND (payment_status IS NULL OR payment_status != 'Pending')"
+    : "";
+
+  targetDb.prepare(`
+    UPDATE orders
+    SET carrier_assigned_explicitly = 1
+    WHERE courier_partner = 'BlueDart Luxury Express'
+      AND tracking_number IS NULL
+      ${paidFilter}
+  `).run();
+
+  cleanupFabricatedCourierAwb(targetDb);
+}
+
+/**
  * Applies courier and AWB cleanup migrations idempotently:
  * - 'cleanup_fabricated_courier_awb': Initial migration clearing fake AWBs and undispatched defaults
  * - 'cleanup_legacy_default_carrier_no_awb': Corrective migration ensuring even databases that already ran
  *   the initial migration have legacy default 'BlueDart Luxury Express' cleared from no-AWB rows regardless of status.
  * - 'cleanup_misclassified_timestamp_carrier_defaults': Corrective migration repairing orders mistakenly flagged
  *   as explicit by the timestamp heuristic in commit ce02ddf.
+ * - 'restore_paid_order_explicit_carrier_assignments': Corrective migration for databases that already recorded
+ *   v3, safely recovering explicit carrier assignments on paid orders that were reset by the earlier v3 implementation.
  */
 function applyCourierMigrations(targetDb = db) {
   targetDb.exec(`
@@ -771,10 +804,20 @@ function applyCourierMigrations(targetDb = db) {
     targetDb.prepare("INSERT OR IGNORE INTO schema_migrations (migration_name) VALUES ('cleanup_legacy_default_carrier_no_awb')").run();
   }
 
-  const v3Ran = targetDb.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_misclassified_timestamp_carrier_defaults'").get();
-  if (!v3Ran) {
+  const v3AlreadyRecorded = Boolean(targetDb.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_misclassified_timestamp_carrier_defaults'").get());
+  if (!v3AlreadyRecorded) {
     repairMisclassifiedCourierDefaults(targetDb);
     targetDb.prepare("INSERT OR IGNORE INTO schema_migrations (migration_name) VALUES ('cleanup_misclassified_timestamp_carrier_defaults')").run();
+  }
+
+  const v4Ran = targetDb.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'restore_paid_order_explicit_carrier_assignments'").get();
+  if (!v4Ran) {
+    // If v3 was recorded prior to this migration pass (by the earlier flawed implementation),
+    // restore the explicit carrier flag on affected paid orders.
+    if (v3AlreadyRecorded) {
+      restorePaidOrderExplicitCarrierAssignments(targetDb);
+    }
+    targetDb.prepare("INSERT OR IGNORE INTO schema_migrations (migration_name) VALUES ('restore_paid_order_explicit_carrier_assignments')").run();
   }
 }
 
@@ -783,6 +826,7 @@ initSchema();
 db.initSchema = initSchema;
 db.cleanupFabricatedCourierAwb = cleanupFabricatedCourierAwb;
 db.repairMisclassifiedCourierDefaults = repairMisclassifiedCourierDefaults;
+db.restorePaidOrderExplicitCarrierAssignments = restorePaidOrderExplicitCarrierAssignments;
 db.applyCourierMigrations = applyCourierMigrations;
 
 module.exports = db;
