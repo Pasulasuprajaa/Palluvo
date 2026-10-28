@@ -1276,7 +1276,31 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(auditAfterStatus.assigned_by, String(adminUser.id));
     assert.strictEqual(auditAfterStatus.evidence_source, 'admin-dashboard-status-update');
 
-    // 5b. Atomic rollback test: If carrier audit write fails, entire transaction rolls back and order is unchanged
+    // 5b. Verify that prefilled carrier does NOT mark unverified defaults as explicit on ordinary lifecycle status updates
+    // Set order to an unverified legacy default: courier_partner is 'BlueDart Luxury Express', but carrier_assigned_explicitly = 0, no audit row
+    dbModule.prepare("UPDATE orders SET status = 'Placed', carrier_assigned_explicitly = 0, courier_partner = 'BlueDart Luxury Express' WHERE id = ?").run(testOrderId);
+    dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
+
+    const prefilledUpdateRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Packed',
+        courier_partner: 'BlueDart Luxury Express', // Prepopulated from DB
+        estimated_delivery: '3-4 Business Days'
+      })
+    });
+    assert.strictEqual(prefilledUpdateRes.status, 200, 'Prefilled status update must succeed');
+    const orderAfterPrefilled = dbModule.prepare("SELECT status, carrier_assigned_explicitly, courier_partner FROM orders WHERE id = ?").get(testOrderId);
+    assert.strictEqual(orderAfterPrefilled.status, 'Packed');
+    assert.strictEqual(orderAfterPrefilled.carrier_assigned_explicitly, 0, 'Prefilled unverified carrier must NOT be marked explicit on ordinary status update');
+    const auditCountPrefilled = dbModule.prepare("SELECT COUNT(*) as count FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get().count;
+    assert.strictEqual(auditCountPrefilled, 0, 'No carrier audit row should be created for prefilled unchanged carrier');
+
+    // 5c. Atomic rollback test: If carrier audit write fails, entire transaction rolls back and order is unchanged
     // Create a temporary trigger to simulate audit write failure
     dbModule.exec(`
       CREATE TRIGGER test_fail_carrier_audit
@@ -1301,13 +1325,66 @@ async function testShopFilterAccessibility() {
       });
       assert.strictEqual(failStatusRes.status, 500, 'Must return 500 when carrier audit fails');
 
-      // Verify transaction rollback: status must still be 'Shipped', courier must still be 'BlueDart Luxury Express'
+      // Verify transaction rollback: status must still be 'Packed', courier must still be 'BlueDart Luxury Express'
       const orderAfterFail = dbModule.prepare("SELECT status, courier_partner FROM orders WHERE id = ?").get(testOrderId);
-      assert.strictEqual(orderAfterFail.status, 'Shipped', 'Order status must NOT be modified when audit insert fails');
+      assert.strictEqual(orderAfterFail.status, 'Packed', 'Order status must NOT be modified when audit insert fails');
       assert.strictEqual(orderAfterFail.courier_partner, 'BlueDart Luxury Express', 'Order courier must NOT be modified when audit insert fails');
     } finally {
       dbModule.exec(`DROP TRIGGER IF EXISTS test_fail_carrier_audit;`);
     }
+
+    // 6. Finding 2 test: Evidence preservation when deduplicating against prior generic dashboard audit entry
+    // Seed generic dashboard audit entry
+    dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
+    dbModule.prepare(`
+      INSERT INTO carrier_assignment_audit (order_number, courier_partner, assigned_by, evidence_source)
+      VALUES ('PAL-ADMIN-REC-TEST-1', 'BlueDart Luxury Express', 'legacy-admin', 'admin-dashboard-status-update')
+    `).run();
+
+    // Now run operator recovery with real manifest evidence
+    const recoveryEnrichRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/recover-carriers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        recovery_batches: [
+          {
+            order_number: 'PAL-ADMIN-REC-TEST-1',
+            courier_partner: 'BlueDart Luxury Express',
+            evidence_source: 'Warehouse dispatch manifest 2026-WD-9911'
+          }
+        ]
+      })
+    });
+    assert.strictEqual(recoveryEnrichRes.status, 200, 'Recovery must succeed');
+
+    // Verify that the audit record preserves the genuine manifest evidence and authenticated operator
+    const auditRowEnriched = dbModule.prepare("SELECT assigned_by, evidence_source FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get();
+    assert.strictEqual(auditRowEnriched.assigned_by, String(adminUser.id), 'Audit row actor must be updated to authenticated operator ID');
+    assert.strictEqual(auditRowEnriched.evidence_source, 'Warehouse dispatch manifest 2026-WD-9911', 'Audit row evidence must be preserved and enriched with manifest reference');
+
+    // Repeated recovery with same manifest evidence must remain idempotent
+    const repeatEnrichRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/recover-carriers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        recovery_batches: [
+          {
+            order_number: 'PAL-ADMIN-REC-TEST-1',
+            courier_partner: 'BlueDart Luxury Express',
+            evidence_source: 'Warehouse dispatch manifest 2026-WD-9911'
+          }
+        ]
+      })
+    });
+    assert.strictEqual(repeatEnrichRes.status, 200);
+    const auditCountEnriched = dbModule.prepare("SELECT COUNT(*) as count FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get().count;
+    assert.strictEqual(auditCountEnriched, 1, 'Repeated recovery must not duplicate enriched audit rows');
 
     console.log('✅ PASS: [P2] Admin recovery endpoints strictly attribute recovery to authenticated admin ID and enforce atomic, idempotent batches');
   } finally {

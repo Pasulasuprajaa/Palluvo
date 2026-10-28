@@ -469,27 +469,33 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
       return res.status(400).json({ error: 'Order status is required.' });
     }
 
-    const ord = db.prepare('SELECT id, order_number FROM orders WHERE id = ?').get(req.params.id);
+    const ord = db.prepare('SELECT id, order_number, courier_partner, carrier_assigned_explicitly FROM orders WHERE id = ?').get(req.params.id);
     if (!ord) {
       return res.status(404).json({ error: 'Order not found.' });
     }
 
-    const isExplicitCarrier = courier_partner !== undefined && courier_partner !== null && String(courier_partner).trim() !== '';
-    const trimmedCarrier = isExplicitCarrier ? String(courier_partner).trim() : null;
+    const currentCarrier = ord.courier_partner ? String(ord.courier_partner).trim() : '';
+    const trimmedCarrier = courier_partner !== undefined && courier_partner !== null ? String(courier_partner).trim() : null;
+    const submittedCarrier = trimmedCarrier !== null ? trimmedCarrier : '';
+
+    // Compare against previous value: only treat as a new explicit assignment if a nonblank carrier
+    // was newly assigned or changed from the prefilled stored value.
+    const isCarrierChanged = submittedCarrier !== '' && submittedCarrier !== currentCarrier;
+    const isExplicitCarrier = isCarrierChanged;
     const operatorId = req.user && req.user.id != null ? String(req.user.id) : (req.user?.email || 'admin');
 
     // Wrap status update and carrier audit in one atomic transaction; fail closed if audit insert fails
-    const updateOrderStatusAndAudit = db.transaction((orderId, statusVal, trackingVal, carrierVal, estDeliveryVal, isExplicit, orderNum, opId) => {
+    const updateOrderStatusAndAudit = db.transaction((orderId, statusVal, trackingVal, carrierVal, estDeliveryVal, isExplicit, existingExplicit, orderNum, opId) => {
       db.prepare(`
         UPDATE orders SET
           status = ?,
           tracking_number = COALESCE(?, tracking_number),
           courier_partner = COALESCE(?, courier_partner),
           estimated_delivery = COALESCE(?, estimated_delivery),
-          carrier_assigned_explicitly = CASE WHEN ? = 1 THEN 1 ELSE carrier_assigned_explicitly END,
+          carrier_assigned_explicitly = CASE WHEN ? = 1 THEN 1 ELSE ? END,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(statusVal, trackingVal, carrierVal, estDeliveryVal, isExplicit ? 1 : 0, orderId);
+      `).run(statusVal, trackingVal, carrierVal, estDeliveryVal, isExplicit ? 1 : 0, existingExplicit, orderId);
 
       if (isExplicit) {
         db.prepare(`
@@ -506,6 +512,7 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
       trimmedCarrier !== null ? trimmedCarrier : (courier_partner !== undefined ? courier_partner : null),
       estimated_delivery !== undefined ? estimated_delivery : null,
       isExplicitCarrier,
+      ord.carrier_assigned_explicitly || 0,
       ord.order_number,
       operatorId
     );

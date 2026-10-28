@@ -798,8 +798,14 @@ function recoverCarrierAssignmentsWithVerifiedEvidence(verifiedRecords = [], tar
   const selectOrder = targetDb.prepare(
     'SELECT order_number, courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = ?'
   );
-  const checkAudit = targetDb.prepare(
-    'SELECT id FROM carrier_assignment_audit WHERE order_number = ? AND courier_partner = ?'
+  const checkExactAudit = targetDb.prepare(
+    'SELECT id FROM carrier_assignment_audit WHERE order_number = ? AND courier_partner = ? AND evidence_source = ?'
+  );
+  const checkGenericAudit = targetDb.prepare(
+    "SELECT id FROM carrier_assignment_audit WHERE order_number = ? AND courier_partner = ? AND (evidence_source IS NULL OR evidence_source = '' OR evidence_source = 'admin-dashboard-status-update')"
+  );
+  const updateAudit = targetDb.prepare(
+    'UPDATE carrier_assignment_audit SET assigned_by = ?, evidence_source = ?, assigned_at = CURRENT_TIMESTAMP WHERE id = ?'
   );
   const updateOrder = targetDb.prepare(`
     UPDATE orders
@@ -867,10 +873,17 @@ function recoverCarrierAssignmentsWithVerifiedEvidence(verifiedRecords = [], tar
     for (const item of records) {
       updateOrder.run(item.courier_partner, item.order_number);
 
-      // Idempotent audit check: avoid duplicate audit entries for already recovered order/carrier
-      const existingAudit = checkAudit.get(item.order_number, item.courier_partner);
-      if (!existingAudit) {
-        insertAudit.run(item.order_number, item.courier_partner, item.assigned_by, item.evidence_source);
+      // Idempotent audit check: avoid duplicate audit entries for the same order, carrier, and verified evidence source
+      const exactAudit = checkExactAudit.get(item.order_number, item.courier_partner, item.evidence_source);
+      if (!exactAudit) {
+        // If a generic dashboard entry exists for this order/carrier, enrich it with the supplied verified evidence
+        const genericAudit = checkGenericAudit.get(item.order_number, item.courier_partner);
+        if (genericAudit) {
+          updateAudit.run(item.assigned_by, item.evidence_source, genericAudit.id);
+        } else {
+          // Otherwise record recovery as a distinct audit event
+          insertAudit.run(item.order_number, item.courier_partner, item.assigned_by, item.evidence_source);
+        }
       }
 
       results.recovered.push(item.order_number);
