@@ -487,8 +487,8 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
         const ord = db.prepare('SELECT order_number FROM orders WHERE id = ?').get(req.params.id);
         if (ord && ord.order_number) {
           db.prepare(`
-            INSERT INTO carrier_assignment_audit (order_number, courier_partner, assigned_by)
-            VALUES (?, ?, 'admin')
+            INSERT INTO carrier_assignment_audit (order_number, courier_partner, assigned_by, evidence_source)
+            VALUES (?, ?, 'admin', 'admin-dashboard-status-update')
           `).run(ord.order_number, courier_partner);
         }
       } catch (e) {}
@@ -499,6 +499,52 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
   } catch (err) {
     console.error('Admin update order error:', err);
     res.status(500).json({ error: 'Failed to update order status.' });
+  }
+});
+
+// POST /api/admin/orders/recover-carriers (Operator recovery path for verified carrier assignments)
+router.post('/orders/recover-carriers', requireDurableStorage, (req, res) => {
+  try {
+    const { recovery_batches } = req.body;
+    if (!Array.isArray(recovery_batches) || recovery_batches.length === 0) {
+      return res.status(400).json({ error: 'recovery_batches must be a non-empty array of verified order carrier records.' });
+    }
+
+    const results = db.recoverCarrierAssignmentsWithVerifiedEvidence(recovery_batches, db);
+    res.json({
+      message: `Recovered ${results.recovered.length} carrier assignments with verified operator evidence.`,
+      ...results
+    });
+  } catch (err) {
+    console.error('Operator carrier recovery error:', err);
+    res.status(500).json({ error: 'Failed to recover carrier assignments.' });
+  }
+});
+
+// POST /api/admin/orders/:id/verify-carrier (Operator single-order carrier verification with durable audit)
+router.post('/orders/:id/verify-carrier', requireDurableStorage, (req, res) => {
+  try {
+    const { courier_partner, evidence_source, notes } = req.body;
+    const ord = db.prepare('SELECT id, order_number, courier_partner FROM orders WHERE id = ?').get(req.params.id);
+    if (!ord) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+
+    const courier = courier_partner || ord.courier_partner || 'BlueDart Luxury Express';
+    const evidence = evidence_source || notes || 'Operator manual verification';
+
+    const results = db.recoverCarrierAssignmentsWithVerifiedEvidence([{
+      order_number: ord.order_number,
+      courier_partner: courier,
+      evidence_source: evidence,
+      verified_by: 'admin-operator'
+    }], db);
+
+    const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+    res.json({ message: 'Carrier assignment verified and recorded in audit log.', order: updated, results });
+  } catch (err) {
+    console.error('Admin verify carrier error:', err);
+    res.status(500).json({ error: 'Failed to verify carrier assignment.' });
   }
 });
 

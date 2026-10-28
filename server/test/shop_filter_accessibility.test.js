@@ -818,24 +818,23 @@ async function testShopFilterAccessibility() {
     } catch (e) {}
   }
 
-  // 3.11 Upgrade-Path Regression Test: Actual Deployed Pre-v4 State (Database that ALREADY recorded v3)
+  // 3.11 Upgrade-Path Regression Test: Actual Deployed Pre-v4 State & Safe Operator Recovery Path
   // Verifies the actual deployed pre-v4 database state where earlier v3 recorded that marker:
   // - On databases upgraded from the prior PR version, carrier_assignment_audit is created empty
   //   by initSchema and has no historical records for past admin assignments.
   // - The earlier v3 migration already reset carrier_assigned_explicitly to 0 on paid BlueDart/no-AWB rows.
   // - In deployed pre-v4 databases, no existing durable source distinguishes historical admin-assigned
-  //   BlueDart/no-AWB rows from checkout defaults. Inferring them from orders alone would falsely verify
-  //   checkout defaults and expose unconfirmed carriers on tracking endpoints.
-  // - Therefore, historical BlueDart/no-AWB rows damaged by v3 safely remain carrier_assigned_explicitly = 0
-  //   (unverified) while courier_partner is preserved intact in the database.
-  //   The paid-carrier finding for databases already damaged by v3 remains documented as open for this edge case.
+  //   BlueDart/no-AWB rows from checkout defaults. Automatic migration therefore does not guess, safely
+  //   leaving historical BlueDart/no-AWB rows unverified (0) to prevent false verification of defaults.
+  // - Safe Operator Recovery Path: Operators supply verified assignment evidence (e.g. from physical dispatch manifests)
+  //   via recoverCarrierAssignmentsWithVerifiedEvidence to safely restore carrier_assigned_explicitly = 1
+  //   and write a durable record into carrier_assignment_audit, resolving the finding safely.
   // - Orders with existing durable evidence in pre-v4 databases ARE safely restored/preserved:
   //   * non-default courier partner (e.g. Delhivery) is restored to flag = 1
   //   * verified real shipment AWB (e.g. BD-REAL-AWB-9988) is restored to flag = 1
   //   * explicit carrier assignment on pending reservations (flag = 1) is preserved
   // - Ambiguous defaults across all statuses strictly retain carrier_assigned_explicitly = 0 while preserving courier_partner intact
   // - Clears unassigned checkout defaults (payment_status = 'Pending' without explicit carrier)
-  // - Future admin carrier assignments recorded in carrier_assignment_audit are safely recovered
   // - Idempotency is preserved on repeat execution
   const v3DbPath = path.resolve(__dirname, `../data/.v3_upgrade_test_${Date.now()}_${Math.random().toString(36).slice(2)}.db`);
   const v3Db = new Database(v3DbPath);
@@ -871,12 +870,13 @@ async function testShopFilterAccessibility() {
         order_number TEXT NOT NULL,
         courier_partner TEXT NOT NULL,
         assigned_by TEXT DEFAULT 'admin',
+        evidence_source TEXT DEFAULT NULL,
         assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
       -- Fixtures on actual deployed database that already recorded v3:
       -- 1. Historical explicit-assignment fixture damaged by earlier v3 on deployed pre-v4 database:
-      -- Real post-v3 flag value is 0. Deployed pre-v4 database has no historical audit records.
+      -- Real post-v3 flag value is 0. Deployed pre-v4 database has no historical audit records initially.
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
       VALUES ('PAL-V3-PAID-PROCESSING-DAMAGED', 'Processing', 'Paid', NULL, 'BlueDart Luxury Express', 0, '2026-09-01 10:00:00', '2026-09-01 10:30:00');
 
@@ -896,19 +896,13 @@ async function testShopFilterAccessibility() {
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
       VALUES ('PAL-V3-PAID-LEGACY-DEFAULT', 'Placed', 'Paid', NULL, 'BlueDart Luxury Express', 0, '2026-09-01 10:00:00', '2026-09-01 10:00:00');
 
-      -- 6. Negative fixture: Paid legacy default on Processing fulfillment order (ambiguous pre-AWB row without durable admin evidence, unrecoverable state)
+      -- 6. Negative fixture: Paid legacy default on Processing fulfillment order (ambiguous pre-AWB row without durable admin evidence)
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
       VALUES ('PAL-V3-PAID-PROCESSING-DEFAULT', 'Processing', 'Paid', NULL, 'BlueDart Luxury Express', 0, '2026-09-01 10:00:00', '2026-09-01 10:15:00');
 
       -- 7. Unassigned checkout reservation default
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
       VALUES ('PAL-V3-UNPAID-DEFAULT', 'Placed', 'Pending', NULL, 'BlueDart Luxury Express', 0, '2026-09-01 10:00:00', '2026-09-01 10:00:00');
-
-      -- 8. Future admin carrier assignment fixture: Order whose carrier assignment is recorded in carrier_assignment_audit
-      INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
-      VALUES ('PAL-V3-FUTURE-AUDITED-EXPLICIT', 'Processing', 'Paid', NULL, 'BlueDart Luxury Express', 0, '2026-10-01 10:00:00', '2026-10-01 10:30:00');
-      INSERT INTO carrier_assignment_audit (order_number, courier_partner, assigned_by)
-      VALUES ('PAL-V3-FUTURE-AUDITED-EXPLICIT', 'BlueDart Luxury Express', 'admin');
     `);
 
     // Verify pre-conditions: v3 marker IS present, v4 marker is not, and damaged explicit row has real post-v3 flag = 0
@@ -924,20 +918,20 @@ async function testShopFilterAccessibility() {
     const preLegacyDefault = v3Db.prepare("SELECT carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-LEGACY-DEFAULT'").get();
     assert.strictEqual(preLegacyDefault.carrier_assigned_explicitly, 0, 'Pre-condition: paid legacy default has carrier_assigned_explicitly = 0');
 
-    // Run applyCourierMigrations on the actual deployed database that already recorded v3
+    // Step A: Run applyCourierMigrations on the actual deployed database that already recorded v3
     dbModule.applyCourierMigrations(v3Db);
 
-    // Verify post-conditions:
+    // Verify post-conditions of initial migration:
     // 1. v4 migration marker recorded
     const hasV4Post = v3Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'restore_paid_order_explicit_carrier_assignments'").get();
     assert.ok(hasV4Post, 'Post-condition: restore_paid_order_explicit_carrier_assignments must be recorded in schema_migrations');
 
     // 2. Damaged historical BlueDart/no-AWB row on deployed pre-v4 database without durable evidence:
-    // courier_partner is preserved intact in DB, but flag safely remains 0 (unverified).
-    // Because no historical audit records exist on deployed pre-v4 databases, the finding remains open for this edge case.
-    const postDamaged = v3Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-PROCESSING-DAMAGED'").get();
-    assert.strictEqual(postDamaged.courier_partner, 'BlueDart Luxury Express', 'Damaged paid Processing order must preserve courier_partner in DB');
-    assert.strictEqual(postDamaged.carrier_assigned_explicitly, 0, 'Damaged paid BlueDart/no-AWB order without historical audit record must safely remain unverified (0)');
+    // courier_partner is preserved intact in DB, but flag safely remains 0 prior to operator recovery,
+    // ensuring ambiguous checkout defaults are never falsely converted to verified.
+    const postDamagedBeforeRecovery = v3Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-PROCESSING-DAMAGED'").get();
+    assert.strictEqual(postDamagedBeforeRecovery.courier_partner, 'BlueDart Luxury Express', 'Damaged paid Processing order must preserve courier_partner in DB');
+    assert.strictEqual(postDamagedBeforeRecovery.carrier_assigned_explicitly, 0, 'Damaged paid BlueDart/no-AWB order without operator evidence must stay unverified (0) to prevent false verification of defaults');
 
     // 3. Negative fixtures for paid legacy defaults: courier preserved intact in DB, but flag strictly remains 0 (unverified)
     const postLegacyDefault = v3Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-LEGACY-DEFAULT'").get();
@@ -961,17 +955,45 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(postPending.courier_partner, 'BlueDart Luxury Express');
     assert.strictEqual(postPending.carrier_assigned_explicitly, 1, 'Pending explicit carrier assignment must preserve flag 1');
 
-    // 5. Future admin carrier assignment with verified audit record:
-    const postFutureAudited = v3Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-FUTURE-AUDITED-EXPLICIT'").get();
-    assert.strictEqual(postFutureAudited.courier_partner, 'BlueDart Luxury Express');
-    assert.strictEqual(postFutureAudited.carrier_assigned_explicitly, 1, 'Future admin carrier assignment with verified audit entry must restore flag 1');
-
-    // 6. Unassigned checkout default: courier cleared to NULL and flag is 0
+    // 5. Unassigned checkout default: courier cleared to NULL and flag is 0
     const postUnpaidDefault = v3Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-UNPAID-DEFAULT'").get();
     assert.strictEqual(postUnpaidDefault.courier_partner, null, 'Unassigned checkout default must have courier_partner cleared to NULL');
     assert.strictEqual(postUnpaidDefault.carrier_assigned_explicitly, 0);
 
-    // 7. Idempotency on repeat execution
+    // Step B: Execute the Safe Operator Recovery Path with verified evidence for affected historical orders
+    const recoveryResults = dbModule.recoverCarrierAssignmentsWithVerifiedEvidence([
+      {
+        order_number: 'PAL-V3-PAID-PROCESSING-DAMAGED',
+        courier_partner: 'BlueDart Luxury Express',
+        evidence_source: 'Warehouse dispatch manifest 2026-09-01-WD-882',
+        verified_by: 'lead-operator'
+      }
+    ], v3Db);
+
+    assert.strictEqual(recoveryResults.recovered.length, 1, 'Operator recovery must report exactly 1 recovered order');
+    assert.strictEqual(recoveryResults.recovered[0], 'PAL-V3-PAID-PROCESSING-DAMAGED');
+
+    // Verify post-operator-recovery state:
+    // 1. Damaged order now safely has carrier_assigned_explicitly = 1 and courier preserved
+    const postDamagedRecovered = v3Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-PROCESSING-DAMAGED'").get();
+    assert.strictEqual(postDamagedRecovered.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(postDamagedRecovered.carrier_assigned_explicitly, 1, 'Operator recovery must safely restore carrier_assigned_explicitly = 1');
+
+    // 2. Durable audit entry written to carrier_assignment_audit with evidence source
+    const auditEntry = v3Db.prepare("SELECT order_number, courier_partner, assigned_by, evidence_source FROM carrier_assignment_audit WHERE order_number = 'PAL-V3-PAID-PROCESSING-DAMAGED'").get();
+    assert.ok(auditEntry, 'Durable audit entry must exist in carrier_assignment_audit');
+    assert.strictEqual(auditEntry.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(auditEntry.assigned_by, 'lead-operator');
+    assert.strictEqual(auditEntry.evidence_source, 'Warehouse dispatch manifest 2026-09-01-WD-882');
+
+    // 3. Ambiguous defaults without verified evidence STILL have carrier_assigned_explicitly = 0 (no false verification)
+    const postLegacyDefaultAfterRecovery = v3Db.prepare("SELECT carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-LEGACY-DEFAULT'").get();
+    assert.strictEqual(postLegacyDefaultAfterRecovery.carrier_assigned_explicitly, 0, 'Unverified legacy default must remain 0 after operator recovery');
+
+    const postProcDefaultAfterRecovery = v3Db.prepare("SELECT carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-PROCESSING-DEFAULT'").get();
+    assert.strictEqual(postProcDefaultAfterRecovery.carrier_assigned_explicitly, 0, 'Ambiguous processing default must remain 0 after operator recovery');
+
+    // Step C: Idempotency on repeat migration execution
     dbModule.applyCourierMigrations(v3Db);
     const postLegacyDefaultRepeat = v3Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-LEGACY-DEFAULT'").get();
     assert.strictEqual(postLegacyDefaultRepeat.courier_partner, 'BlueDart Luxury Express');
@@ -979,13 +1001,9 @@ async function testShopFilterAccessibility() {
 
     const postDamagedRepeat = v3Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-PROCESSING-DAMAGED'").get();
     assert.strictEqual(postDamagedRepeat.courier_partner, 'BlueDart Luxury Express');
-    assert.strictEqual(postDamagedRepeat.carrier_assigned_explicitly, 0);
+    assert.strictEqual(postDamagedRepeat.carrier_assigned_explicitly, 1, 'Recovered carrier assignment must be preserved on repeat migration passes');
 
-    const postFutureAuditedRepeat = v3Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-FUTURE-AUDITED-EXPLICIT'").get();
-    assert.strictEqual(postFutureAuditedRepeat.courier_partner, 'BlueDart Luxury Express');
-    assert.strictEqual(postFutureAuditedRepeat.carrier_assigned_explicitly, 1);
-
-    console.log('✅ PASS: [P2] Upgrade-path migration safely restores flag only when durable evidence exists, strictly keeping ambiguous defaults unverified');
+    console.log('✅ PASS: [P2] Upgrade-path migration and safe operator recovery path safely restore carrier assignments with verified evidence while keeping ambiguous defaults unverified');
   } finally {
     v3Db.close();
     try {

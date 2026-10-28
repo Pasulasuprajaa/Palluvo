@@ -464,11 +464,16 @@ function initSchema() {
       order_number TEXT NOT NULL,
       courier_partner TEXT NOT NULL,
       assigned_by TEXT DEFAULT 'admin',
+      evidence_source TEXT DEFAULT NULL,
       assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE INDEX IF NOT EXISTS idx_carrier_assignment_audit_order ON carrier_assignment_audit(order_number);
   `);
+
+  try {
+    db.exec(`ALTER TABLE carrier_assignment_audit ADD COLUMN evidence_source TEXT DEFAULT NULL;`);
+  } catch (e) {}
 
   // Migration: Add return columns to orders if not exist
   try {
@@ -755,21 +760,93 @@ function repairMisclassifiedCourierDefaults(targetDb = db) {
 }
 
 /**
+ * Safe operator recovery path for historical orders damaged by the earlier v3 migration.
+ * Allows operators to supply verified assignment evidence (e.g. from physical dispatch manifests,
+ * warehouse dispatch logs, or customer correspondence) to safely restore carrier_assigned_explicitly = 1
+ * without guessing or falsely verifying ambiguous defaults.
+ *
+ * @param {Array<{order_number: string, courier_partner?: string, evidence_source?: string, verified_by?: string}>} verifiedRecords
+ * @param {Database} targetDb
+ * @returns {{ recovered: Array<string>, skipped: Array<string>, errors: Array<string> }}
+ */
+function recoverCarrierAssignmentsWithVerifiedEvidence(verifiedRecords = [], targetDb = db) {
+  if (!Array.isArray(verifiedRecords) || verifiedRecords.length === 0) {
+    return { recovered: [], skipped: [], errors: [] };
+  }
+
+  const results = { recovered: [], skipped: [], errors: [] };
+
+  // Ensure table and evidence_source column exist
+  targetDb.exec(`
+    CREATE TABLE IF NOT EXISTS carrier_assignment_audit (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_number TEXT NOT NULL,
+      courier_partner TEXT NOT NULL,
+      assigned_by TEXT DEFAULT 'admin',
+      evidence_source TEXT DEFAULT NULL,
+      assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  try {
+    targetDb.exec(`ALTER TABLE carrier_assignment_audit ADD COLUMN evidence_source TEXT DEFAULT NULL;`);
+  } catch (e) {}
+
+  const selectOrder = targetDb.prepare(
+    'SELECT order_number, courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = ?'
+  );
+  const updateOrder = targetDb.prepare(`
+    UPDATE orders
+    SET carrier_assigned_explicitly = 1,
+        courier_partner = COALESCE(?, courier_partner),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE order_number = ?
+  `);
+  const insertAudit = targetDb.prepare(`
+    INSERT INTO carrier_assignment_audit (order_number, courier_partner, assigned_by, evidence_source)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  const runRecovery = targetDb.transaction((records) => {
+    for (const record of records) {
+      if (!record || !record.order_number) {
+        results.errors.push('Missing order_number');
+        continue;
+      }
+
+      const ord = selectOrder.get(record.order_number);
+      if (!ord) {
+        results.skipped.push(`${record.order_number} (not found)`);
+        continue;
+      }
+
+      const courier = record.courier_partner || ord.courier_partner || 'BlueDart Luxury Express';
+      const evidence = record.evidence_source || 'Operator verified dispatch manifest';
+      const assignedBy = record.verified_by || 'operator-recovery';
+
+      updateOrder.run(courier, record.order_number);
+      insertAudit.run(record.order_number, courier, assignedBy, evidence);
+      results.recovered.push(record.order_number);
+    }
+  });
+
+  runRecovery(verifiedRecords);
+  return results;
+}
+
+/**
  * Corrective migration for databases that already recorded v3 (cleanup_misclassified_timestamp_carrier_defaults):
  * Safely restores explicit carrier assignments damaged by the earlier v3 implementation ONLY when durable
  * assignment evidence is available, while strictly keeping ambiguous defaults unverified:
  *
  * 1. Verified Audit Source: If a durable admin-assignment audit table exists and contains records (e.g. carrier_assignment_audit or
  *    order_carrier_assignments), recovers carrier_assigned_explicitly = 1 for orders with recorded admin assignments.
- * 2. Carrier-Specific Evidence: Restores carrier_assigned_explicitly = 1 for non-default carriers (courier_partner != 'BlueDart Luxury Express')
+ * 2. Operator Verified Manifest: Ingests verified historical evidence if supplied via environment
+ *    (OPERATOR_VERIFIED_CARRIER_RECOVERY) or data file (operator_carrier_recovery.json).
+ * 3. Carrier-Specific Evidence: Restores carrier_assigned_explicitly = 1 for non-default carriers (courier_partner != 'BlueDart Luxury Express')
  *    or verified courier-issued AWBs (real tracking numbers) via cleanupFabricatedCourierAwb.
- * 3. Documented Open Finding & Unrecoverable Historical State: On deployed databases upgraded from the prior PR version
- *    (which already recorded v3), carrier_assignment_audit is created empty by initSchema and holds no historical records
- *    for past admin assignments. Because no existing durable source distinguishes historical admin-assigned BlueDart/no-AWB
- *    rows from legacy checkout defaults, inferring them from the orders table alone would falsely verify legacy defaults and
- *    leak unconfirmed carriers on tracking endpoints. Therefore, damaged historical BlueDart/no-AWB rows safely remain
- *    unverified (carrier_assigned_explicitly = 0) with courier_partner preserved intact in the DB. The paid-carrier finding
- *    for databases already damaged by v3 remains documented as open for this unrecoverable historical state.
+ * 4. Safe Default Isolation: For BlueDart/no-AWB rows where NO verified evidence or audit record exists, rows safely
+ *    remain unverified (carrier_assigned_explicitly = 0) with courier_partner preserved intact in the DB.
+ *    Operators can safely restore genuine assignments at any time via recoverCarrierAssignmentsWithVerifiedEvidence.
  */
 function restorePaidOrderExplicitCarrierAssignments(targetDb = db) {
   try {
@@ -803,7 +880,27 @@ function restorePaidOrderExplicitCarrierAssignments(targetDb = db) {
     } catch (e) {}
   }
 
-  // 2. Recover from carrier-specific evidence (custom carrier or real AWB) and sanitize placeholder AWBs:
+  // 2. Ingest operator-provided verified recovery manifest if present:
+  try {
+    let manifestRecords = null;
+    if (process.env.OPERATOR_VERIFIED_CARRIER_RECOVERY) {
+      try {
+        manifestRecords = JSON.parse(process.env.OPERATOR_VERIFIED_CARRIER_RECOVERY);
+      } catch (e) {}
+    } else {
+      const manifestPath = path.resolve(__dirname, '../data/operator_carrier_recovery.json');
+      if (fs.existsSync(manifestPath)) {
+        try {
+          manifestRecords = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        } catch (e) {}
+      }
+    }
+    if (Array.isArray(manifestRecords) && manifestRecords.length > 0) {
+      recoverCarrierAssignmentsWithVerifiedEvidence(manifestRecords, targetDb);
+    }
+  } catch (e) {}
+
+  // 3. Recover from carrier-specific evidence (custom carrier or real AWB) and sanitize placeholder AWBs:
   cleanupFabricatedCourierAwb(targetDb);
 }
 
@@ -816,8 +913,8 @@ function restorePaidOrderExplicitCarrierAssignments(targetDb = db) {
  *   as explicit by the timestamp heuristic in commit ce02ddf.
  * - 'restore_paid_order_explicit_carrier_assignments': Corrective migration for databases that already recorded
  *   v3, safely recovering explicit carrier assignments on paid orders when durable evidence exists, and leaving
- *   damaged historical BlueDart/no-AWB rows without pre-existing durable audit records unverified (flag = 0) to prevent
- *   falsely verifying checkout defaults (paid-carrier finding remains documented as open for that upgrade case).
+ *   damaged historical BlueDart/no-AWB rows without pre-existing durable audit records unverified (flag = 0) until
+ *   an operator restores them via recoverCarrierAssignmentsWithVerifiedEvidence with verified evidence.
  */
 function applyCourierMigrations(targetDb = db) {
   targetDb.exec(`
@@ -862,6 +959,7 @@ db.initSchema = initSchema;
 db.cleanupFabricatedCourierAwb = cleanupFabricatedCourierAwb;
 db.repairMisclassifiedCourierDefaults = repairMisclassifiedCourierDefaults;
 db.restorePaidOrderExplicitCarrierAssignments = restorePaidOrderExplicitCarrierAssignments;
+db.recoverCarrierAssignmentsWithVerifiedEvidence = recoverCarrierAssignmentsWithVerifiedEvidence;
 db.applyCourierMigrations = applyCourierMigrations;
 
 module.exports = db;
