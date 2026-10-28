@@ -52,7 +52,7 @@ export default function OrderTrackingPage({ trackingId: initialId, onNavigate })
         <h1 className="font-serif text-3xl sm:text-4xl font-bold text-[#1F1A1C]">
           Track Your Saree Shipment
         </h1>
-        <p className="text-xs sm:text-sm text-[#6E6467]">
+        <p id="tracking-input-description" className="text-xs sm:text-sm text-[#6E6467]">
           Enter your PALLUVO Order ID or Tracking Number.
         </p>
       </div>
@@ -63,15 +63,24 @@ export default function OrderTrackingPage({ trackingId: initialId, onNavigate })
           e.preventDefault();
           handleTrack();
         }}
+        role="search"
+        aria-label="Track order"
         className="max-w-xl mx-auto flex gap-2"
       >
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-[#6E6467] absolute left-3.5 top-3.5" />
+          <label htmlFor="tracking-search-input" className="sr-only">
+            Order ID or Tracking Number
+          </label>
+          <Search className="w-4 h-4 text-[#6E6467] absolute left-3.5 top-3.5" aria-hidden="true" />
           <input
+            id="tracking-search-input"
+            name="trackingNumber"
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="e.g. PAL-2026-98124"
+            aria-label="Order ID or Tracking Number"
+            aria-describedby="tracking-input-description"
             className="w-full bg-white border border-[#EAE2D7] rounded-xl pl-10 pr-4 py-3 text-xs text-[#1F1A1C] focus:outline-none focus:border-[#5B1425] shadow-sm font-mono"
           />
         </div>

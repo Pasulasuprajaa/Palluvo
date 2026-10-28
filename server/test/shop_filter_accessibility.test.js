@@ -246,6 +246,15 @@ async function testShopFilterAccessibility() {
     orderTrackingSource.includes('orderInfo.tracking_number &&'),
     'OrderTrackingPage must only render Tracking AWB row when tracking_number exists'
   );
+  assert.ok(
+    orderTrackingSource.includes('aria-label="Order ID or Tracking Number"') ||
+    orderTrackingSource.includes('htmlFor="tracking-search-input"'),
+    'OrderTrackingPage tracking search input must have an accessible name (label or aria-label)'
+  );
+  assert.ok(
+    orderTrackingSource.includes('id="tracking-search-input"'),
+    'OrderTrackingPage tracking input must have an id associated with its label'
+  );
 
   const seedSource = fs.readFileSync(path.resolve(__dirname, '../db/seed.js'), 'utf8');
   assert.ok(
@@ -627,11 +636,16 @@ async function testShopFilterAccessibility() {
   }
 
   // 3.10 Corrective Migration Regression Test: Database ALREADY upgraded by commit ce02ddf
-  // (both 'cleanup_fabricated_courier_awb' and 'cleanup_legacy_default_carrier_no_awb' present)
-  // where a Placed or Shipped default-BlueDart/no-AWB row was previously misclassified with carrier_assigned_explicitly = 1.
-  // Must execute v3 migration (cleanup_misclassified_timestamp_carrier_defaults) to safely repair the misclassified row
-  // by resetting carrier_assigned_explicitly to 0 while PRESERVING the ambiguous courier_partner,
-  // and clearing unverified courier_partner only where reliable audit evidence exists (e.g. unpaid checkout reservations).
+  // 3.10 Corrective Migration Regression Test: Database ALREADY upgraded by commit ce02ddf
+  // (both 'cleanup_fabricated_courier_awb' and 'cleanup_legacy_default_carrier_no_awb' present).
+  // Verifies that:
+  // - Admin-assigned BlueDart carrier on paid orders without an AWB (e.g. Processing, Placed, Packed, Shipped)
+  //   strictly PRESERVES carrier_assigned_explicitly = 1 and courier_partner = 'BlueDart Luxury Express'.
+  // - Explicit carrier assignment on pending checkout reservations strictly PRESERVES carrier_assigned_explicitly = 1 and courier_partner.
+  // - Unassigned default checkout reservations (payment_status = 'Pending', carrier_assigned_explicitly = 0)
+  //   have courier_partner cleared to NULL and carrier_assigned_explicitly = 0.
+  // - Ambiguous pre-AWB orders without explicit assignment (carrier_assigned_explicitly = 0)
+  //   strictly preserve courier_partner intact without falsely setting explicit flag to 1.
   const v2DbPath = path.resolve(__dirname, `../data/.v2_upgrade_test_${Date.now()}_${Math.random().toString(36).slice(2)}.db`);
   const v2Db = new Database(v2DbPath);
 
@@ -659,45 +673,51 @@ async function testShopFilterAccessibility() {
       INSERT INTO schema_migrations (migration_name) VALUES ('cleanup_legacy_default_carrier_no_awb');
 
       -- Rows left in database from commit ce02ddf:
-      -- 1. Placed order with default BlueDart and no AWB that was misclassified as carrier_assigned_explicitly = 1
-      -- due to the old timestamp heuristic (created_at != updated_at from payment processing).
-      -- Ambiguous pre-AWB assignment in Placed status must have carrier_assigned_explicitly reset to 0
-      -- while strictly PRESERVING courier_partner = 'BlueDart Luxury Express'!
+      -- 1. Paid order with explicit admin carrier assignment in Processing without AWB (MUST BE PRESERVED with flag = 1)
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
-      VALUES ('PAL-CE-PLACED-FLAGGED', 'Placed', 'Paid', NULL, 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 10:05:00');
+      VALUES ('PAL-CE-PAID-PROCESSING-EXPLICIT', 'Processing', 'Paid', NULL, 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 10:30:00');
 
-      -- 2. Dispatched order with no AWB that was misclassified with carrier_assigned_explicitly = 1.
-      -- Genuine admin assignment made in Shipped status while AWB is pending:
-      -- Ambiguous pre-AWB assignment in Shipped status must have carrier_assigned_explicitly reset to 0
-      -- while strictly PRESERVING courier_partner = 'BlueDart Luxury Express'!
+      -- 2. Paid order with explicit admin carrier assignment in Placed status without AWB (MUST BE PRESERVED with flag = 1)
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
-      VALUES ('PAL-CE-SHIPPED-FLAGGED', 'Shipped', 'Paid', NULL, 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 10:05:00');
+      VALUES ('PAL-CE-PAID-PLACED-EXPLICIT', 'Placed', 'Paid', NULL, 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 10:05:00');
 
-      -- 3. Unassigned checkout reservation default with no AWB and no explicit carrier assignment:
+      -- 3. Paid order with explicit admin carrier assignment in Packed status without AWB (MUST BE PRESERVED with flag = 1)
+      INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
+      VALUES ('PAL-CE-PAID-PACKED-EXPLICIT', 'Packed', 'Paid', NULL, 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 10:45:00');
+
+      -- 4. Paid order with explicit admin carrier assignment in Shipped status without AWB (MUST BE PRESERVED with flag = 1)
+      INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
+      VALUES ('PAL-CE-PAID-SHIPPED-EXPLICIT', 'Shipped', 'Paid', NULL, 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 11:00:00');
+
+      -- 5. Pending checkout reservation with explicit carrier assignment made by admin while pending:
+      -- Must strictly PRESERVE courier_partner intact with flag = 1!
+      INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
+      VALUES ('PAL-CE-PENDING-EXPLICIT', 'Placed', 'Pending', NULL, 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 10:05:00');
+
+      -- 6. Unassigned checkout reservation default with no AWB and no explicit carrier assignment:
       -- Reliable audit evidence: Unassigned default on abandoned checkout.
       -- Must have courier_partner cleared to NULL and carrier_assigned_explicitly reset to 0.
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
       VALUES ('PAL-CE-UNPAID-DEFAULT', 'Placed', 'Pending', NULL, 'BlueDart Luxury Express', 0, '2026-09-01 10:00:00', '2026-09-01 10:00:00');
 
-      -- 4. Pending checkout reservation with explicit carrier assignment made by admin while pending:
-      -- Must strictly PRESERVE courier_partner intact!
-      INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
-      VALUES ('PAL-CE-PENDING-EXPLICIT', 'Placed', 'Pending', NULL, 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 10:05:00');
-
-      -- 5. Genuine/ambiguous fulfillment order in Processing without AWB (must be PRESERVED)
+      -- 7. Genuine/ambiguous fulfillment order in Processing without AWB (flag = 0) (courier_partner must be PRESERVED)
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
       VALUES ('PAL-CE-PROCESSING-PRESERVED', 'Processing', 'Paid', NULL, 'BlueDart Luxury Express', 0, '2026-09-01 10:00:00', '2026-09-01 11:30:00');
 
-      -- 6. Genuine custom carrier assignment without AWB (must be PRESERVED with flag = 1)
+      -- 8. Genuine/ambiguous pre-AWB order in Placed status (flag = 0) (courier_partner must be PRESERVED)
+      INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
+      VALUES ('PAL-CE-PLACED-PRESERVED', 'Placed', 'Paid', NULL, 'BlueDart Luxury Express', 0, '2026-09-01 10:00:00', '2026-09-01 10:00:00');
+
+      -- 9. Genuine custom carrier assignment without AWB (must be PRESERVED with flag = 1)
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
       VALUES ('PAL-CE-CUSTOM-PRESERVED', 'Placed', 'Paid', NULL, 'Delhivery', 1, '2026-09-01 10:00:00', '2026-09-01 10:00:00');
 
-      -- 7. Dispatched order with real AWB and courier (must be PRESERVED with flag = 1)
+      -- 10. Dispatched order with real AWB and courier (must be PRESERVED with flag = 1)
       INSERT INTO orders (order_number, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly, created_at, updated_at)
       VALUES ('PAL-CE-REAL-PRESERVED', 'Shipped', 'Paid', 'BD-REAL-AWB-9988', 'BlueDart Luxury Express', 1, '2026-09-01 10:00:00', '2026-09-01 12:00:00');
     `);
 
-    // Verify pre-conditions: Both v1 and v2 markers exist, v3 marker does not, and misclassified row carries flag 1
+    // Verify pre-conditions: Both v1 and v2 markers exist, v3 marker does not, and explicit rows carry flag 1
     const hasV1 = v2Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_fabricated_courier_awb'").get();
     assert.ok(hasV1, 'Pre-condition: cleanup_fabricated_courier_awb must be present');
 
@@ -707,13 +727,9 @@ async function testShopFilterAccessibility() {
     const hasV3Pre = v2Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_misclassified_timestamp_carrier_defaults'").get();
     assert.strictEqual(hasV3Pre, undefined, 'Pre-condition: cleanup_misclassified_timestamp_carrier_defaults must not be present initially');
 
-    const preFlagged = v2Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PLACED-FLAGGED'").get();
-    assert.strictEqual(preFlagged.courier_partner, 'BlueDart Luxury Express');
-    assert.strictEqual(preFlagged.carrier_assigned_explicitly, 1);
-
-    const preShippedFlagged = v2Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-SHIPPED-FLAGGED'").get();
-    assert.strictEqual(preShippedFlagged.courier_partner, 'BlueDart Luxury Express');
-    assert.strictEqual(preShippedFlagged.carrier_assigned_explicitly, 1);
+    const prePaidProc = v2Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PAID-PROCESSING-EXPLICIT'").get();
+    assert.strictEqual(prePaidProc.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(prePaidProc.carrier_assigned_explicitly, 1);
 
     // Run applyCourierMigrations on the database upgraded by commit ce02ddf
     dbModule.applyCourierMigrations(v2Db);
@@ -723,33 +739,45 @@ async function testShopFilterAccessibility() {
     const hasV3Post = v2Db.prepare("SELECT 1 FROM schema_migrations WHERE migration_name = 'cleanup_misclassified_timestamp_carrier_defaults'").get();
     assert.ok(hasV3Post, 'Post-condition: cleanup_misclassified_timestamp_carrier_defaults must be recorded in schema_migrations');
 
-    // 2. Previously misclassified Placed order has carrier_assigned_explicitly reset to 0 while PRESERVING courier_partner
-    const postFlagged = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PLACED-FLAGGED'").get();
-    assert.strictEqual(postFlagged.courier_partner, 'BlueDart Luxury Express', 'Ambiguous pre-AWB Placed order must have courier_partner preserved');
-    assert.strictEqual(postFlagged.status, 'Placed');
-    assert.strictEqual(postFlagged.carrier_assigned_explicitly, 0, 'Misclassified Placed order must have carrier_assigned_explicitly reset to 0');
+    // 2. Explicit carrier assignments on paid orders without AWB are strictly PRESERVED across statuses
+    const postPaidProc = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PAID-PROCESSING-EXPLICIT'").get();
+    assert.strictEqual(postPaidProc.courier_partner, 'BlueDart Luxury Express', 'Paid Processing order with explicit carrier must preserve carrier');
+    assert.strictEqual(postPaidProc.status, 'Processing');
+    assert.strictEqual(postPaidProc.carrier_assigned_explicitly, 1, 'Paid Processing order must preserve carrier_assigned_explicitly = 1');
 
-    // 3. Dispatched order without AWB is preserved: carrier kept intact, flag reset to 0
-    const postShippedFlagged = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-SHIPPED-FLAGGED'").get();
-    assert.strictEqual(postShippedFlagged.courier_partner, 'BlueDart Luxury Express', 'Dispatched order without AWB must have pre-AWB courier preserved');
-    assert.strictEqual(postShippedFlagged.status, 'Shipped');
-    assert.strictEqual(postShippedFlagged.carrier_assigned_explicitly, 0);
+    const postPaidPlaced = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PAID-PLACED-EXPLICIT'").get();
+    assert.strictEqual(postPaidPlaced.courier_partner, 'BlueDart Luxury Express', 'Paid Placed order with explicit carrier must preserve carrier');
+    assert.strictEqual(postPaidPlaced.status, 'Placed');
+    assert.strictEqual(postPaidPlaced.carrier_assigned_explicitly, 1, 'Paid Placed order must preserve carrier_assigned_explicitly = 1');
+
+    const postPaidPacked = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PAID-PACKED-EXPLICIT'").get();
+    assert.strictEqual(postPaidPacked.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(postPaidPacked.carrier_assigned_explicitly, 1);
+
+    const postPaidShipped = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PAID-SHIPPED-EXPLICIT'").get();
+    assert.strictEqual(postPaidShipped.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(postPaidShipped.carrier_assigned_explicitly, 1);
+
+    // 3. Pending reservation with explicit carrier assignment strictly PRESERVES courier_partner and explicit flag
+    const postPendingExplicit = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PENDING-EXPLICIT'").get();
+    assert.strictEqual(postPendingExplicit.courier_partner, 'BlueDart Luxury Express', 'Explicitly assigned carrier on payment-pending reservation must be preserved');
+    assert.strictEqual(postPendingExplicit.carrier_assigned_explicitly, 1, 'Explicit carrier assignment evidence must be preserved on pending reservation');
 
     // 4. Unpaid checkout default has reliable audit evidence: courier cleared to null and flag is 0
     const postUnpaidDefault = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-UNPAID-DEFAULT'").get();
     assert.strictEqual(postUnpaidDefault.courier_partner, null, 'Unpaid checkout default must have courier_partner cleared to null');
     assert.strictEqual(postUnpaidDefault.carrier_assigned_explicitly, 0);
 
-    // 5. Pending reservation with explicit carrier assignment strictly PRESERVES courier_partner and explicit flag
-    const postPendingExplicit = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PENDING-EXPLICIT'").get();
-    assert.strictEqual(postPendingExplicit.courier_partner, 'BlueDart Luxury Express', 'Explicitly assigned carrier on payment-pending reservation must be preserved');
-    assert.strictEqual(postPendingExplicit.carrier_assigned_explicitly, 1, 'Explicit carrier assignment evidence must be preserved on pending reservation');
-
-    // 6. Genuine/ambiguous fulfillment order in Processing is preserved
+    // 5. Genuine/ambiguous fulfillment order in Processing is preserved (flag = 0)
     const postProcessing = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PROCESSING-PRESERVED'").get();
     assert.strictEqual(postProcessing.courier_partner, 'BlueDart Luxury Express', 'Fulfillment order in Processing must be preserved');
     assert.strictEqual(postProcessing.status, 'Processing');
     assert.strictEqual(postProcessing.carrier_assigned_explicitly, 0);
+
+    // 6. Genuine/ambiguous pre-AWB order in Placed is preserved (flag = 0)
+    const postPlacedAmbiguous = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PLACED-PRESERVED'").get();
+    assert.strictEqual(postPlacedAmbiguous.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(postPlacedAmbiguous.carrier_assigned_explicitly, 0);
 
     // 7. Custom carrier assignment is preserved
     const postCustom = v2Db.prepare("SELECT courier_partner, status, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-CUSTOM-PRESERVED'").get();
@@ -763,19 +791,19 @@ async function testShopFilterAccessibility() {
 
     // 9. Idempotency on repeat execution
     dbModule.applyCourierMigrations(v2Db);
-    const postFlaggedRepeat = v2Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PLACED-FLAGGED'").get();
-    assert.strictEqual(postFlaggedRepeat.courier_partner, 'BlueDart Luxury Express');
-    assert.strictEqual(postFlaggedRepeat.carrier_assigned_explicitly, 0);
+    const postPaidProcRepeat = v2Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PAID-PROCESSING-EXPLICIT'").get();
+    assert.strictEqual(postPaidProcRepeat.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(postPaidProcRepeat.carrier_assigned_explicitly, 1);
 
-    const postShippedRepeat = v2Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-SHIPPED-FLAGGED'").get();
-    assert.strictEqual(postShippedRepeat.courier_partner, 'BlueDart Luxury Express');
-    assert.strictEqual(postShippedRepeat.carrier_assigned_explicitly, 0);
+    const postPaidPlacedRepeat = v2Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PAID-PLACED-EXPLICIT'").get();
+    assert.strictEqual(postPaidPlacedRepeat.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(postPaidPlacedRepeat.carrier_assigned_explicitly, 1);
 
     const postPendingRepeat = v2Db.prepare("SELECT courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-CE-PENDING-EXPLICIT'").get();
     assert.strictEqual(postPendingRepeat.courier_partner, 'BlueDart Luxury Express');
     assert.strictEqual(postPendingRepeat.carrier_assigned_explicitly, 1);
 
-    console.log('✅ PASS: [P2] Corrective migration repairs legacy rows misclassified by timestamp heuristic, preserves ambiguous assignments across all statuses (including pending explicit assignments), and clears unassigned checkout defaults');
+    console.log('✅ PASS: [P2] Corrective migration preserves explicit carrier assignments on paid and pending orders without AWB, preserves ambiguous carriers across all statuses, and clears unassigned checkout defaults');
   } finally {
     v2Db.close();
     try {
@@ -828,6 +856,14 @@ async function testShopFilterAccessibility() {
       status: 'Shipped',
       payment_status: 'Paid',
       tracking_number: 'BD-TRACK-REAL-8822',
+      courier_partner: 'BlueDart Luxury Express',
+      carrier_assigned_explicitly: 1
+    },
+    {
+      order_number: 'PAL-TRK-PAID-PROCESSING-EXPLICIT',
+      status: 'Processing',
+      payment_status: 'Paid',
+      tracking_number: null,
       courier_partner: 'BlueDart Luxury Express',
       carrier_assigned_explicitly: 1
     },
@@ -899,7 +935,17 @@ async function testShopFilterAccessibility() {
     const handedStageAwb = dataVerifiedAwb.order.timeline.find(s => s.stage === 'Handed to Courier Partner');
     assert.strictEqual(handedStageAwb.description, 'Dispatched with BlueDart Luxury Express (AWB: BD-TRACK-REAL-8822).');
 
-    // 4. Placed order before dispatch
+    // 4. Paid order in Processing with explicit admin carrier assignment (no AWB)
+    const resPaidProcExplicit = await fetch(`http://127.0.0.1:${testPort}/api/orders/track/PAL-TRK-PAID-PROCESSING-EXPLICIT`);
+    assert.strictEqual(resPaidProcExplicit.status, 200);
+    const dataPaidProcExplicit = await resPaidProcExplicit.json();
+    assert.strictEqual(dataPaidProcExplicit.order.courier_partner, 'BlueDart Luxury Express', 'Explicitly assigned carrier on paid Processing order must be returned');
+    assert.strictEqual(dataPaidProcExplicit.order.carrier_assigned_explicitly, 1);
+    assert.strictEqual(dataPaidProcExplicit.order.is_carrier_verified, true);
+    const handedStagePaidProc = dataPaidProcExplicit.order.timeline.find(s => s.stage === 'Handed to Courier Partner');
+    assert.strictEqual(handedStagePaidProc.description, 'Package will be handed over to courier partner upon packing.');
+
+    // 5. Placed order before dispatch
     const resPlaced = await fetch(`http://127.0.0.1:${testPort}/api/orders/track/PAL-TRK-PLACED-DEFAULT`);
     assert.strictEqual(resPlaced.status, 200);
     const dataPlaced = await resPlaced.json();

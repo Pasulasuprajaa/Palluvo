@@ -703,11 +703,12 @@ function cleanupFabricatedCourierAwb(targetDb = db) {
 /**
  * Corrective migration for databases upgraded during commit ce02ddf:
  * Safely repairs rows misclassified by the previous timestamp heuristic.
- * - For unverified no-AWB rows on unpaid reservations (payment_status = 'Pending'),
+ * - For unverified no-AWB rows on unpaid checkout reservations (payment_status = 'Pending'),
  *   resets carrier_assigned_explicitly to 0 and clears courier_partner to NULL.
- * - For ambiguous pre-AWB rows across all order statuses (Placed, Processing, Packed, Shipped, etc.),
- *   preserves courier_partner intact while resetting carrier_assigned_explicitly to 0
- *   (ensuring genuine admin assignments are kept without falsely claiming verification).
+ * - Explicit carrier assignments (carrier_assigned_explicitly = 1) across all order statuses
+ *   and payment statuses (including paid Placed, Processing, Packed, and Shipped orders as well
+ *   as pending reservations) are strictly preserved so genuine admin carrier selections are never erased.
+ * - Ambiguous pre-AWB historical rows across paid order statuses preserve courier_partner intact.
  */
 function repairMisclassifiedCourierDefaults(targetDb = db) {
   try {
@@ -732,18 +733,12 @@ function repairMisclassifiedCourierDefaults(targetDb = db) {
     `).run();
   }
 
-  // 2. For ambiguous pre-AWB historical rows across paid order statuses lacking real tracking,
-  // reset carrier_assigned_explicitly to 0 (so we do not claim verification) while strictly PRESERVING courier_partner intact!
-  // Payment-pending reservations with explicit carrier assignments (carrier_assigned_explicitly = 1)
-  // are preserved intact and must not have their explicit evidence erased.
-  const pendingFilter = hasPaymentStatus ? "AND (payment_status IS NULL OR payment_status != 'Pending')" : "";
-  targetDb.prepare(`
-    UPDATE orders
-    SET carrier_assigned_explicitly = 0
-    WHERE courier_partner = 'BlueDart Luxury Express'
-      AND tracking_number IS NULL
-      ${pendingFilter}
-  `).run();
+  // 2. Explicit carrier assignments (carrier_assigned_explicitly = 1) on paid orders
+  // (Placed, Processing, Packed, Shipped) must be strictly preserved!
+  // We do not blindly reset carrier_assigned_explicitly = 0 on paid BlueDart/no-AWB rows,
+  // because an admin-assigned BlueDart carrier on a paid Placed, Processing, or Packed order can already have flag 1.
+  // Erasing that evidence causes tracking endpoints to suppress the assigned carrier, and subsequent
+  // cleanup cannot backfill it because BlueDart is the legacy default and there is no AWB.
 
   cleanupFabricatedCourierAwb(targetDb);
 }
