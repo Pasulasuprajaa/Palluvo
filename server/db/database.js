@@ -759,14 +759,17 @@ function repairMisclassifiedCourierDefaults(targetDb = db) {
  * Safely restores explicit carrier assignments damaged by the earlier v3 implementation ONLY when durable
  * assignment evidence is available, while strictly keeping ambiguous defaults unverified:
  *
- * 1. Verified Audit Source: If a durable admin-assignment audit table exists (e.g. carrier_assignment_audit or
+ * 1. Verified Audit Source: If a durable admin-assignment audit table exists and contains records (e.g. carrier_assignment_audit or
  *    order_carrier_assignments), recovers carrier_assigned_explicitly = 1 for orders with recorded admin assignments.
  * 2. Carrier-Specific Evidence: Restores carrier_assigned_explicitly = 1 for non-default carriers (courier_partner != 'BlueDart Luxury Express')
  *    or verified courier-issued AWBs (real tracking numbers) via cleanupFabricatedCourierAwb.
- * 3. Explicitly Handled Unrecoverable State: For BlueDart/no-AWB rows where NO durable evidence or verified audit source
- *    exists, the true historical assignment state is unrecoverable from the orders table alone. These rows are explicitly
- *    handled by keeping them unverified (carrier_assigned_explicitly = 0) and preserving courier_partner intact in the database,
- *    ensuring customer tracking suppresses unconfirmed carriers without erasing database records.
+ * 3. Documented Open Finding & Unrecoverable Historical State: On deployed databases upgraded from the prior PR version
+ *    (which already recorded v3), carrier_assignment_audit is created empty by initSchema and holds no historical records
+ *    for past admin assignments. Because no existing durable source distinguishes historical admin-assigned BlueDart/no-AWB
+ *    rows from legacy checkout defaults, inferring them from the orders table alone would falsely verify legacy defaults and
+ *    leak unconfirmed carriers on tracking endpoints. Therefore, damaged historical BlueDart/no-AWB rows safely remain
+ *    unverified (carrier_assigned_explicitly = 0) with courier_partner preserved intact in the DB. The paid-carrier finding
+ *    for databases already damaged by v3 remains documented as open for this unrecoverable historical state.
  */
 function restorePaidOrderExplicitCarrierAssignments(targetDb = db) {
   try {
@@ -812,7 +815,9 @@ function restorePaidOrderExplicitCarrierAssignments(targetDb = db) {
  * - 'cleanup_misclassified_timestamp_carrier_defaults': Corrective migration repairing orders mistakenly flagged
  *   as explicit by the timestamp heuristic in commit ce02ddf.
  * - 'restore_paid_order_explicit_carrier_assignments': Corrective migration for databases that already recorded
- *   v3, safely recovering explicit carrier assignments on paid orders that were reset by the earlier v3 implementation.
+ *   v3, safely recovering explicit carrier assignments on paid orders when durable evidence exists, and leaving
+ *   damaged historical BlueDart/no-AWB rows without pre-existing durable audit records unverified (flag = 0) to prevent
+ *   falsely verifying checkout defaults (paid-carrier finding remains documented as open for that upgrade case).
  */
 function applyCourierMigrations(targetDb = db) {
   targetDb.exec(`
