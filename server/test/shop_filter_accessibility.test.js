@@ -988,7 +988,32 @@ async function testShopFilterAccessibility() {
     const postDamagedAfterBadEvidence = v3Db.prepare("SELECT carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-PROCESSING-DAMAGED'").get();
     assert.strictEqual(postDamagedAfterBadEvidence.carrier_assigned_explicitly, 0, 'Order must remain unverified when recovery request lacks verified evidence');
 
-    // Step B2: Execute the Safe Operator Recovery Path with genuine verified evidence and operator identity
+    // Step B2: Verify mixed batch atomic validation: if any record in a batch fails, abort without committing partial changes
+    const mixedBatchResult = dbModule.recoverCarrierAssignmentsWithVerifiedEvidence([
+      {
+        order_number: 'PAL-V3-PAID-PROCESSING-DAMAGED',
+        courier_partner: 'BlueDart Luxury Express',
+        evidence_source: 'Warehouse dispatch manifest 2026-09-01-WD-882',
+        verified_by: 'lead-operator'
+      },
+      {
+        order_number: 'PAL-V3-NONEXISTENT-ORDER',
+        courier_partner: 'BlueDart Luxury Express',
+        evidence_source: 'Warehouse dispatch manifest 2026-09-01-WD-882',
+        verified_by: 'lead-operator'
+      }
+    ], v3Db);
+
+    assert.strictEqual(mixedBatchResult.recovered.length, 0, 'Mixed batch with failing record must NOT commit valid records');
+    assert.ok(mixedBatchResult.errors.length > 0, 'Mixed batch must report error for non-existent order');
+
+    const postDamagedAfterMixedBatch = v3Db.prepare("SELECT carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-PROCESSING-DAMAGED'").get();
+    assert.strictEqual(postDamagedAfterMixedBatch.carrier_assigned_explicitly, 0, 'Order must not be partially committed when batch has errors');
+
+    const auditCountBeforeRecovery = v3Db.prepare("SELECT COUNT(*) as count FROM carrier_assignment_audit WHERE order_number = 'PAL-V3-PAID-PROCESSING-DAMAGED'").get().count;
+    assert.strictEqual(auditCountBeforeRecovery, 0, 'No audit entries should exist after failed mixed batch');
+
+    // Step B3: Execute the Safe Operator Recovery Path with genuine verified evidence and operator identity
     const recoveryResults = dbModule.recoverCarrierAssignmentsWithVerifiedEvidence([
       {
         order_number: 'PAL-V3-PAID-PROCESSING-DAMAGED',
@@ -1013,6 +1038,20 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(auditEntry.courier_partner, 'BlueDart Luxury Express');
     assert.strictEqual(auditEntry.assigned_by, 'lead-operator');
     assert.strictEqual(auditEntry.evidence_source, 'Warehouse dispatch manifest 2026-09-01-WD-882');
+
+    // Step B4: Verify idempotency of repeated recovery: retrying recovery must not insert duplicate audit entries
+    const repeatRecoveryResults = dbModule.recoverCarrierAssignmentsWithVerifiedEvidence([
+      {
+        order_number: 'PAL-V3-PAID-PROCESSING-DAMAGED',
+        courier_partner: 'BlueDart Luxury Express',
+        evidence_source: 'Warehouse dispatch manifest 2026-09-01-WD-882',
+        verified_by: 'lead-operator'
+      }
+    ], v3Db);
+
+    assert.strictEqual(repeatRecoveryResults.recovered.length, 1, 'Repeated recovery must succeed idempotently');
+    const auditCountAfterRepeat = v3Db.prepare("SELECT COUNT(*) as count FROM carrier_assignment_audit WHERE order_number = 'PAL-V3-PAID-PROCESSING-DAMAGED'").get().count;
+    assert.strictEqual(auditCountAfterRepeat, 1, 'Repeated recovery must not insert duplicate audit records');
 
     // 3. Ambiguous defaults without verified evidence STILL have carrier_assigned_explicitly = 0 (no false verification)
     const postLegacyDefaultAfterRecovery = v3Db.prepare("SELECT carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-LEGACY-DEFAULT'").get();
@@ -1040,6 +1079,151 @@ async function testShopFilterAccessibility() {
       const wal = `${v3DbPath}-wal`;
       if (fs.existsSync(shm)) fs.unlinkSync(shm);
       if (fs.existsSync(wal)) fs.unlinkSync(wal);
+    } catch (e) {}
+  }
+
+  // 3.11c Admin Recovery Endpoints: Authenticated Admin Attribution & Batch Consistency
+  const expressAdmin = require('express');
+  const jwt = require('jsonwebtoken');
+  const { JWT_SECRET } = require('../middleware/auth');
+
+  // Ensure an admin user exists for token authentication
+  let adminUser = dbModule.prepare("SELECT id, name, email, role FROM users WHERE role = 'admin' LIMIT 1").get();
+  let createdAdminId = null;
+  if (!adminUser) {
+    const adminRes = dbModule.prepare("INSERT INTO users (name, email, password_hash, role) VALUES ('Admin Audit Op', 'admin_audit_op@palluvo.com', 'dummyhash', 'admin')").run();
+    adminUser = { id: adminRes.lastInsertRowid, email: 'admin_audit_op@palluvo.com', role: 'admin' };
+    createdAdminId = adminUser.id;
+  }
+  const adminToken = jwt.sign({ id: adminUser.id, role: 'admin' }, JWT_SECRET, { expiresIn: '1h' });
+
+  const adminApp = expressAdmin();
+  adminApp.use(expressAdmin.json());
+  const adminRouter = require('../routes/admin');
+  adminApp.use('/api/admin', adminRouter);
+
+  const adminServer = adminApp.listen(0);
+  const adminPort = adminServer.address().port;
+
+  try {
+    // Ensure a valid user exists for foreign key constraint on orders.user_id
+    const existingUser = dbModule.prepare('SELECT id FROM users LIMIT 1').get();
+    let testUserId = existingUser ? existingUser.id : adminUser.id;
+
+    // Seed test order for admin recovery endpoint test
+    dbModule.prepare(`
+      INSERT OR REPLACE INTO orders (order_number, user_id, address_data, subtotal, total_amount, status, payment_status, tracking_number, courier_partner, carrier_assigned_explicitly)
+      VALUES ('PAL-ADMIN-REC-TEST-1', ?, '{}', 5000, 5000, 'Processing', 'Paid', NULL, 'BlueDart Luxury Express', 0)
+    `).run(testUserId);
+    const testOrderId = dbModule.prepare("SELECT id FROM orders WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get().id;
+
+    // 1. Finding 2 test: Mixed batch must return 400 and commit NO rows
+    const mixedRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/recover-carriers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        recovery_batches: [
+          {
+            order_number: 'PAL-ADMIN-REC-TEST-1',
+            courier_partner: 'BlueDart Luxury Express',
+            evidence_source: 'Dispatch manifest batch-404'
+          },
+          {
+            order_number: 'PAL-ADMIN-NONEXISTENT',
+            courier_partner: 'BlueDart Luxury Express',
+            evidence_source: 'Dispatch manifest batch-404'
+          }
+        ]
+      })
+    });
+    assert.strictEqual(mixedRes.status, 400, 'Mixed recovery batch with invalid order must return 400');
+    const mixedData = await mixedRes.json();
+    assert.ok(mixedData.error, 'Error message must be present');
+    const orderAfterMixed = dbModule.prepare("SELECT carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get();
+    assert.strictEqual(orderAfterMixed.carrier_assigned_explicitly, 0, 'Order must not be partially recovered on mixed batch failure');
+
+    // 2. Finding 1 test: Valid batch attributes verified_by strictly to authenticated admin (adminUser.id), ignoring caller spoof
+    const validRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/recover-carriers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        recovery_batches: [
+          {
+            order_number: 'PAL-ADMIN-REC-TEST-1',
+            courier_partner: 'BlueDart Luxury Express',
+            evidence_source: 'Dispatch manifest batch-404',
+            verified_by: 'spoofed_impersonated_user@evil.com' // Caller-supplied identity must be ignored
+          }
+        ]
+      })
+    });
+    assert.strictEqual(validRes.status, 200, 'Valid recovery batch must return 200');
+    const orderAfterValid = dbModule.prepare("SELECT carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get();
+    assert.strictEqual(orderAfterValid.carrier_assigned_explicitly, 1, 'Order must be recovered');
+
+    const auditRow = dbModule.prepare("SELECT assigned_by, evidence_source FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get();
+    assert.ok(auditRow, 'Audit row must be recorded');
+    assert.strictEqual(auditRow.assigned_by, String(adminUser.id), `Audit row must be attributed strictly to req.user.id (${adminUser.id}), ignoring spoofed body`);
+    assert.strictEqual(auditRow.evidence_source, 'Dispatch manifest batch-404');
+
+    // 3. Finding 2 test: Repeated recovery must be idempotent and not insert duplicate audit rows
+    const repeatRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/recover-carriers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        recovery_batches: [
+          {
+            order_number: 'PAL-ADMIN-REC-TEST-1',
+            courier_partner: 'BlueDart Luxury Express',
+            evidence_source: 'Dispatch manifest batch-404'
+          }
+        ]
+      })
+    });
+    assert.strictEqual(repeatRes.status, 200);
+    const auditCount = dbModule.prepare("SELECT COUNT(*) as count FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get().count;
+    assert.strictEqual(auditCount, 1, 'Repeated admin recovery must not create duplicate audit rows');
+
+    // 4. Finding 1 test on single order endpoint /api/admin/orders/:id/verify-carrier
+    dbModule.prepare("UPDATE orders SET carrier_assigned_explicitly = 0 WHERE id = ?").run(testOrderId);
+    dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
+
+    const singleVerifyRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/verify-carrier`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        courier_partner: 'BlueDart Luxury Express',
+        evidence_source: 'Physical slip 9922',
+        verified_by: 'spoofed_impersonated_user@evil.com'
+      })
+    });
+    assert.strictEqual(singleVerifyRes.status, 200, 'Single verify-carrier endpoint must succeed');
+    const singleAuditRow = dbModule.prepare("SELECT assigned_by, evidence_source FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get();
+    assert.ok(singleAuditRow);
+    assert.strictEqual(singleAuditRow.assigned_by, String(adminUser.id), `Single verify-carrier must attribute strictly to authenticated admin ID (${adminUser.id})`);
+    assert.strictEqual(singleAuditRow.evidence_source, 'Physical slip 9922');
+
+    console.log('✅ PASS: [P2] Admin recovery endpoints strictly attribute recovery to authenticated admin ID and enforce atomic, idempotent batches');
+  } finally {
+    adminServer.close();
+    try {
+      dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
+      dbModule.prepare("DELETE FROM orders WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
+      if (createdAdminId) {
+        dbModule.prepare("DELETE FROM users WHERE id = ?").run(createdAdminId);
+      }
     } catch (e) {}
   }
 

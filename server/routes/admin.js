@@ -486,10 +486,11 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
       try {
         const ord = db.prepare('SELECT order_number FROM orders WHERE id = ?').get(req.params.id);
         if (ord && ord.order_number) {
+          const operatorId = req.user && req.user.id != null ? String(req.user.id) : (req.user?.email || 'admin');
           db.prepare(`
             INSERT INTO carrier_assignment_audit (order_number, courier_partner, assigned_by, evidence_source)
-            VALUES (?, ?, 'admin', 'admin-dashboard-status-update')
-          `).run(ord.order_number, courier_partner);
+            VALUES (?, ?, ?, 'admin-dashboard-status-update')
+          `).run(ord.order_number, courier_partner, operatorId);
         }
       } catch (e) {}
     }
@@ -510,7 +511,15 @@ router.post('/orders/recover-carriers', requireDurableStorage, (req, res) => {
       return res.status(400).json({ error: 'recovery_batches must be a non-empty array of verified order carrier records.' });
     }
 
-    // Strictly validate that each record supplies a non-blank evidence_source and verified_by
+    // Derive operator identity strictly from authenticated admin session (stable user ID), ignoring caller-supplied identities
+    const operatorId = req.user && req.user.id != null
+      ? String(req.user.id)
+      : (req.user && req.user.email ? String(req.user.email) : null);
+    if (!operatorId) {
+      return res.status(401).json({ error: 'Authenticated admin session is required to perform recovery.' });
+    }
+
+    // Strictly validate that each record supplies a non-blank evidence_source and attribute strictly to authenticated admin
     for (const rec of recovery_batches) {
       if (!rec || !rec.order_number) {
         return res.status(400).json({ error: 'Each recovery record must specify an order_number.' });
@@ -519,18 +528,17 @@ router.post('/orders/recover-carriers', requireDurableStorage, (req, res) => {
       if (!evidence) {
         return res.status(400).json({ error: `Order ${rec.order_number}: Verified evidence_source is required and cannot be blank.` });
       }
-      const operatorId = rec.verified_by && typeof rec.verified_by === 'string' ? rec.verified_by.trim() :
-        (req.user && (req.user.email || req.user.name) ? String(req.user.email || req.user.name).trim() : '');
-      if (!operatorId) {
-        return res.status(400).json({ error: `Order ${rec.order_number}: A meaningful operator identity (verified_by) is required.` });
-      }
       rec.evidence_source = evidence;
-      rec.verified_by = operatorId;
+      rec.verified_by = operatorId; // Enforce authenticated admin ID, ignore caller-supplied identities
     }
 
     const results = db.recoverCarrierAssignmentsWithVerifiedEvidence(recovery_batches, db);
-    if (results.errors.length > 0 && results.recovered.length === 0) {
-      return res.status(400).json({ error: 'Recovery failed due to validation errors.', ...results });
+    // Reject request if any records failed validation to prevent committing partially failed batches
+    if (results.errors.length > 0) {
+      return res.status(400).json({
+        error: 'Batch recovery aborted. All records in the batch must be valid and verified.',
+        ...results
+      });
     }
 
     res.json({
@@ -546,7 +554,7 @@ router.post('/orders/recover-carriers', requireDurableStorage, (req, res) => {
 // POST /api/admin/orders/:id/verify-carrier (Operator single-order carrier verification with durable audit)
 router.post('/orders/:id/verify-carrier', requireDurableStorage, (req, res) => {
   try {
-    const { courier_partner, evidence_source, notes, verified_by } = req.body;
+    const { courier_partner, evidence_source, notes } = req.body;
     const ord = db.prepare('SELECT id, order_number, courier_partner FROM orders WHERE id = ?').get(req.params.id);
     if (!ord) {
       return res.status(404).json({ error: 'Order not found.' });
@@ -557,10 +565,12 @@ router.post('/orders/:id/verify-carrier', requireDurableStorage, (req, res) => {
       return res.status(400).json({ error: 'Verified evidence_source is required and cannot be blank.' });
     }
 
-    const operatorId = (verified_by && typeof verified_by === 'string' && verified_by.trim()) ? verified_by.trim() :
-      (req.user && (req.user.email || req.user.name) ? String(req.user.email || req.user.name).trim() : '');
+    // Derive operator identity strictly from authenticated admin session (stable user ID), ignoring caller-supplied identities
+    const operatorId = req.user && req.user.id != null
+      ? String(req.user.id)
+      : (req.user && req.user.email ? String(req.user.email) : null);
     if (!operatorId) {
-      return res.status(400).json({ error: 'A meaningful operator identity (verified_by) is required.' });
+      return res.status(401).json({ error: 'Authenticated admin session is required to perform recovery.' });
     }
 
     const courier = (courier_partner || ord.courier_partner || '').trim();
@@ -572,7 +582,7 @@ router.post('/orders/:id/verify-carrier', requireDurableStorage, (req, res) => {
       order_number: ord.order_number,
       courier_partner: courier,
       evidence_source: evidence,
-      verified_by: operatorId
+      verified_by: operatorId // Enforce authenticated admin ID, ignore caller-supplied identities
     }], db);
 
     if (results.errors.length > 0) {

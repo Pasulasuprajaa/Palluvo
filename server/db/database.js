@@ -765,8 +765,9 @@ function repairMisclassifiedCourierDefaults(targetDb = db) {
  * warehouse dispatch logs, or customer correspondence) to safely restore carrier_assigned_explicitly = 1
  * without guessing or falsely verifying ambiguous defaults.
  *
- * Strictly rejects records with missing or blank evidence_source or operator identity (verified_by)
- * without manufacturing generic fallback audit strings.
+ * Atomically validates the entire batch upfront: if any record has validation errors or is missing,
+ * the entire batch is rejected without committing partial changes.
+ * Repeated execution on already recovered orders is idempotent and avoids inserting duplicate audit records.
  *
  * @param {Array<{order_number: string, courier_partner?: string, evidence_source: string, verified_by: string}>} verifiedRecords
  * @param {Database} targetDb
@@ -797,6 +798,9 @@ function recoverCarrierAssignmentsWithVerifiedEvidence(verifiedRecords = [], tar
   const selectOrder = targetDb.prepare(
     'SELECT order_number, courier_partner, carrier_assigned_explicitly FROM orders WHERE order_number = ?'
   );
+  const checkAudit = targetDb.prepare(
+    'SELECT id FROM carrier_assignment_audit WHERE order_number = ? AND courier_partner = ?'
+  );
   const updateOrder = targetDb.prepare(`
     UPDATE orders
     SET carrier_assigned_explicitly = 1,
@@ -809,48 +813,77 @@ function recoverCarrierAssignmentsWithVerifiedEvidence(verifiedRecords = [], tar
     VALUES (?, ?, ?, ?)
   `);
 
+  // Pre-validate the entire batch upfront. If ANY record has an error, abort without modifying database.
+  const validatedRecords = [];
+  for (const record of verifiedRecords) {
+    if (!record || !record.order_number) {
+      results.errors.push('Missing order_number');
+      continue;
+    }
+
+    const evidence = record.evidence_source && typeof record.evidence_source === 'string'
+      ? record.evidence_source.trim()
+      : '';
+    if (!evidence) {
+      results.errors.push(`Order ${record.order_number}: Missing or blank evidence_source. Verified evidence is strictly required.`);
+      continue;
+    }
+
+    const assignedBy = record.verified_by && typeof record.verified_by === 'string'
+      ? record.verified_by.trim()
+      : '';
+    if (!assignedBy) {
+      results.errors.push(`Order ${record.order_number}: Missing or blank verified_by. A meaningful operator identity is strictly required.`);
+      continue;
+    }
+
+    const ord = selectOrder.get(record.order_number);
+    if (!ord) {
+      results.errors.push(`Order ${record.order_number} not found.`);
+      continue;
+    }
+
+    const courier = (record.courier_partner || ord.courier_partner || '').trim();
+    if (!courier) {
+      results.errors.push(`Order ${record.order_number}: Missing courier_partner. An explicit carrier partner must be provided or present on the order.`);
+      continue;
+    }
+
+    validatedRecords.push({
+      order_number: record.order_number,
+      courier_partner: courier,
+      assigned_by: assignedBy,
+      evidence_source: evidence
+    });
+  }
+
+  // If any record in the batch failed validation, abort the entire batch without applying partial changes
+  if (results.errors.length > 0) {
+    return results;
+  }
+
+  // Atomically apply validated records with idempotent audit logging
   const runRecovery = targetDb.transaction((records) => {
-    for (const record of records) {
-      if (!record || !record.order_number) {
-        results.errors.push('Missing order_number');
-        continue;
+    for (const item of records) {
+      updateOrder.run(item.courier_partner, item.order_number);
+
+      // Idempotent audit check: avoid duplicate audit entries for already recovered order/carrier
+      const existingAudit = checkAudit.get(item.order_number, item.courier_partner);
+      if (!existingAudit) {
+        insertAudit.run(item.order_number, item.courier_partner, item.assigned_by, item.evidence_source);
       }
 
-      const evidence = record.evidence_source && typeof record.evidence_source === 'string'
-        ? record.evidence_source.trim()
-        : '';
-      if (!evidence) {
-        results.errors.push(`Order ${record.order_number}: Missing or blank evidence_source. Verified evidence is strictly required.`);
-        continue;
-      }
-
-      const assignedBy = record.verified_by && typeof record.verified_by === 'string'
-        ? record.verified_by.trim()
-        : '';
-      if (!assignedBy) {
-        results.errors.push(`Order ${record.order_number}: Missing or blank verified_by. A meaningful operator identity is strictly required.`);
-        continue;
-      }
-
-      const ord = selectOrder.get(record.order_number);
-      if (!ord) {
-        results.skipped.push(`${record.order_number} (not found)`);
-        continue;
-      }
-
-      const courier = (record.courier_partner || ord.courier_partner || '').trim();
-      if (!courier) {
-        results.errors.push(`Order ${record.order_number}: Missing courier_partner. An explicit carrier partner must be provided or present on the order.`);
-        continue;
-      }
-
-      updateOrder.run(courier, record.order_number);
-      insertAudit.run(record.order_number, courier, assignedBy, evidence);
-      results.recovered.push(record.order_number);
+      results.recovered.push(item.order_number);
     }
   });
 
-  runRecovery(verifiedRecords);
+  try {
+    runRecovery(validatedRecords);
+  } catch (err) {
+    results.errors.push(`Transaction failed: ${err.message}`);
+    results.recovered = [];
+  }
+
   return results;
 }
 
