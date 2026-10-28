@@ -1197,6 +1197,38 @@ async function testShopFilterAccessibility() {
     dbModule.prepare("UPDATE orders SET carrier_assigned_explicitly = 0 WHERE id = ?").run(testOrderId);
     dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
 
+    // 4a. Verify that fallback to notes is rejected when evidence_source is absent
+    const notesOnlyRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/verify-carrier`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        courier_partner: 'BlueDart Luxury Express',
+        notes: 'verified' // Absence of evidence_source must fail
+      })
+    });
+    assert.strictEqual(notesOnlyRes.status, 400, 'verify-carrier must reject notes-only payload without evidence_source');
+    const notesOnlyData = await notesOnlyRes.json();
+    assert.ok(notesOnlyData.error.includes('evidence_source is required'), 'Must require explicit evidence_source');
+
+    // 4b. Verify that blank evidence_source is rejected even if notes is present
+    const blankEvidenceRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/verify-carrier`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        courier_partner: 'BlueDart Luxury Express',
+        evidence_source: '   ',
+        notes: 'verified'
+      })
+    });
+    assert.strictEqual(blankEvidenceRes.status, 400, 'verify-carrier must reject blank evidence_source');
+
+    // 4c. Valid single verify-carrier with explicit evidence_source
     const singleVerifyRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/verify-carrier`, {
       method: 'POST',
       headers: {
@@ -1206,6 +1238,7 @@ async function testShopFilterAccessibility() {
       body: JSON.stringify({
         courier_partner: 'BlueDart Luxury Express',
         evidence_source: 'Physical slip 9922',
+        notes: 'Checked warehouse shelf B-4',
         verified_by: 'spoofed_impersonated_user@evil.com'
       })
     });
@@ -1214,6 +1247,67 @@ async function testShopFilterAccessibility() {
     assert.ok(singleAuditRow);
     assert.strictEqual(singleAuditRow.assigned_by, String(adminUser.id), `Single verify-carrier must attribute strictly to authenticated admin ID (${adminUser.id})`);
     assert.strictEqual(singleAuditRow.evidence_source, 'Physical slip 9922');
+
+    // 5. Finding 2 test: Atomic status update with carrier audit
+    // Reset test order to Placed, carrier_assigned_explicitly = 0, no audit
+    dbModule.prepare("UPDATE orders SET status = 'Placed', carrier_assigned_explicitly = 0, courier_partner = NULL WHERE id = ?").run(testOrderId);
+    dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
+
+    // 5a. Successful status update commits both order changes and audit record atomically
+    const statusUpdateRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Shipped',
+        courier_partner: 'BlueDart Luxury Express',
+        tracking_number: 'BD-STATUS-TX-1001',
+        estimated_delivery: '2026-11-01'
+      })
+    });
+    assert.strictEqual(statusUpdateRes.status, 200, 'Status update must succeed');
+    const orderAfterStatus = dbModule.prepare("SELECT status, carrier_assigned_explicitly, courier_partner FROM orders WHERE id = ?").get(testOrderId);
+    assert.strictEqual(orderAfterStatus.status, 'Shipped');
+    assert.strictEqual(orderAfterStatus.carrier_assigned_explicitly, 1);
+    const auditAfterStatus = dbModule.prepare("SELECT assigned_by, evidence_source FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get();
+    assert.ok(auditAfterStatus, 'Audit row must be created with status update');
+    assert.strictEqual(auditAfterStatus.assigned_by, String(adminUser.id));
+    assert.strictEqual(auditAfterStatus.evidence_source, 'admin-dashboard-status-update');
+
+    // 5b. Atomic rollback test: If carrier audit write fails, entire transaction rolls back and order is unchanged
+    // Create a temporary trigger to simulate audit write failure
+    dbModule.exec(`
+      CREATE TRIGGER test_fail_carrier_audit
+      BEFORE INSERT ON carrier_assignment_audit
+      BEGIN
+        SELECT RAISE(ABORT, 'Simulated audit storage failure');
+      END;
+    `);
+
+    try {
+      const failStatusRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          status: 'Delivered',
+          courier_partner: 'Delhivery',
+          tracking_number: 'DL-FAIL-9999'
+        })
+      });
+      assert.strictEqual(failStatusRes.status, 500, 'Must return 500 when carrier audit fails');
+
+      // Verify transaction rollback: status must still be 'Shipped', courier must still be 'BlueDart Luxury Express'
+      const orderAfterFail = dbModule.prepare("SELECT status, courier_partner FROM orders WHERE id = ?").get(testOrderId);
+      assert.strictEqual(orderAfterFail.status, 'Shipped', 'Order status must NOT be modified when audit insert fails');
+      assert.strictEqual(orderAfterFail.courier_partner, 'BlueDart Luxury Express', 'Order courier must NOT be modified when audit insert fails');
+    } finally {
+      dbModule.exec(`DROP TRIGGER IF EXISTS test_fail_carrier_audit;`);
+    }
 
     console.log('✅ PASS: [P2] Admin recovery endpoints strictly attribute recovery to authenticated admin ID and enforce atomic, idempotent batches');
   } finally {
