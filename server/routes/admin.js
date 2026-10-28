@@ -510,7 +510,29 @@ router.post('/orders/recover-carriers', requireDurableStorage, (req, res) => {
       return res.status(400).json({ error: 'recovery_batches must be a non-empty array of verified order carrier records.' });
     }
 
+    // Strictly validate that each record supplies a non-blank evidence_source and verified_by
+    for (const rec of recovery_batches) {
+      if (!rec || !rec.order_number) {
+        return res.status(400).json({ error: 'Each recovery record must specify an order_number.' });
+      }
+      const evidence = rec.evidence_source && typeof rec.evidence_source === 'string' ? rec.evidence_source.trim() : '';
+      if (!evidence) {
+        return res.status(400).json({ error: `Order ${rec.order_number}: Verified evidence_source is required and cannot be blank.` });
+      }
+      const operatorId = rec.verified_by && typeof rec.verified_by === 'string' ? rec.verified_by.trim() :
+        (req.user && (req.user.email || req.user.name) ? String(req.user.email || req.user.name).trim() : '');
+      if (!operatorId) {
+        return res.status(400).json({ error: `Order ${rec.order_number}: A meaningful operator identity (verified_by) is required.` });
+      }
+      rec.evidence_source = evidence;
+      rec.verified_by = operatorId;
+    }
+
     const results = db.recoverCarrierAssignmentsWithVerifiedEvidence(recovery_batches, db);
+    if (results.errors.length > 0 && results.recovered.length === 0) {
+      return res.status(400).json({ error: 'Recovery failed due to validation errors.', ...results });
+    }
+
     res.json({
       message: `Recovered ${results.recovered.length} carrier assignments with verified operator evidence.`,
       ...results
@@ -524,21 +546,38 @@ router.post('/orders/recover-carriers', requireDurableStorage, (req, res) => {
 // POST /api/admin/orders/:id/verify-carrier (Operator single-order carrier verification with durable audit)
 router.post('/orders/:id/verify-carrier', requireDurableStorage, (req, res) => {
   try {
-    const { courier_partner, evidence_source, notes } = req.body;
+    const { courier_partner, evidence_source, notes, verified_by } = req.body;
     const ord = db.prepare('SELECT id, order_number, courier_partner FROM orders WHERE id = ?').get(req.params.id);
     if (!ord) {
       return res.status(404).json({ error: 'Order not found.' });
     }
 
-    const courier = courier_partner || ord.courier_partner || 'BlueDart Luxury Express';
-    const evidence = evidence_source || notes || 'Operator manual verification';
+    const evidence = (evidence_source || notes || '').trim();
+    if (!evidence) {
+      return res.status(400).json({ error: 'Verified evidence_source is required and cannot be blank.' });
+    }
+
+    const operatorId = (verified_by && typeof verified_by === 'string' && verified_by.trim()) ? verified_by.trim() :
+      (req.user && (req.user.email || req.user.name) ? String(req.user.email || req.user.name).trim() : '');
+    if (!operatorId) {
+      return res.status(400).json({ error: 'A meaningful operator identity (verified_by) is required.' });
+    }
+
+    const courier = (courier_partner || ord.courier_partner || '').trim();
+    if (!courier) {
+      return res.status(400).json({ error: 'courier_partner must be specified or present on the order.' });
+    }
 
     const results = db.recoverCarrierAssignmentsWithVerifiedEvidence([{
       order_number: ord.order_number,
       courier_partner: courier,
       evidence_source: evidence,
-      verified_by: 'admin-operator'
+      verified_by: operatorId
     }], db);
+
+    if (results.errors.length > 0) {
+      return res.status(400).json({ error: results.errors[0], results });
+    }
 
     const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
     res.json({ message: 'Carrier assignment verified and recorded in audit log.', order: updated, results });

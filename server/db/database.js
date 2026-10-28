@@ -765,7 +765,10 @@ function repairMisclassifiedCourierDefaults(targetDb = db) {
  * warehouse dispatch logs, or customer correspondence) to safely restore carrier_assigned_explicitly = 1
  * without guessing or falsely verifying ambiguous defaults.
  *
- * @param {Array<{order_number: string, courier_partner?: string, evidence_source?: string, verified_by?: string}>} verifiedRecords
+ * Strictly rejects records with missing or blank evidence_source or operator identity (verified_by)
+ * without manufacturing generic fallback audit strings.
+ *
+ * @param {Array<{order_number: string, courier_partner?: string, evidence_source: string, verified_by: string}>} verifiedRecords
  * @param {Database} targetDb
  * @returns {{ recovered: Array<string>, skipped: Array<string>, errors: Array<string> }}
  */
@@ -797,7 +800,7 @@ function recoverCarrierAssignmentsWithVerifiedEvidence(verifiedRecords = [], tar
   const updateOrder = targetDb.prepare(`
     UPDATE orders
     SET carrier_assigned_explicitly = 1,
-        courier_partner = COALESCE(?, courier_partner),
+        courier_partner = ?,
         updated_at = CURRENT_TIMESTAMP
     WHERE order_number = ?
   `);
@@ -813,15 +816,33 @@ function recoverCarrierAssignmentsWithVerifiedEvidence(verifiedRecords = [], tar
         continue;
       }
 
+      const evidence = record.evidence_source && typeof record.evidence_source === 'string'
+        ? record.evidence_source.trim()
+        : '';
+      if (!evidence) {
+        results.errors.push(`Order ${record.order_number}: Missing or blank evidence_source. Verified evidence is strictly required.`);
+        continue;
+      }
+
+      const assignedBy = record.verified_by && typeof record.verified_by === 'string'
+        ? record.verified_by.trim()
+        : '';
+      if (!assignedBy) {
+        results.errors.push(`Order ${record.order_number}: Missing or blank verified_by. A meaningful operator identity is strictly required.`);
+        continue;
+      }
+
       const ord = selectOrder.get(record.order_number);
       if (!ord) {
         results.skipped.push(`${record.order_number} (not found)`);
         continue;
       }
 
-      const courier = record.courier_partner || ord.courier_partner || 'BlueDart Luxury Express';
-      const evidence = record.evidence_source || 'Operator verified dispatch manifest';
-      const assignedBy = record.verified_by || 'operator-recovery';
+      const courier = (record.courier_partner || ord.courier_partner || '').trim();
+      if (!courier) {
+        results.errors.push(`Order ${record.order_number}: Missing courier_partner. An explicit carrier partner must be provided or present on the order.`);
+        continue;
+      }
 
       updateOrder.run(courier, record.order_number);
       insertAudit.run(record.order_number, courier, assignedBy, evidence);

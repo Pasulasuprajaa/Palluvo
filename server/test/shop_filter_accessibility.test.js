@@ -960,7 +960,35 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(postUnpaidDefault.courier_partner, null, 'Unassigned checkout default must have courier_partner cleared to NULL');
     assert.strictEqual(postUnpaidDefault.carrier_assigned_explicitly, 0);
 
-    // Step B: Execute the Safe Operator Recovery Path with verified evidence for affected historical orders
+    // Step B1: Verify that missing or blank evidence_source or operator identity is strictly REJECTED without manufacturing audit fallbacks
+    const badEvidenceResult = dbModule.recoverCarrierAssignmentsWithVerifiedEvidence([
+      {
+        order_number: 'PAL-V3-PAID-PROCESSING-DAMAGED',
+        courier_partner: 'BlueDart Luxury Express',
+        evidence_source: '   ', // Blank evidence
+        verified_by: 'lead-operator'
+      },
+      {
+        order_number: 'PAL-V3-PAID-PROCESSING-DAMAGED',
+        courier_partner: 'BlueDart Luxury Express',
+        // Missing evidence_source entirely
+        verified_by: 'lead-operator'
+      },
+      {
+        order_number: 'PAL-V3-PAID-PROCESSING-DAMAGED',
+        courier_partner: 'BlueDart Luxury Express',
+        evidence_source: 'Warehouse dispatch manifest 2026-09-01-WD-882',
+        verified_by: '' // Blank operator
+      }
+    ], v3Db);
+
+    assert.strictEqual(badEvidenceResult.recovered.length, 0, 'Records with missing or blank evidence/operator must NOT be recovered');
+    assert.strictEqual(badEvidenceResult.errors.length, 3, 'Must report validation errors for missing or blank evidence/operator');
+
+    const postDamagedAfterBadEvidence = v3Db.prepare("SELECT carrier_assigned_explicitly FROM orders WHERE order_number = 'PAL-V3-PAID-PROCESSING-DAMAGED'").get();
+    assert.strictEqual(postDamagedAfterBadEvidence.carrier_assigned_explicitly, 0, 'Order must remain unverified when recovery request lacks verified evidence');
+
+    // Step B2: Execute the Safe Operator Recovery Path with genuine verified evidence and operator identity
     const recoveryResults = dbModule.recoverCarrierAssignmentsWithVerifiedEvidence([
       {
         order_number: 'PAL-V3-PAID-PROCESSING-DAMAGED',
