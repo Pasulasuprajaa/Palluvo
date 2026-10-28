@@ -470,6 +470,15 @@ function initSchema() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_carrier_assignment_audit_order ON carrier_assignment_audit(order_number);
+
+    -- Monotonic row version increment trigger: advances version on any order mutation that does not explicitly set it
+    CREATE TRIGGER IF NOT EXISTS trg_orders_version_increment
+    AFTER UPDATE ON orders
+    FOR EACH ROW
+    WHEN (NEW.version IS OLD.version)
+    BEGIN
+      UPDATE orders SET version = COALESCE(OLD.version, 1) + 1 WHERE id = OLD.id;
+    END;
   `);
 
   try {
@@ -518,6 +527,17 @@ function initSchema() {
   } catch (e) {}
   try {
     db.exec(`UPDATE orders SET version = 1 WHERE version IS NULL;`);
+  } catch (e) {}
+  try {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_orders_version_increment
+      AFTER UPDATE ON orders
+      FOR EACH ROW
+      WHEN (NEW.version IS OLD.version)
+      BEGIN
+        UPDATE orders SET version = COALESCE(OLD.version, 1) + 1 WHERE id = OLD.id;
+      END;
+    `);
   } catch (e) {}
   try {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_orders_pending_expiry ON orders(payment_status, expires_at);`);

@@ -1250,8 +1250,9 @@ async function testShopFilterAccessibility() {
 
     // 5. Finding 2 test: Atomic status update with carrier audit
     // Reset test order to Placed, carrier_assigned_explicitly = 0, no audit
-    dbModule.prepare("UPDATE orders SET status = 'Placed', carrier_assigned_explicitly = 0, courier_partner = NULL, version = 1 WHERE id = ?").run(testOrderId);
+    dbModule.prepare("UPDATE orders SET status = 'Placed', carrier_assigned_explicitly = 0, courier_partner = NULL WHERE id = ?").run(testOrderId);
     dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
+    const orderBefore5a = dbModule.prepare("SELECT version FROM orders WHERE id = ?").get(testOrderId);
 
     // 5a. Successful status update commits both order changes and audit record atomically
     const statusUpdateRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
@@ -1264,7 +1265,7 @@ async function testShopFilterAccessibility() {
         status: 'Shipped',
         courier_partner: 'BlueDart Luxury Express',
         loaded_courier_partner: '',
-        expected_version: 1,
+        expected_version: orderBefore5a.version,
         tracking_number: 'BD-STATUS-TX-1001',
         estimated_delivery: '2026-11-01'
       })
@@ -1273,7 +1274,7 @@ async function testShopFilterAccessibility() {
     const orderAfterStatus = dbModule.prepare("SELECT status, carrier_assigned_explicitly, courier_partner, version FROM orders WHERE id = ?").get(testOrderId);
     assert.strictEqual(orderAfterStatus.status, 'Shipped');
     assert.strictEqual(orderAfterStatus.carrier_assigned_explicitly, 1);
-    assert.strictEqual(orderAfterStatus.version, 2, 'Monotonic row version must increment from 1 to 2');
+    assert.strictEqual(orderAfterStatus.version, orderBefore5a.version + 1, 'Monotonic row version must increment');
     const auditAfterStatus = dbModule.prepare("SELECT assigned_by, evidence_source FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get();
     assert.ok(auditAfterStatus, 'Audit row must be created with status update');
     assert.strictEqual(auditAfterStatus.assigned_by, String(adminUser.id));
@@ -1281,8 +1282,9 @@ async function testShopFilterAccessibility() {
 
     // 5b. Verify that prefilled carrier does NOT mark unverified defaults as explicit on ordinary lifecycle status updates
     // Set order to an unverified legacy default: courier_partner is 'BlueDart Luxury Express', but carrier_assigned_explicitly = 0, no audit row
-    dbModule.prepare("UPDATE orders SET status = 'Placed', carrier_assigned_explicitly = 0, courier_partner = 'BlueDart Luxury Express', version = 2 WHERE id = ?").run(testOrderId);
+    dbModule.prepare("UPDATE orders SET status = 'Placed', carrier_assigned_explicitly = 0, courier_partner = 'BlueDart Luxury Express' WHERE id = ?").run(testOrderId);
     dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
+    const orderBefore5b = dbModule.prepare("SELECT version FROM orders WHERE id = ?").get(testOrderId);
 
     const prefilledUpdateRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
       method: 'PUT',
@@ -1294,7 +1296,7 @@ async function testShopFilterAccessibility() {
         status: 'Packed',
         courier_partner: 'BlueDart Luxury Express', // Prepopulated from DB
         loaded_courier_partner: 'BlueDart Luxury Express',
-        expected_version: 2,
+        expected_version: orderBefore5b.version,
         estimated_delivery: '3-4 Business Days'
       })
     });
@@ -1302,7 +1304,7 @@ async function testShopFilterAccessibility() {
     const orderAfterPrefilled = dbModule.prepare("SELECT status, carrier_assigned_explicitly, courier_partner, version FROM orders WHERE id = ?").get(testOrderId);
     assert.strictEqual(orderAfterPrefilled.status, 'Packed');
     assert.strictEqual(orderAfterPrefilled.carrier_assigned_explicitly, 0, 'Prefilled unverified carrier must NOT be marked explicit on ordinary status update');
-    assert.strictEqual(orderAfterPrefilled.version, 3, 'Monotonic row version must increment from 2 to 3');
+    assert.strictEqual(orderAfterPrefilled.version, orderBefore5b.version + 1, 'Monotonic row version must increment');
     const auditCountPrefilled = dbModule.prepare("SELECT COUNT(*) as count FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get().count;
     assert.strictEqual(auditCountPrefilled, 0, 'No carrier audit row should be created for prefilled unchanged carrier');
 
@@ -1528,6 +1530,52 @@ async function testShopFilterAccessibility() {
       })
     });
     assert.strictEqual(cas2.status, 409, 'Second concurrent CAS update must be rejected with 409 Conflict');
+
+    // 7g. Regression test for finding: order mutation (e.g. payment/customer cancellation) advances version,
+    // rejecting stale admin form submissions even within the exact same second timestamp.
+    const fixedSecond = '2026-10-28 15:30:00';
+    dbModule.prepare("UPDATE orders SET status = 'Placed', courier_partner = 'Delhivery', carrier_assigned_explicitly = 1, updated_at = ? WHERE id = ?").run(fixedSecond, testOrderId);
+    const orderBaseline = dbModule.prepare("SELECT version FROM orders WHERE id = ?").get(testOrderId);
+
+    // Operator opens form with baseline version and same-second timestamp
+    const staleBaseline = {
+      expected_version: orderBaseline.version,
+      expected_updated_at: fixedSecond,
+      loaded_courier_partner: 'Delhivery'
+    };
+
+    // Concurrently, an order mutation executes in the same CURRENT_TIMESTAMP second
+    dbModule.prepare("UPDATE orders SET status = 'Cancelled', updated_at = ? WHERE id = ?").run(fixedSecond, testOrderId);
+
+    // Confirm that the mutation advanced the row version via trigger/helper despite same timestamp
+    const orderAfterMutation = dbModule.prepare("SELECT status, version, updated_at FROM orders WHERE id = ?").get(testOrderId);
+    assert.strictEqual(orderAfterMutation.status, 'Cancelled');
+    assert.strictEqual(orderAfterMutation.version, orderBaseline.version + 1, 'Every order mutation must advance row version');
+    assert.strictEqual(orderAfterMutation.updated_at, fixedSecond, 'Timestamp was in same second');
+
+    // Stale admin form now tries to update status to 'Shipped' using the loaded baseline
+    const staleAdminSubmitRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Shipped',
+        courier_partner: 'Delhivery',
+        loaded_courier_partner: staleBaseline.loaded_courier_partner,
+        expected_version: staleBaseline.expected_version,
+        expected_updated_at: staleBaseline.expected_updated_at
+      })
+    });
+    assert.strictEqual(staleAdminSubmitRes.status, 409, 'Must reject stale admin update after order mutation even with identical timestamp');
+    const staleAdminSubmitData = await staleAdminSubmitRes.json();
+    assert.ok(staleAdminSubmitData.error.includes('version conflict') || staleAdminSubmitData.error.includes('modified by another session'));
+
+    // Verify order state was preserved as Cancelled and not overwritten
+    const finalOrderCheck = dbModule.prepare("SELECT status, version FROM orders WHERE id = ?").get(testOrderId);
+    assert.strictEqual(finalOrderCheck.status, 'Cancelled', 'Cancelled status must not be overwritten');
+    assert.strictEqual(finalOrderCheck.version, orderAfterMutation.version, 'Version must not be overwritten');
 
     console.log('✅ PASS: [P2] Admin recovery endpoints strictly attribute recovery to authenticated admin ID and enforce atomic, idempotent batches');
   } finally {

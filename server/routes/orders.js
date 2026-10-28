@@ -255,6 +255,7 @@ router.post('/cancel/:id', authenticateToken, requireDurableStorage, async (req,
             refund_id = ?,
             refund_error = ?,
             refund_idempotency_key = ?,
+            version = COALESCE(version, 1) + 1,
             updated_at = CURRENT_TIMESTAMP 
         WHERE id = ? AND user_id = ? AND status != 'Cancelled' AND payment_status NOT IN ('Failed', 'Expired')
       `).run(finalPaymentStatus, paymentId, refundId, refundError, initialIdempotencyKey, order.id, req.user.id);
@@ -326,7 +327,7 @@ router.post('/return/:id', authenticateToken, requireDurableStorage, (req, res) 
     }
 
     const returnStatus = return_type === 'Exchange' ? 'Exchange Requested' : 'Return Requested';
-    db.prepare('UPDATE orders SET return_status = ?, return_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    db.prepare('UPDATE orders SET return_status = ?, return_reason = ?, version = COALESCE(version, 1) + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(returnStatus, `${reason.trim()} (Pickup requested on ${pickup_date || 'next business day'})`, order.id);
 
     res.json({

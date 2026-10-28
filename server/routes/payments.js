@@ -1192,6 +1192,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
           UPDATE orders 
           SET payment_status = 'Failed', 
               status = 'Cancelled', 
+              version = COALESCE(version, 1) + 1,
               updated_at = CURRENT_TIMESTAMP 
           WHERE id = ? AND user_id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
         `).run(order.id, req.user.id);
@@ -1227,6 +1228,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
           payment_status = 'Paid',
           status = 'Placed',
           razorpay_payment_id = ?,
+          version = COALESCE(version, 1) + 1,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND user_id = ? AND payment_status = 'Pending'
       `).run(razorpay_payment_id, order.id, req.user.id);
@@ -1301,6 +1303,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
             payment_status = 'Paid',
             status = 'Placed',
             razorpay_payment_id = ?,
+            version = COALESCE(version, 1) + 1,
             updated_at = CURRENT_TIMESTAMP
           WHERE id = ? AND user_id = ?
         `).run(razorpay_payment_id, order.id, req.user.id);
@@ -1364,6 +1367,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
           refund_id = ?,
           refund_error = ?,
           refund_idempotency_key = ?,
+          version = COALESCE(version, 1) + 1,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND user_id = ?
       `).run(finalPaymentStatus, razorpay_payment_id, refundId, refundError, initialIdempotencyKey, order.id, req.user.id);
