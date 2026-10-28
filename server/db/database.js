@@ -801,12 +801,6 @@ function recoverCarrierAssignmentsWithVerifiedEvidence(verifiedRecords = [], tar
   const checkExactAudit = targetDb.prepare(
     'SELECT id FROM carrier_assignment_audit WHERE order_number = ? AND courier_partner = ? AND evidence_source = ?'
   );
-  const checkGenericAudit = targetDb.prepare(
-    "SELECT id FROM carrier_assignment_audit WHERE order_number = ? AND courier_partner = ? AND (evidence_source IS NULL OR evidence_source = '' OR evidence_source = 'admin-dashboard-status-update')"
-  );
-  const updateAudit = targetDb.prepare(
-    'UPDATE carrier_assignment_audit SET assigned_by = ?, evidence_source = ?, assigned_at = CURRENT_TIMESTAMP WHERE id = ?'
-  );
   const updateOrder = targetDb.prepare(`
     UPDATE orders
     SET carrier_assigned_explicitly = 1,
@@ -873,17 +867,11 @@ function recoverCarrierAssignmentsWithVerifiedEvidence(verifiedRecords = [], tar
     for (const item of records) {
       updateOrder.run(item.courier_partner, item.order_number);
 
-      // Idempotent audit check: avoid duplicate audit entries for the same order, carrier, and verified evidence source
+      // Idempotent audit check: avoid duplicate audit entries for the same order, carrier, and verified evidence source.
+      // Appends a distinct recovery verification event without mutating original historical assignment rows.
       const exactAudit = checkExactAudit.get(item.order_number, item.courier_partner, item.evidence_source);
       if (!exactAudit) {
-        // If a generic dashboard entry exists for this order/carrier, enrich it with the supplied verified evidence
-        const genericAudit = checkGenericAudit.get(item.order_number, item.courier_partner);
-        if (genericAudit) {
-          updateAudit.run(item.assigned_by, item.evidence_source, genericAudit.id);
-        } else {
-          // Otherwise record recovery as a distinct audit event
-          insertAudit.run(item.order_number, item.courier_partner, item.assigned_by, item.evidence_source);
-        }
+        insertAudit.run(item.order_number, item.courier_partner, item.assigned_by, item.evidence_source);
       }
 
       results.recovered.push(item.order_number);

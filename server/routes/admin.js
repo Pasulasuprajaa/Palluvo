@@ -463,24 +463,73 @@ router.get('/orders', (req, res) => {
 // PUT /api/admin/orders/:id/status (Update order lifecycle status)
 router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
   try {
-    const { status, tracking_number, courier_partner, estimated_delivery } = req.body;
+    const {
+      status,
+      tracking_number,
+      courier_partner,
+      estimated_delivery,
+      expected_updated_at,
+      updated_at: clientUpdatedAt,
+      loaded_courier_partner,
+      expected_courier_partner
+    } = req.body;
 
     if (!status) {
       return res.status(400).json({ error: 'Order status is required.' });
     }
 
-    const ord = db.prepare('SELECT id, order_number, courier_partner, carrier_assigned_explicitly FROM orders WHERE id = ?').get(req.params.id);
+    const ord = db.prepare('SELECT id, order_number, courier_partner, carrier_assigned_explicitly, updated_at FROM orders WHERE id = ?').get(req.params.id);
     if (!ord) {
       return res.status(404).json({ error: 'Order not found.' });
+    }
+
+    // Optimistic concurrency control: reject stale status forms before treating a carrier as newly assigned
+    const expectedVersion = expected_updated_at || clientUpdatedAt;
+    if (expectedVersion && ord.updated_at && String(expectedVersion).trim() !== String(ord.updated_at).trim()) {
+      return res.status(409).json({
+        error: 'Order was modified by another session while this form was open. Please reload and retry.'
+      });
     }
 
     const currentCarrier = ord.courier_partner ? String(ord.courier_partner).trim() : '';
     const trimmedCarrier = courier_partner !== undefined && courier_partner !== null ? String(courier_partner).trim() : null;
     const submittedCarrier = trimmedCarrier !== null ? trimmedCarrier : '';
 
-    // Compare against previous value: only treat as a new explicit assignment if a nonblank carrier
-    // was newly assigned or changed from the prefilled stored value.
-    const isCarrierChanged = submittedCarrier !== '' && submittedCarrier !== currentCarrier;
+    // Baseline carrier check: if caller supplied the carrier loaded into their form, verify it hasn't changed concurrently
+    const baselineCarrier = loaded_courier_partner !== undefined
+      ? (loaded_courier_partner !== null ? String(loaded_courier_partner).trim() : '')
+      : (expected_courier_partner !== undefined
+        ? (expected_courier_partner !== null ? String(expected_courier_partner).trim() : '')
+        : null);
+
+    if (baselineCarrier !== null && baselineCarrier !== currentCarrier) {
+      return res.status(409).json({
+        error: 'Order carrier was modified by another session while this form was open. Please reload and retry.'
+      });
+    }
+
+    // Avoid updating carrier fields unless the operator changed them from the version they loaded
+    let isCarrierChanged = false;
+    let finalCarrier = null;
+
+    if (baselineCarrier !== null) {
+      if (submittedCarrier !== baselineCarrier) {
+        // Operator actively changed the carrier in the form
+        isCarrierChanged = submittedCarrier !== '';
+        finalCarrier = submittedCarrier !== '' ? submittedCarrier : null;
+      } else {
+        // Operator did not change the carrier field; keep existing carrier intact without updating it
+        isCarrierChanged = false;
+        finalCarrier = currentCarrier ? currentCarrier : null;
+      }
+    } else {
+      // Direct API caller without baseline: compare submitted against current
+      isCarrierChanged = submittedCarrier !== '' && submittedCarrier !== currentCarrier;
+      finalCarrier = isCarrierChanged
+        ? submittedCarrier
+        : (trimmedCarrier !== null ? trimmedCarrier : (currentCarrier ? currentCarrier : null));
+    }
+
     const isExplicitCarrier = isCarrierChanged;
     const operatorId = req.user && req.user.id != null ? String(req.user.id) : (req.user?.email || 'admin');
 
@@ -490,7 +539,7 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
         UPDATE orders SET
           status = ?,
           tracking_number = COALESCE(?, tracking_number),
-          courier_partner = COALESCE(?, courier_partner),
+          courier_partner = ?,
           estimated_delivery = COALESCE(?, estimated_delivery),
           carrier_assigned_explicitly = CASE WHEN ? = 1 THEN 1 ELSE ? END,
           updated_at = CURRENT_TIMESTAMP
@@ -509,7 +558,7 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
       req.params.id,
       status,
       tracking_number !== undefined ? tracking_number : null,
-      trimmedCarrier !== null ? trimmedCarrier : (courier_partner !== undefined ? courier_partner : null),
+      finalCarrier,
       estimated_delivery !== undefined ? estimated_delivery : null,
       isExplicitCarrier,
       ord.carrier_assigned_explicitly || 0,

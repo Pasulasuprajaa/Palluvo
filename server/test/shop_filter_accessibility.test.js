@@ -1333,16 +1333,16 @@ async function testShopFilterAccessibility() {
       dbModule.exec(`DROP TRIGGER IF EXISTS test_fail_carrier_audit;`);
     }
 
-    // 6. Finding 2 test: Evidence preservation when deduplicating against prior generic dashboard audit entry
+    // 6. Finding 1 test: Distinct recovery verification event preservation without mutating original assignment audit
     // Seed generic dashboard audit entry
     dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
     dbModule.prepare(`
-      INSERT INTO carrier_assignment_audit (order_number, courier_partner, assigned_by, evidence_source)
-      VALUES ('PAL-ADMIN-REC-TEST-1', 'BlueDart Luxury Express', 'legacy-admin', 'admin-dashboard-status-update')
+      INSERT INTO carrier_assignment_audit (order_number, courier_partner, assigned_by, evidence_source, assigned_at)
+      VALUES ('PAL-ADMIN-REC-TEST-1', 'BlueDart Luxury Express', 'legacy-admin', 'admin-dashboard-status-update', '2026-09-01 10:00:00')
     `).run();
 
     // Now run operator recovery with real manifest evidence
-    const recoveryEnrichRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/recover-carriers`, {
+    const recoveryRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/recover-carriers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1358,15 +1358,21 @@ async function testShopFilterAccessibility() {
         ]
       })
     });
-    assert.strictEqual(recoveryEnrichRes.status, 200, 'Recovery must succeed');
+    assert.strictEqual(recoveryRes.status, 200, 'Recovery must succeed');
 
-    // Verify that the audit record preserves the genuine manifest evidence and authenticated operator
-    const auditRowEnriched = dbModule.prepare("SELECT assigned_by, evidence_source FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get();
-    assert.strictEqual(auditRowEnriched.assigned_by, String(adminUser.id), 'Audit row actor must be updated to authenticated operator ID');
-    assert.strictEqual(auditRowEnriched.evidence_source, 'Warehouse dispatch manifest 2026-WD-9911', 'Audit row evidence must be preserved and enriched with manifest reference');
+    // Verify that the original assignment audit row remains intact and was NOT mutated
+    const originalAuditRow = dbModule.prepare("SELECT assigned_by, evidence_source, assigned_at FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1' AND evidence_source = 'admin-dashboard-status-update'").get();
+    assert.ok(originalAuditRow, 'Original historical assignment audit row must be preserved');
+    assert.strictEqual(originalAuditRow.assigned_by, 'legacy-admin', 'Original assignment actor must not be overwritten');
+    assert.strictEqual(originalAuditRow.assigned_at, '2026-09-01 10:00:00', 'Original timestamp must not be overwritten');
 
-    // Repeated recovery with same manifest evidence must remain idempotent
-    const repeatEnrichRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/recover-carriers`, {
+    // Verify that recovery verification event is recorded as a separate distinct audit event
+    const recoveryAuditRow = dbModule.prepare("SELECT assigned_by, evidence_source FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1' AND evidence_source = 'Warehouse dispatch manifest 2026-WD-9911'").get();
+    assert.ok(recoveryAuditRow, 'Distinct recovery verification event must exist');
+    assert.strictEqual(recoveryAuditRow.assigned_by, String(adminUser.id), 'Recovery audit event must be attributed to recovery operator ID');
+
+    // Repeated recovery with same manifest evidence must remain idempotent (does not duplicate recovery event)
+    const repeatRes2 = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/recover-carriers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1382,9 +1388,65 @@ async function testShopFilterAccessibility() {
         ]
       })
     });
-    assert.strictEqual(repeatEnrichRes.status, 200);
-    const auditCountEnriched = dbModule.prepare("SELECT COUNT(*) as count FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get().count;
-    assert.strictEqual(auditCountEnriched, 1, 'Repeated recovery must not duplicate enriched audit rows');
+    assert.strictEqual(repeatRes2.status, 200);
+    const auditCountTotal = dbModule.prepare("SELECT COUNT(*) as count FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get().count;
+    assert.strictEqual(auditCountTotal, 2, 'Total audit rows must be exactly 2 (original assignment + single recovery event)');
+
+    // 7. Finding 2 test: Reject stale status forms before treating carrier as newly assigned
+    // Reset order: courier is 'Delhivery', updated_at is recorded
+    dbModule.prepare("UPDATE orders SET status = 'Shipped', courier_partner = 'Delhivery', carrier_assigned_explicitly = 1, updated_at = '2026-10-28 12:00:00' WHERE id = ?").run(testOrderId);
+
+    // 7a. Reject stale status form where order was updated concurrently (version mismatch)
+    const staleVersionRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Delivered',
+        courier_partner: 'BlueDart Luxury Express',
+        expected_updated_at: '2026-10-28 10:00:00' // Stale version
+      })
+    });
+    assert.strictEqual(staleVersionRes.status, 409, 'Must reject stale status form with 409 Conflict');
+    const staleVersionData = await staleVersionRes.json();
+    assert.ok(staleVersionData.error.includes('modified by another session'));
+
+    // 7b. Reject stale status form where carrier in DB changed while form was open
+    const staleCarrierRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Delivered',
+        courier_partner: 'BlueDart Luxury Express', // Pre-filled stale carrier from before DB change to Delhivery
+        loaded_courier_partner: 'BlueDart Luxury Express'
+      })
+    });
+    assert.strictEqual(staleCarrierRes.status, 409, 'Must reject when loaded carrier differs from DB carrier');
+
+    // 7c. Avoid updating carrier fields when operator did not change it from the version they loaded
+    const orderCurrent = dbModule.prepare("SELECT updated_at FROM orders WHERE id = ?").get(testOrderId);
+    const unchangedCarrierRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Delivered',
+        courier_partner: 'Delhivery',
+        loaded_courier_partner: 'Delhivery',
+        expected_updated_at: orderCurrent.updated_at
+      })
+    });
+    assert.strictEqual(unchangedCarrierRes.status, 200, 'Status update must succeed');
+    const orderFinal = dbModule.prepare("SELECT status, courier_partner, carrier_assigned_explicitly FROM orders WHERE id = ?").get(testOrderId);
+    assert.strictEqual(orderFinal.status, 'Delivered');
+    assert.strictEqual(orderFinal.courier_partner, 'Delhivery');
 
     console.log('✅ PASS: [P2] Admin recovery endpoints strictly attribute recovery to authenticated admin ID and enforce atomic, idempotent batches');
   } finally {
