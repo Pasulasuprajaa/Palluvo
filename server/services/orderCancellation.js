@@ -5,12 +5,9 @@ const { buildRefundPayload } = require('../routes/payments');
 /**
  * Shared order cancellation workflow supporting both customer and admin cancellation.
  * Performs all side effects atomically:
- * - Checks order lifecycle and payment state
- * - Initiates idempotent Razorpay refund for paid orders
- * - Updates payment_status and payments ledger
- * - Restores inventory (products and product_variants stock_quantity)
- * - Restores coupon usage
- * - Sets status = 'Cancelled' and advances monotonic version
+ * 1. Validates order status (rejecting Shipped, Out for Delivery, Delivered, Cancelled, and already Refunded orders).
+ * 2. Persists/locks cancellation intent and restores inventory and coupons atomically with optimistic concurrency check (expectedVersion) BEFORE calling Razorpay.
+ * 3. For paid orders, initiates idempotent Razorpay refund and reconciles the gateway result onto the order and payments ledger.
  *
  * @param {number|string} orderId
  * @param {object} options
@@ -54,6 +51,14 @@ async function cancelOrder(orderId, options = {}) {
     return { error: 'Order is already cancelled.', statusCode: 400 };
   }
 
+  // Guard against cancelling dispatched or delivered shipments (including Out for Delivery)
+  if (order.status === 'Shipped' || order.status === 'Out for Delivery' || order.status === 'Delivered') {
+    return {
+      error: 'Orders that are already shipped, out for delivery, or delivered cannot be cancelled. Please contact concierge support for returns.',
+      statusCode: 400
+    };
+  }
+
   if (order.payment_status === 'Refunded' || order.payment_status === 'Refund_Pending') {
     return { error: 'Order cancellation and refund are already in progress or completed.', statusCode: 400 };
   }
@@ -62,19 +67,11 @@ async function cancelOrder(orderId, options = {}) {
     return { error: 'Order payment failed or expired; reservation has already been released.', statusCode: 400 };
   }
 
-  if (order.status === 'Shipped' || order.status === 'Delivered') {
-    return { error: 'Orders that are already shipped or delivered cannot be cancelled. Please contact concierge support for returns.', statusCode: 400 };
-  }
-
-  let finalPaymentStatus = order.payment_status;
-  let refundId = order.refund_id || null;
-  let refundError = null;
-  let initialIdempotencyKey = order.refund_idempotency_key || null;
+  const isPaid = order.payment_status === 'Paid';
   let paymentId = order.razorpay_payment_id || null;
-  let isRefundFull = false;
+  let initialIdempotencyKey = null;
 
-  // Persist and initiate idempotent refund workflow for captured paid orders
-  if (order.payment_status === 'Paid') {
+  if (isPaid) {
     if (!paymentId) {
       const paymentRow = db.prepare('SELECT razorpay_payment_id FROM payments WHERE order_id = ? AND razorpay_payment_id IS NOT NULL ORDER BY id DESC LIMIT 1').get(order.id);
       paymentId = paymentRow?.razorpay_payment_id || null;
@@ -85,22 +82,6 @@ async function cancelOrder(orderId, options = {}) {
     }
 
     initialIdempotencyKey = order.refund_idempotency_key || `rfnd_${order.id}_${order.order_number}`;
-    let refundResult = null;
-    try {
-      const refundPayload = buildRefundPayload(order, initialIdempotencyKey);
-      if (refundPayload.notes) {
-        refundPayload.notes.reason = actor === 'admin' ? 'admin_cancellation' : 'customer_cancellation';
-      }
-      refundResult = await refundRazorpayPayment(paymentId, refundPayload);
-    } catch (refErr) {
-      console.error('Refund initiation error for cancelled order:', refErr);
-      refundError = refErr.message || 'Refund initiation failed';
-    }
-
-    const isRefundProcessed = Boolean(refundResult && refundResult.status === 'processed');
-    isRefundFull = isRefundProcessed && (!refundResult.amount || refundResult.amount >= Math.round(order.total_amount * 100));
-    refundId = refundResult ? refundResult.id : null;
-    finalPaymentStatus = isRefundFull ? 'Refunded' : 'Refund_Pending';
   }
 
   // Determine updated carrier and tracking fields
@@ -108,8 +89,13 @@ async function cancelOrder(orderId, options = {}) {
   const trackingVal = trackingNumber !== undefined ? trackingNumber : null;
   const estDeliveryVal = estimatedDelivery !== undefined ? estimatedDelivery : null;
 
-  const cancelTx = db.transaction(() => {
-    let whereClause = "id = ? AND status != 'Cancelled' AND payment_status NOT IN ('Failed', 'Expired')";
+  // Initial target payment status when committing cancellation intent
+  const lockedPaymentStatus = isPaid ? 'Refund_Pending' : order.payment_status;
+
+  // Phase 1: Atomically commit cancellation intent, lock refund-pending state, and restore stock/coupons
+  // Enforces expectedVersion BEFORE calling external gateway so concurrent modifications fail closed with 409
+  const commitCancellationIntentTx = db.transaction(() => {
+    let whereClause = "id = ? AND status != 'Cancelled' AND status NOT IN ('Shipped', 'Out for Delivery', 'Delivered') AND payment_status NOT IN ('Failed', 'Expired', 'Refunded')";
     const whereParams = [order.id];
 
     if (userId != null) {
@@ -127,9 +113,7 @@ async function cancelOrder(orderId, options = {}) {
       SET status = 'Cancelled',
           payment_status = ?,
           razorpay_payment_id = COALESCE(?, razorpay_payment_id),
-          refund_id = ?,
-          refund_error = ?,
-          refund_idempotency_key = ?,
+          refund_idempotency_key = COALESCE(?, refund_idempotency_key),
           tracking_number = COALESCE(?, tracking_number),
           courier_partner = ?,
           estimated_delivery = COALESCE(?, estimated_delivery),
@@ -138,10 +122,8 @@ async function cancelOrder(orderId, options = {}) {
           updated_at = CURRENT_TIMESTAMP 
       WHERE ${whereClause}
     `).run(
-      finalPaymentStatus,
+      lockedPaymentStatus,
       paymentId,
-      refundId,
-      refundError,
       initialIdempotencyKey,
       trackingVal,
       carrierVal,
@@ -153,14 +135,6 @@ async function cancelOrder(orderId, options = {}) {
     );
 
     if (updateRes.changes > 0) {
-      if (isRefundFull) {
-        db.prepare(`
-          UPDATE payments
-          SET status = 'Refunded'
-          WHERE order_id = ?
-        `).run(order.id);
-      }
-
       const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
       for (const item of items) {
         db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')
@@ -188,28 +162,93 @@ async function cancelOrder(orderId, options = {}) {
     return false;
   });
 
-  const didCancel = cancelTx();
-  if (!didCancel) {
+  const didCommitIntent = commitCancellationIntentTx();
+  if (!didCommitIntent) {
     if (expectedVersion != null) {
       return { error: 'Order was updated by another session (atomic version conflict). Please reload and retry.', statusCode: 409 };
     }
     return { error: 'Order could not be cancelled or has already been cancelled.', statusCode: 400 };
   }
 
-  const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
-  const isFull = finalPaymentStatus === 'Refunded';
+  // Phase 2: If the order was not paid, cancellation is fully complete
+  if (!isPaid) {
+    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+    return {
+      success: true,
+      order: updatedOrder,
+      message: 'Order cancelled successfully.'
+    };
+  }
+
+  // Phase 3: For paid orders, the order is now locked in 'Cancelled' and 'Refund_Pending'
+  // Issue the external refund via Razorpay and reconcile the result onto the database
+  let refundResult = null;
+  let refundError = null;
+  try {
+    const refundPayload = buildRefundPayload(order, initialIdempotencyKey);
+    if (refundPayload.notes) {
+      refundPayload.notes.reason = actor === 'admin' ? 'admin_cancellation' : 'customer_cancellation';
+    }
+    refundResult = await refundRazorpayPayment(paymentId, refundPayload);
+  } catch (refErr) {
+    console.error('Refund initiation error for cancelled order:', refErr);
+    refundError = refErr.message || 'Refund initiation failed';
+  }
+
+  const isRefundProcessed = Boolean(refundResult && refundResult.status === 'processed');
+  const isRefundFull = isRefundProcessed && (!refundResult.amount || refundResult.amount >= Math.round(order.total_amount * 100));
+  const refundId = refundResult ? refundResult.id : null;
+
+  // Reconcile gateway response idempotently onto orders and payments ledger
+  db.transaction(() => {
+    if (isRefundFull) {
+      db.prepare(`
+        UPDATE orders 
+        SET payment_status = 'Refunded',
+            refund_id = ?,
+            refund_error = NULL,
+            version = COALESCE(version, 1) + 1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(refundId, order.id);
+
+      db.prepare(`
+        UPDATE payments
+        SET status = 'Refunded'
+        WHERE order_id = ?
+      `).run(order.id);
+    } else if (refundId) {
+      db.prepare(`
+        UPDATE orders 
+        SET refund_id = ?,
+            refund_error = ?,
+            version = COALESCE(version, 1) + 1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(refundId, refundError, order.id);
+    } else if (refundError) {
+      db.prepare(`
+        UPDATE orders 
+        SET refund_error = ?,
+            version = COALESCE(version, 1) + 1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(refundError, order.id);
+    }
+  })();
+
+  const finalOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+  const isFullyRefunded = finalOrder.payment_status === 'Refunded';
 
   return {
     success: true,
-    order: updatedOrder,
-    refunded: isFull,
-    refund_id: refundId,
-    payment_status: finalPaymentStatus,
-    message: order.payment_status === 'Paid'
-      ? (isFull
-          ? 'Order cancelled successfully. A full refund has been credited to your original payment method.'
-          : 'Order cancelled successfully. A refund has been initiated and will arrive within 3-5 business days.')
-      : 'Order cancelled successfully.'
+    order: finalOrder,
+    refunded: isFullyRefunded,
+    refund_id: finalOrder.refund_id || refundId,
+    payment_status: finalOrder.payment_status,
+    message: isFullyRefunded
+      ? 'Order cancelled successfully. A full refund has been credited to your original payment method.'
+      : 'Order cancelled successfully. A refund has been initiated and will arrive within 3-5 business days.'
   };
 }
 

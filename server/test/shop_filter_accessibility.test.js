@@ -1826,7 +1826,8 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(couponAfterCancel.times_used, 4, 'Coupon times_used must be decremented');
 
     // Verify that attempting to cancel an already Shipped order is rejected with 400
-    dbModule.prepare("UPDATE orders SET status = 'Shipped', version = 3 WHERE id = ?").run(cancelOrderId);
+    dbModule.prepare("UPDATE orders SET status = 'Shipped', payment_status = 'Paid' WHERE id = ?").run(cancelOrderId);
+    const orderBeforeShipped = dbModule.prepare("SELECT version FROM orders WHERE id = ?").get(cancelOrderId);
     const cancelShippedRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${cancelOrderId}/status`, {
       method: 'PUT',
       headers: {
@@ -1835,19 +1836,65 @@ async function testShopFilterAccessibility() {
       },
       body: JSON.stringify({
         status: 'Cancelled',
-        expected_version: 3
+        expected_version: orderBeforeShipped.version
       })
     });
     assert.strictEqual(cancelShippedRes.status, 400, 'Attempting to cancel a shipped order must return 400 Bad Request');
+
+    // Verify that attempting to cancel an Out for Delivery order is rejected with 400
+    dbModule.prepare("UPDATE orders SET status = 'Out for Delivery', payment_status = 'Paid' WHERE id = ?").run(cancelOrderId);
+    const orderBeforeOfd = dbModule.prepare("SELECT version FROM orders WHERE id = ?").get(cancelOrderId);
+    const cancelOfdRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${cancelOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Cancelled',
+        expected_version: orderBeforeOfd.version
+      })
+    });
+    assert.strictEqual(cancelOfdRes.status, 400, 'Attempting to cancel an order out for delivery must return 400 Bad Request');
+    const cancelOfdData = await cancelOfdRes.json();
+    assert.ok(cancelOfdData.error.includes('out for delivery'), 'Error must mention out for delivery');
+
+    // Verify cancellation intent is committed before external refund: version conflict fails closed with 409
+    const cancelConflictInsert = dbModule.prepare(`
+      INSERT INTO orders (order_number, user_id, address_data, subtotal, total_amount, status, payment_status, razorpay_payment_id, version)
+      VALUES ('PAL-ADMIN-CANCEL-CONFLICT', ?, '{}', 5000, 5000, 'Processing', 'Paid', 'pay_mock_conflict_test', 2)
+    `).run(testUserId);
+    const conflictOrderId = cancelConflictInsert.lastInsertRowid;
+
+    // Simulate concurrent modification advancing the version
+    dbModule.prepare("UPDATE orders SET version = 3 WHERE id = ?").run(conflictOrderId);
+
+    // Stale admin request with expected_version: 2 must fail with 409 before external refund is issued
+    const conflictRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${conflictOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Cancelled',
+        expected_version: 2
+      })
+    });
+    assert.strictEqual(conflictRes.status, 409, 'Must return 409 conflict when version check fails before refund is issued');
+    const conflictOrderCheck = dbModule.prepare("SELECT status, payment_status, version FROM orders WHERE id = ?").get(conflictOrderId);
+    assert.strictEqual(conflictOrderCheck.status, 'Processing', 'Order status must remain Processing');
+    assert.strictEqual(conflictOrderCheck.payment_status, 'Paid', 'Order payment status must remain Paid');
+    assert.strictEqual(conflictOrderCheck.version, 3, 'Order version must not be changed');
 
     console.log('✅ PASS: [P2] Admin recovery endpoints strictly attribute recovery to authenticated admin ID and enforce atomic, idempotent batches');
   } finally {
     adminServer.close();
     try {
-      dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number IN ('PAL-ADMIN-REC-TEST-1', 'PAL-ADMIN-CANCEL-TEST')").run();
-      dbModule.prepare("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE order_number IN ('PAL-ADMIN-REC-TEST-1', 'PAL-ADMIN-CANCEL-TEST'))").run();
-      dbModule.prepare("DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number IN ('PAL-ADMIN-REC-TEST-1', 'PAL-ADMIN-CANCEL-TEST'))").run();
-      dbModule.prepare("DELETE FROM orders WHERE order_number IN ('PAL-ADMIN-REC-TEST-1', 'PAL-ADMIN-CANCEL-TEST')").run();
+      dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number IN ('PAL-ADMIN-REC-TEST-1', 'PAL-ADMIN-CANCEL-TEST', 'PAL-ADMIN-CANCEL-CONFLICT')").run();
+      dbModule.prepare("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE order_number IN ('PAL-ADMIN-REC-TEST-1', 'PAL-ADMIN-CANCEL-TEST', 'PAL-ADMIN-CANCEL-CONFLICT'))").run();
+      dbModule.prepare("DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number IN ('PAL-ADMIN-REC-TEST-1', 'PAL-ADMIN-CANCEL-TEST', 'PAL-ADMIN-CANCEL-CONFLICT'))").run();
+      dbModule.prepare("DELETE FROM orders WHERE order_number IN ('PAL-ADMIN-REC-TEST-1', 'PAL-ADMIN-CANCEL-TEST', 'PAL-ADMIN-CANCEL-CONFLICT')").run();
       if (typeof testProdId !== 'undefined') {
         dbModule.prepare("DELETE FROM product_variants WHERE product_id = ?").run(testProdId);
         dbModule.prepare("DELETE FROM products WHERE id = ?").run(testProdId);
