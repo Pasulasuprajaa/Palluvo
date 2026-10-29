@@ -1221,8 +1221,69 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
     }
 
     // 5. Signature IS VALID: Customer was charged at gateway
+
+    // If order was terminally cancelled, do NOT resurrect it as paid without reservation.
+    // Idempotently refund the captured payment immediately.
+    if (order.status === 'Cancelled' || order.payment_status === 'Cancelled') {
+      let refundResult = null;
+      let refundError = null;
+      const initialIdempotencyKey = order.refund_idempotency_key || `rfnd_${order.id}_${order.order_number}`;
+      try {
+        const refundPayload = buildRefundPayload(order, initialIdempotencyKey);
+        refundResult = await refundRazorpayPayment(razorpay_payment_id, refundPayload);
+      } catch (refErr) {
+        console.error('Automated refund error for cancelled order:', refErr);
+        refundError = refErr.message || 'Refund initiation failed';
+      }
+
+      const isRefundProcessed = Boolean(refundResult && refundResult.status === 'processed');
+      const isRefundPending = Boolean(refundResult && refundResult.status === 'pending');
+      const isRefundFull = isRefundProcessed && (!refundResult.amount || refundResult.amount >= Math.round(order.total_amount * 100));
+      const refundId = refundResult ? refundResult.id : null;
+      const finalPaymentStatus = isRefundFull ? 'Refunded' : 'Refund_Pending';
+      const paymentRecordStatus = isRefundFull ? 'Refunded' : (isRefundPending ? 'Refund_Pending' : 'Captured');
+
+      db.transaction(() => {
+        db.prepare(`
+          UPDATE orders SET
+            payment_status = ?,
+            status = 'Cancelled',
+            razorpay_payment_id = ?,
+            refund_id = ?,
+            refund_error = ?,
+            refund_idempotency_key = ?,
+            version = COALESCE(version, 1) + 1,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND user_id = ?
+        `).run(finalPaymentStatus, razorpay_payment_id, refundId, refundError, initialIdempotencyKey, order.id, req.user.id);
+
+        db.prepare(`
+          INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+          VALUES (?, ?, ?, ?, ?, 'INR', ?, 'Razorpay')
+        `).run(order.id, razorpay_order_id, razorpay_payment_id, razorpay_signature, order.total_amount * 100, paymentRecordStatus);
+      })();
+
+      if (isRefundFull) {
+        return res.status(409).json({
+          error: 'Payment was charged, but the order has already been cancelled. A full refund has been credited to your original payment method.',
+          payment_status: 'Refunded',
+          refunded: true,
+          refund_id: refundId,
+          order_number: order.order_number
+        });
+      }
+
+      return res.status(409).json({
+        error: 'Payment was charged, but the order has already been cancelled. A full refund has been initiated and is currently processing. Our automated reconciler will confirm completion.',
+        payment_status: 'Refund_Pending',
+        refunded: false,
+        refund_id: refundId,
+        order_number: order.order_number
+      });
+    }
+
     // Standard Active Path: Order is currently Pending (reservation still held)
-    if (order.payment_status === 'Pending') {
+    if (order.payment_status === 'Pending' && order.status !== 'Cancelled') {
       const updateResult = db.prepare(`
         UPDATE orders SET
           payment_status = 'Paid',
@@ -1230,7 +1291,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
           razorpay_payment_id = ?,
           version = COALESCE(version, 1) + 1,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND user_id = ? AND payment_status = 'Pending'
+        WHERE id = ? AND user_id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
       `).run(razorpay_payment_id, order.id, req.user.id);
 
       if (updateResult.changes > 0) {

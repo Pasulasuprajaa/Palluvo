@@ -90,7 +90,7 @@ async function cancelOrder(orderId, options = {}) {
   const estDeliveryVal = estimatedDelivery !== undefined ? estimatedDelivery : null;
 
   // Initial target payment status when committing cancellation intent
-  const lockedPaymentStatus = isPaid ? 'Refund_Pending' : order.payment_status;
+  const lockedPaymentStatus = isPaid ? 'Refund_Pending' : (order.payment_status === 'Pending' ? 'Cancelled' : order.payment_status);
 
   // Phase 1: Atomically commit cancellation intent, lock refund-pending state, and restore stock/coupons
   // Enforces expectedVersion BEFORE calling external gateway so concurrent modifications fail closed with 409

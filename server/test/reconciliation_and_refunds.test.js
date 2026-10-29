@@ -717,6 +717,49 @@ async function runTests() {
 
     const updatedPayment = db.prepare('SELECT * FROM payments WHERE order_id = ?').get(cancelOrderId);
     assert.strictEqual(updatedPayment.status, 'Refunded', 'Payments ledger status must be updated to Refunded');
+
+    // [P1] Late payment on cancelled pending order does not resurrect as Placed/Paid and is refunded
+    const latePendingInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, address_data)
+      VALUES ('PAL-LATE-CANCEL-1', ?, 5000, 5000, 'Razorpay', 'Pending', 'order_mock_late_cancel_1', 'Placed', '{}')
+    `).run(cancelOrder.user_id);
+    const latePendingOrderId = latePendingInsert.lastInsertRowid;
+
+    // Customer cancels the pending order
+    const cancelPendingRes = await request(`/api/orders/cancel/${latePendingOrderId}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cancelUserToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    assert.strictEqual(cancelPendingRes.status, 200, 'Pending order cancellation should succeed');
+    const cancelledPendingOrder = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(latePendingOrderId);
+    assert.strictEqual(cancelledPendingOrder.status, 'Cancelled');
+    assert.strictEqual(cancelledPendingOrder.payment_status, 'Cancelled');
+
+    // Late payment verification arrives for the cancelled order
+    const lateVerifyRes = await request('/api/payments/verify', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cancelUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        orderId: latePendingOrderId,
+        razorpay_order_id: 'order_mock_late_cancel_1',
+        razorpay_payment_id: 'pay_mock_late_cancel_1',
+        razorpay_signature: 'mock_sig_late_cancel'
+      }
+    });
+    assert.strictEqual(lateVerifyRes.status, 409, 'Late payment on cancelled order must return 409 Conflict with refund');
+    assert.strictEqual(lateVerifyRes.body.payment_status, 'Refunded');
+    assert.strictEqual(lateVerifyRes.body.refunded, true);
+
+    const postVerifyOrder = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(latePendingOrderId);
+    assert.strictEqual(postVerifyOrder.status, 'Cancelled', 'Late payment must not resurrect cancelled order to Placed');
+    assert.strictEqual(postVerifyOrder.payment_status, 'Refunded');
+
     console.log('✅ PASS: [P2] Order cancellation updates payment ledger status to Refunded on immediate full refund');
 
     // --- TEST SUITE P2: Runtime Product URL Preservation & Real 404 Routing ---

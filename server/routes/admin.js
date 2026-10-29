@@ -500,7 +500,7 @@ router.put('/orders/:id/status', requireDurableStorage, async (req, res) => {
       });
     }
 
-    const ord = db.prepare('SELECT id, order_number, courier_partner, carrier_assigned_explicitly, version, updated_at FROM orders WHERE id = ?').get(req.params.id);
+    const ord = db.prepare('SELECT id, order_number, status, payment_status, courier_partner, carrier_assigned_explicitly, version, updated_at FROM orders WHERE id = ?').get(req.params.id);
     if (!ord) {
       return res.status(404).json({ error: 'Order not found.' });
     }
@@ -529,6 +529,13 @@ router.put('/orders/:id/status', requireDurableStorage, async (req, res) => {
     if (expectedVersionTs && ord.updated_at && String(expectedVersionTs).trim() !== String(ord.updated_at).trim()) {
       return res.status(409).json({
         error: 'Order was modified by another session while this form was open. Please reload and retry.'
+      });
+    }
+
+    // Reject generic status changes for cancelled or refunded orders to keep cancellation strictly terminal
+    if (ord.status === 'Cancelled' || ord.payment_status === 'Refunded' || ord.payment_status === 'Refund_Pending') {
+      return res.status(400).json({
+        error: 'Cannot modify lifecycle status for a cancelled or refunded order. Order cancellation is terminal.'
       });
     }
 
@@ -616,7 +623,10 @@ router.put('/orders/:id/status', requireDurableStorage, async (req, res) => {
           carrier_assigned_explicitly = CASE WHEN ? IS NULL THEN 0 WHEN ? = 1 THEN 1 ELSE ? END,
           version = COALESCE(version, 1) + 1,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND (version = ? OR (version IS NULL AND ? = 1))
+        WHERE id = ? 
+          AND (version = ? OR (version IS NULL AND ? = 1))
+          AND status != 'Cancelled'
+          AND payment_status NOT IN ('Refunded', 'Refund_Pending')
       `).run(statusVal, trackingVal, carrierVal, estDeliveryVal, carrierVal, isExplicit ? 1 : 0, existingExplicit, orderId, expectedVer, expectedVer);
 
       if (updateResult.changes === 0) {

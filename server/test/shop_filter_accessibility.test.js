@@ -1616,6 +1616,7 @@ async function testShopFilterAccessibility() {
     );
 
     // 7j. [P2] Validate lifecycle status against supported values
+    dbModule.prepare("UPDATE orders SET status = 'Placed' WHERE id = ?").run(testOrderId);
     const currentOrderBeforeStatusCheck = dbModule.prepare("SELECT status, version FROM orders WHERE id = ?").get(testOrderId);
 
     // Reject non-canonical string status
@@ -1886,6 +1887,29 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(conflictOrderCheck.status, 'Processing', 'Order status must remain Processing');
     assert.strictEqual(conflictOrderCheck.payment_status, 'Paid', 'Order payment status must remain Paid');
     assert.strictEqual(conflictOrderCheck.version, 3, 'Order version must not be changed');
+
+    // [P2] Terminal cancellation guard: admin cannot transition a cancelled order back to an active state
+    dbModule.prepare("UPDATE orders SET status = 'Cancelled', payment_status = 'Refunded' WHERE id = ?").run(cancelOrderId);
+    const orderBeforeReopen = dbModule.prepare("SELECT version FROM orders WHERE id = ?").get(cancelOrderId);
+    const reopenRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${cancelOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Processing',
+        expected_version: orderBeforeReopen.version
+      })
+    });
+    assert.strictEqual(reopenRes.status, 400, 'Attempting to change status of cancelled order must return 400 Bad Request');
+    const reopenData = await reopenRes.json();
+    assert.ok(
+      reopenData.error.includes('terminal') || reopenData.error.includes('cancelled'),
+      'Error message must indicate cancellation is terminal'
+    );
+    const orderAfterReopen = dbModule.prepare("SELECT status FROM orders WHERE id = ?").get(cancelOrderId);
+    assert.strictEqual(orderAfterReopen.status, 'Cancelled', 'Cancelled status must remain terminal and unchanged');
 
     console.log('✅ PASS: [P2] Admin recovery endpoints strictly attribute recovery to authenticated admin ID and enforce atomic, idempotent batches');
   } finally {
