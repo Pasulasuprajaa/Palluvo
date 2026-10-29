@@ -756,9 +756,86 @@ async function runTests() {
     assert.strictEqual(lateVerifyRes.body.payment_status, 'Refunded');
     assert.strictEqual(lateVerifyRes.body.refunded, true);
 
-    const postVerifyOrder = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(latePendingOrderId);
+    const postVerifyOrder = db.prepare('SELECT status, payment_status, razorpay_payment_id, refund_idempotency_key FROM orders WHERE id = ?').get(latePendingOrderId);
     assert.strictEqual(postVerifyOrder.status, 'Cancelled', 'Late payment must not resurrect cancelled order to Placed');
     assert.strictEqual(postVerifyOrder.payment_status, 'Refunded');
+    assert.strictEqual(postVerifyOrder.razorpay_payment_id, 'pay_mock_late_cancel_1');
+    assert.ok(postVerifyOrder.refund_idempotency_key, 'Refund idempotency key must be persisted');
+
+    // [P2] Idempotent payment ledger insertion: exactly one record exists
+    const paymentRecords = db.prepare('SELECT * FROM payments WHERE razorpay_payment_id = ?').all('pay_mock_late_cancel_1');
+    assert.strictEqual(paymentRecords.length, 1, 'Only one payment ledger row should exist for late payment ID');
+    assert.strictEqual(paymentRecords[0].status, 'Refunded');
+
+    // Concurrent verification calls for cancelled order: exactly 1 payment row, no duplicates
+    const latePendingInsert2 = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, address_data)
+      VALUES ('PAL-LATE-CANCEL-2', ?, 3000, 3000, 'Razorpay', 'Pending', 'order_mock_late_cancel_2', 'Placed', '{}')
+    `).run(cancelOrder.user_id);
+    const latePendingOrderId2 = latePendingInsert2.lastInsertRowid;
+
+    await request(`/api/orders/cancel/${latePendingOrderId2}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cancelUserToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const [concurrentRes1, concurrentRes2] = await Promise.all([
+      request('/api/payments/verify', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${cancelUserToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: {
+          orderId: latePendingOrderId2,
+          razorpay_order_id: 'order_mock_late_cancel_2',
+          razorpay_payment_id: 'pay_mock_late_cancel_2',
+          razorpay_signature: 'mock_sig_late_cancel'
+        }
+      }),
+      request('/api/payments/verify', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${cancelUserToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: {
+          orderId: latePendingOrderId2,
+          razorpay_order_id: 'order_mock_late_cancel_2',
+          razorpay_payment_id: 'pay_mock_late_cancel_2',
+          razorpay_signature: 'mock_sig_late_cancel'
+        }
+      })
+    ]);
+
+    assert.strictEqual(concurrentRes1.status, 409);
+    assert.strictEqual(concurrentRes2.status, 409);
+    const concurrentPayments = db.prepare('SELECT * FROM payments WHERE razorpay_payment_id = ?').all('pay_mock_late_cancel_2');
+    assert.strictEqual(concurrentPayments.length, 1, 'Concurrent late payment verifications must result in exactly 1 payment ledger entry without duplicates');
+
+    // [P1] Verification crash recovery: If process exits after claim/gateway before completion,
+    // reconciler discovers the persisted refund intent & payment ID and completes reconciliation
+    const crashOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, razorpay_payment_id, refund_idempotency_key, status, address_data)
+      VALUES ('PAL-LATE-CRASH-TEST', ?, 4000, 4000, 'Razorpay', 'Refund_Pending', 'order_mock_test_2', 'pay_mock_2_crash', 'rfnd_crash_test', 'Cancelled', '{}')
+    `).run(cancelOrder.user_id);
+    const crashOrderId = crashOrderInsert.lastInsertRowid;
+
+    db.prepare(`
+      INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+      VALUES (?, 'order_mock_test_2', 'pay_mock_2_crash', 'sig_test', 400000, 'INR', 'Captured', 'Razorpay')
+      ON CONFLICT(razorpay_payment_id) DO UPDATE SET status = 'Captured'
+    `).run(crashOrderId);
+
+    // Run reconciler scoped to crashOrderId
+    await reconcilePendingRefunds({ orderIds: [crashOrderId] });
+    const reconciledCrashOrder = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(crashOrderId);
+    assert.strictEqual(reconciledCrashOrder.payment_status, 'Refunded', 'Persisted refund intent must be safely reconciled by reconciler');
+    const reconciledCrashPayment = db.prepare('SELECT status FROM payments WHERE order_id = ?').get(crashOrderId);
+    assert.strictEqual(reconciledCrashPayment.status, 'Refunded', 'Payments table must be reconciled to Refunded');
 
     console.log('✅ PASS: [P2] Order cancellation updates payment ledger status to Refunded on immediate full refund');
 
