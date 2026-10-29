@@ -460,6 +460,17 @@ router.get('/orders', (req, res) => {
   }
 });
 
+// Canonical order lifecycle statuses supported across storefront tracking and admin dashboard
+const CANONICAL_ORDER_STATUSES = [
+  'Placed',
+  'Processing',
+  'Packed',
+  'Shipped',
+  'Out for Delivery',
+  'Delivered',
+  'Cancelled'
+];
+
 // PUT /api/admin/orders/:id/status (Update order lifecycle status)
 router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
   try {
@@ -476,8 +487,15 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
       expected_courier_partner
     } = req.body;
 
-    if (!status) {
+    if (!status || typeof status !== 'string' || !status.trim()) {
       return res.status(400).json({ error: 'Order status is required.' });
+    }
+
+    const trimmedStatus = status.trim();
+    if (!CANONICAL_ORDER_STATUSES.includes(trimmedStatus)) {
+      return res.status(400).json({
+        error: `Invalid order status "${status}". Allowed values: ${CANONICAL_ORDER_STATUSES.join(', ')}.`
+      });
     }
 
     const ord = db.prepare('SELECT id, order_number, courier_partner, carrier_assigned_explicitly, version, updated_at FROM orders WHERE id = ?').get(req.params.id);
@@ -570,11 +588,11 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
           tracking_number = COALESCE(?, tracking_number),
           courier_partner = ?,
           estimated_delivery = COALESCE(?, estimated_delivery),
-          carrier_assigned_explicitly = CASE WHEN ? = 1 THEN 1 ELSE ? END,
+          carrier_assigned_explicitly = CASE WHEN ? IS NULL THEN 0 WHEN ? = 1 THEN 1 ELSE ? END,
           version = COALESCE(version, 1) + 1,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND (version = ? OR (version IS NULL AND ? = 1))
-      `).run(statusVal, trackingVal, carrierVal, estDeliveryVal, isExplicit ? 1 : 0, existingExplicit, orderId, expectedVer, expectedVer);
+      `).run(statusVal, trackingVal, carrierVal, estDeliveryVal, carrierVal, isExplicit ? 1 : 0, existingExplicit, orderId, expectedVer, expectedVer);
 
       if (updateResult.changes === 0) {
         throw new Error('CONCURRENCY_CONFLICT');
@@ -591,7 +609,7 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
     try {
       updateOrderStatusAndAudit(
         req.params.id,
-        status,
+        trimmedStatus,
         tracking_number !== undefined ? tracking_number : null,
         finalCarrier,
         estimated_delivery !== undefined ? estimated_delivery : null,
@@ -611,7 +629,7 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
     }
 
     const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
-    res.json({ message: `Order status updated to "${status}".`, order: updated });
+    res.json({ message: `Order status updated to "${trimmedStatus}".`, order: updated });
   } catch (err) {
     console.error('Admin update order error:', err);
     res.status(500).json({ error: 'Failed to update order status.' });

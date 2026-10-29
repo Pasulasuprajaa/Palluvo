@@ -1615,6 +1615,111 @@ async function testShopFilterAccessibility() {
       'AdminPage.jsx must include <option value="Processing">Processing</option> in lifecycle select'
     );
 
+    // 7j. [P2] Validate lifecycle status against supported values
+    const currentOrderBeforeStatusCheck = dbModule.prepare("SELECT status, version FROM orders WHERE id = ?").get(testOrderId);
+
+    // Reject non-canonical string status
+    const invalidStatusRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'In Transit', // Unsupported / typo status
+        expected_version: currentOrderBeforeStatusCheck.version
+      })
+    });
+    assert.strictEqual(invalidStatusRes.status, 400, 'Non-canonical status must be rejected with 400 Bad Request');
+    const invalidStatusData = await invalidStatusRes.json();
+    assert.ok(
+      invalidStatusData.error.includes('Invalid order status') && invalidStatusData.error.includes('Allowed values'),
+      'Error message must state allowed canonical statuses'
+    );
+
+    // Reject empty/whitespace status
+    const emptyStatusRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: '   ',
+        expected_version: currentOrderBeforeStatusCheck.version
+      })
+    });
+    assert.strictEqual(emptyStatusRes.status, 400, 'Empty/whitespace status must be rejected with 400 Bad Request');
+
+    // Confirm DB status was not modified by rejected requests
+    const orderAfterRejectedStatus = dbModule.prepare("SELECT status, version FROM orders WHERE id = ?").get(testOrderId);
+    assert.strictEqual(orderAfterRejectedStatus.status, currentOrderBeforeStatusCheck.status);
+    assert.strictEqual(orderAfterRejectedStatus.version, currentOrderBeforeStatusCheck.version);
+
+    // Accept canonical status update (e.g. 'Processing')
+    const validStatusRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Processing',
+        expected_version: currentOrderBeforeStatusCheck.version
+      })
+    });
+    assert.strictEqual(validStatusRes.status, 200, 'Canonical status "Processing" must be accepted');
+    const validStatusData = await validStatusRes.json();
+    assert.strictEqual(validStatusData.order.status, 'Processing');
+
+    // 7k. [P3] Clear the verification flag when a courier is removed while preserving audit history
+    // First, assign a carrier to the order explicitly without an AWB
+    const orderBeforeCarrierAssign = dbModule.prepare("SELECT courier_partner, version FROM orders WHERE id = ?").get(testOrderId);
+    const assignCarrierRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Processing',
+        courier_partner: 'BlueDart Luxury Express',
+        loaded_courier_partner: orderBeforeCarrierAssign.courier_partner || '',
+        expected_version: orderBeforeCarrierAssign.version
+      })
+    });
+    assert.strictEqual(assignCarrierRes.status, 200);
+    const orderAssigned = dbModule.prepare("SELECT courier_partner, carrier_assigned_explicitly, version FROM orders WHERE id = ?").get(testOrderId);
+    assert.strictEqual(orderAssigned.courier_partner, 'BlueDart Luxury Express');
+    assert.strictEqual(orderAssigned.carrier_assigned_explicitly, 1, 'carrier_assigned_explicitly must be 1 after explicit assignment');
+
+    // Verify audit entry was written
+    const auditCountBeforeClear = dbModule.prepare("SELECT COUNT(*) as count FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get().count;
+    assert.ok(auditCountBeforeClear >= 1, 'Audit record must exist for the explicit assignment');
+
+    // Now, unassign/remove the courier by submitting an empty carrier with baseline
+    const unassignCarrierRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Processing',
+        courier_partner: '',
+        loaded_courier_partner: 'BlueDart Luxury Express',
+        expected_version: orderAssigned.version
+      })
+    });
+    assert.strictEqual(unassignCarrierRes.status, 200, 'Unassigning courier must succeed');
+    const orderUnassigned = dbModule.prepare("SELECT courier_partner, carrier_assigned_explicitly, tracking_number FROM orders WHERE id = ?").get(testOrderId);
+    assert.strictEqual(orderUnassigned.courier_partner, null, 'courier_partner must be null after unassignment');
+    assert.strictEqual(orderUnassigned.carrier_assigned_explicitly, 0, 'carrier_assigned_explicitly must be reset to 0 upon courier removal');
+
+    // Verify previous assignment in audit history was preserved
+    const auditCountAfterClear = dbModule.prepare("SELECT COUNT(*) as count FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get().count;
+    assert.strictEqual(auditCountAfterClear, auditCountBeforeClear, 'Past carrier assignment audit history must be preserved');
+
     console.log('✅ PASS: [P2] Admin recovery endpoints strictly attribute recovery to authenticated admin ID and enforce atomic, idempotent batches');
   } finally {
     adminServer.close();
