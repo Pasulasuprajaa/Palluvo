@@ -1233,9 +1233,9 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
 
     // 5. Signature IS VALID: Customer was charged at gateway
 
-    // If order was terminally cancelled, do NOT resurrect it as paid without reservation.
+    // If order was terminally cancelled or failed, do NOT resurrect it as paid without reservation.
     // Persist refund intent before gateway call and make payment ledger insertion idempotent.
-    if (order.status === 'Cancelled' || order.payment_status === 'Cancelled') {
+    if (order.status === 'Cancelled' || order.payment_status === 'Cancelled' || order.payment_status === 'Failed') {
       const initialIdempotencyKey = order.refund_idempotency_key || `rfnd_${order.id}_${order.order_number}`;
 
       // Claim the order's refund transition atomically before calling Razorpay:
@@ -1250,8 +1250,8 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
             version = COALESCE(version, 1) + 1,
             updated_at = CURRENT_TIMESTAMP
           WHERE id = ? AND user_id = ?
-            AND status = 'Cancelled'
-            AND payment_status IN ('Cancelled', 'Pending')
+            AND (status = 'Cancelled' OR payment_status = 'Failed')
+            AND payment_status IN ('Cancelled', 'Pending', 'Failed')
             AND (version = ? OR (version IS NULL AND ? = 1))
         `).run(razorpay_payment_id, initialIdempotencyKey, order.id, req.user.id, order.version, order.version);
 

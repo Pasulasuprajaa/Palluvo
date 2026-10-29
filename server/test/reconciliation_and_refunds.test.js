@@ -837,6 +837,62 @@ async function runTests() {
     const reconciledCrashPayment = db.prepare('SELECT status FROM payments WHERE order_id = ?').get(crashOrderId);
     assert.strictEqual(reconciledCrashPayment.status, 'Refunded', 'Payments table must be reconciled to Refunded');
 
+    // [P1] Refund valid payments after an earlier signature failure
+    // Create an order that failed signature verification previously
+    const failedSigOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, address_data)
+      VALUES ('PAL-FAILED-SIG-LATE-1', ?, 6000, 6000, 'Razorpay', 'Pending', 'order_mock_failed_sig_1', 'Placed', '{}')
+    `).run(cancelOrder.user_id);
+    const failedSigOrderId = failedSigOrderInsert.lastInsertRowid;
+
+    // 1. Submit invalid signature first: transitions order to Cancelled/Failed
+    const invalidSigRes = await request('/api/payments/verify', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cancelUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        orderId: failedSigOrderId,
+        razorpay_order_id: 'order_mock_failed_sig_1',
+        razorpay_payment_id: 'pay_mock_failed_sig_1',
+        razorpay_signature: 'invalid_bad_sig_xyz'
+      }
+    });
+    assert.strictEqual(invalidSigRes.status, 400, 'Invalid signature must be rejected');
+    const orderAfterFailedSig = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(failedSigOrderId);
+    assert.strictEqual(orderAfterFailedSig.status, 'Cancelled', 'Status must transition to Cancelled');
+    assert.strictEqual(orderAfterFailedSig.payment_status, 'Failed', 'Payment status must transition to Failed');
+
+    // 2. Later, valid verification arrives for the actual captured payment on that failed order:
+    // It must not be rejected with 400 or dropped with version conflict; it must be claimed, payment ID persisted, and refunded!
+    const validSigLateRes = await request('/api/payments/verify', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cancelUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        orderId: failedSigOrderId,
+        razorpay_order_id: 'order_mock_failed_sig_1',
+        razorpay_payment_id: 'pay_mock_failed_sig_1',
+        razorpay_signature: 'mock_sig_failed_sig_1'
+      }
+    });
+    assert.strictEqual(validSigLateRes.status, 409, 'Valid verification on Cancelled/Failed order must return 409 Conflict with refund');
+    assert.strictEqual(validSigLateRes.body.payment_status, 'Refunded');
+    assert.strictEqual(validSigLateRes.body.refunded, true);
+
+    const finalFailedSigOrder = db.prepare('SELECT status, payment_status, razorpay_payment_id, refund_idempotency_key FROM orders WHERE id = ?').get(failedSigOrderId);
+    assert.strictEqual(finalFailedSigOrder.status, 'Cancelled');
+    assert.strictEqual(finalFailedSigOrder.payment_status, 'Refunded');
+    assert.strictEqual(finalFailedSigOrder.razorpay_payment_id, 'pay_mock_failed_sig_1');
+    assert.ok(finalFailedSigOrder.refund_idempotency_key);
+
+    const failedSigPayment = db.prepare('SELECT status FROM payments WHERE razorpay_payment_id = ?').all('pay_mock_failed_sig_1');
+    assert.strictEqual(failedSigPayment.length, 1, 'Exactly one payment record must exist in ledger');
+    assert.strictEqual(failedSigPayment[0].status, 'Refunded');
+
     console.log('✅ PASS: [P2] Order cancellation updates payment ledger status to Refunded on immediate full refund');
 
     // --- TEST SUITE P2: Runtime Product URL Preservation & Real 404 Routing ---

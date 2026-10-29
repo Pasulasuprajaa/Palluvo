@@ -380,7 +380,7 @@ function initSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id INTEGER NOT NULL,
       razorpay_order_id TEXT NOT NULL,
-      razorpay_payment_id TEXT NOT NULL UNIQUE,
+      razorpay_payment_id TEXT NOT NULL,
       razorpay_signature TEXT NOT NULL,
       amount INTEGER NOT NULL,
       currency TEXT DEFAULT 'INR',
@@ -429,7 +429,6 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
     CREATE INDEX IF NOT EXISTS idx_product_qa_product ON product_qa(product_id);
     CREATE INDEX IF NOT EXISTS idx_order_items_product_order ON order_items(product_id, order_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_razorpay_payment_id ON payments(razorpay_payment_id);
 
     -- Q&A Helpful Votes Table (Tracks unique votes per voter key / user)
     CREATE TABLE IF NOT EXISTS product_qa_votes (
@@ -486,7 +485,7 @@ function initSchema() {
     db.exec(`ALTER TABLE carrier_assignment_audit ADD COLUMN evidence_source TEXT DEFAULT NULL;`);
   } catch (e) {}
 
-    try {
+  try {
     db.exec(`
       DELETE FROM payments WHERE id NOT IN (SELECT MAX(id) FROM payments GROUP BY razorpay_payment_id);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_razorpay_payment_id ON payments(razorpay_payment_id);
