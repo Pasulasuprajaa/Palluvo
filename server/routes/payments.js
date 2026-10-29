@@ -1150,7 +1150,22 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
 
     // 2. Reject already terminal completed states
     if (order.payment_status === 'Paid') {
-      return res.status(400).json({ error: 'Order has already been paid and processed.' });
+      let parsedAddress = {};
+      try {
+        parsedAddress = JSON.parse(order.address_data);
+      } catch (e) {
+        parsedAddress = { raw: order.address_data };
+      }
+      const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+      return res.json({
+        success: true,
+        message: '✨ Payment verified successfully! Your PALLUVO journey has begun.',
+        order: {
+          ...order,
+          address: parsedAddress,
+          items
+        }
+      });
     }
     if (order.payment_status === 'Refunded') {
       if (order.status === 'Cancelled') {
@@ -1196,7 +1211,131 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
         return res.status(400).json({ error: 'Payment signature verification failed for finalized order.' });
       }
 
-      // Signature verification failed: release reserved stock and coupon ONLY IF
+      // Check if the payment was actually captured at the gateway despite signature rejection (malformed callback/signature)
+      let isPaymentCaptured = false;
+      let confirmedPayment = null;
+
+      try {
+        if (order.razorpay_order_id) {
+          const orderPayments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
+          const matched = Array.isArray(orderPayments) && orderPayments.find(p => (p.id === razorpay_payment_id || p.status === 'captured') && (p.status === 'captured' || p.status === 'authorized'));
+          if (matched) {
+            isPaymentCaptured = true;
+            confirmedPayment = matched;
+          }
+        }
+        if (!isPaymentCaptured && razorpay_payment_id) {
+          try {
+            const p = await fetchRazorpayPayment(razorpay_payment_id);
+            if (p && (p.order_id === order.razorpay_order_id || p.order_id === razorpay_order_id) && (p.status === 'captured' || p.status === 'authorized')) {
+              isPaymentCaptured = true;
+              confirmedPayment = p;
+            }
+          } catch (e) {}
+        }
+      } catch (gatewayErr) {
+        console.warn(`Gateway payment check failed for order ${order.id}:`, gatewayErr.message);
+      }
+
+      if (isPaymentCaptured && confirmedPayment) {
+        const paymentId = confirmedPayment.id || razorpay_payment_id;
+        const initialIdempotencyKey = order.refund_idempotency_key || `rfnd_${order.id}_${order.order_number}`;
+
+        // Route confirmed captures into refund recovery before dropping the reservation
+        const claimRefundTx = db.transaction(() => {
+          const claimRes = db.prepare(`
+            UPDATE orders SET
+              payment_status = 'Refund_Pending',
+              status = 'Cancelled',
+              razorpay_payment_id = ?,
+              refund_idempotency_key = COALESCE(refund_idempotency_key, ?),
+              version = COALESCE(version, 1) + 1,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND user_id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
+          `).run(paymentId, initialIdempotencyKey, order.id, req.user.id);
+
+          if (claimRes.changes > 0) {
+            const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+            for (const item of items) {
+              db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')
+                .run(item.quantity, item.product_id);
+              if (item.variant_id) {
+                db.prepare('UPDATE product_variants SET stock_quantity = stock_quantity + ? WHERE id = ?')
+                  .run(item.quantity, item.variant_id);
+              }
+            }
+            if (order.coupon_code) {
+              db.prepare('UPDATE coupons SET times_used = MAX(0, times_used - 1) WHERE code = ?')
+                .run(order.coupon_code);
+            }
+
+            db.prepare(`
+              INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+              VALUES (?, ?, ?, ?, ?, 'INR', 'Captured', 'Razorpay')
+              ON CONFLICT(razorpay_payment_id) DO UPDATE SET
+                status = 'Captured',
+                amount = excluded.amount
+            `).run(order.id, order.razorpay_order_id, paymentId, razorpay_signature || 'rejected_signature', Math.round(order.total_amount * 100));
+
+            return true;
+          }
+          return false;
+        });
+
+        const didClaimRefund = claimRefundTx();
+
+        if (didClaimRefund) {
+          let refundResult = null;
+          let refundError = null;
+          try {
+            const refundPayload = buildRefundPayload(order, initialIdempotencyKey);
+            if (refundPayload.notes) {
+              refundPayload.notes.reason = 'signature_verification_rejected_refund';
+            }
+            refundResult = await refundRazorpayPayment(paymentId, refundPayload);
+          } catch (refErr) {
+            console.error('Automated refund error for rejected signature order:', refErr);
+            refundError = refErr.message || 'Refund initiation failed';
+          }
+
+          const isRefundProcessed = Boolean(refundResult && refundResult.status === 'processed');
+          const isRefundPending = Boolean(refundResult && refundResult.status === 'pending');
+          const isRefundFull = isRefundProcessed && (!refundResult.amount || refundResult.amount >= Math.round(order.total_amount * 100));
+          const refundId = refundResult ? refundResult.id : null;
+          const finalPaymentStatus = isRefundFull ? 'Refunded' : 'Refund_Pending';
+          const paymentRecordStatus = isRefundFull ? 'Refunded' : (isRefundPending ? 'Refund_Pending' : 'Captured');
+
+          db.transaction(() => {
+            db.prepare(`
+              UPDATE orders SET
+                payment_status = ?,
+                refund_id = COALESCE(?, refund_id),
+                refund_error = ?,
+                version = COALESCE(version, 1) + 1,
+                updated_at = CURRENT_TIMESTAMP
+              WHERE id = ? AND user_id = ?
+            `).run(finalPaymentStatus, refundId, refundError, order.id, req.user.id);
+
+            db.prepare(`
+              INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+              VALUES (?, ?, ?, ?, ?, 'INR', ?, 'Razorpay')
+              ON CONFLICT(razorpay_payment_id) DO UPDATE SET
+                status = excluded.status,
+                amount = excluded.amount
+            `).run(order.id, order.razorpay_order_id, paymentId, razorpay_signature || 'rejected_signature', Math.round(order.total_amount * 100), paymentRecordStatus);
+          })();
+
+          return res.status(400).json({
+            error: 'Payment signature verification failed. As your payment was captured by the gateway, a full refund has been initiated.',
+            payment_status: finalPaymentStatus,
+            refunded: isRefundFull,
+            refund_id: refundId,
+            order_number: order.order_number
+          });
+        }
+      }
+
+      // Signature verification failed and payment was not captured: release reserved stock and coupon ONLY IF
       // the conditional transition from Pending -> Failed succeeds
       const releaseTx = db.transaction(() => {
         const updateRes = db.prepare(`
@@ -1406,6 +1545,58 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
           }
         });
       }
+
+      // On a zero-row update, reload the order and return its current state instead of running recovery against the stale snapshot.
+      const refreshedOrder = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(order.id, req.user.id);
+      if (refreshedOrder) {
+        if (refreshedOrder.payment_status === 'Paid') {
+          let parsedAddress = {};
+          try {
+            parsedAddress = JSON.parse(refreshedOrder.address_data);
+          } catch (e) {
+            parsedAddress = { raw: refreshedOrder.address_data };
+          }
+          const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(refreshedOrder.id);
+          return res.json({
+            success: true,
+            message: '✨ Payment verified successfully! Your PALLUVO journey has begun.',
+            order: {
+              ...refreshedOrder,
+              address: parsedAddress,
+              items
+            }
+          });
+        }
+        if (refreshedOrder.payment_status === 'Refunded') {
+          return res.status(409).json({
+            error: 'Payment was charged, but the order has already been cancelled. A full refund has been credited to your original payment method.',
+            payment_status: 'Refunded',
+            refunded: true,
+            refund_id: refreshedOrder.refund_id,
+            order_number: refreshedOrder.order_number
+          });
+        }
+        if (refreshedOrder.payment_status === 'Refund_Pending') {
+          return res.status(409).json({
+            error: 'Payment was charged, but the order has already been cancelled. A full refund has been initiated and is currently processing. Our automated reconciler will confirm completion.',
+            payment_status: 'Refund_Pending',
+            refunded: false,
+            refund_id: refreshedOrder.refund_id,
+            order_number: refreshedOrder.order_number
+          });
+        }
+        if (refreshedOrder.status === 'Cancelled' || refreshedOrder.payment_status === 'Cancelled' || refreshedOrder.payment_status === 'Failed') {
+          return res.status(409).json({
+            error: 'Order was updated by another session. Please reload and retry.',
+            payment_status: refreshedOrder.payment_status,
+            order_number: refreshedOrder.order_number
+          });
+        }
+      }
+
+      return res.status(409).json({
+        error: 'Order was modified by another session. Please reload and retry.'
+      });
     }
 
     // 6. Delayed Payment Handling for already Expired/Cancelled orders:

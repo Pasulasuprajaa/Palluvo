@@ -230,9 +230,10 @@ async function fetchRazorpayOrder(orderId) {
 
 async function fetchRazorpayOrderPayments(orderId) {
   if (!orderId) return [];
-  if (orderId.startsWith('order_mock_paid_')) {
+  if (orderId.startsWith('order_mock_paid_') || orderId.startsWith('order_mock_captured_')) {
+    const prefixLen = orderId.startsWith('order_mock_paid_') ? 16 : 20;
     return [{
-      id: `pay_mock_${orderId.slice(16) || 'test'}`,
+      id: `pay_mock_${orderId.slice(prefixLen) || 'test'}`,
       status: 'captured',
       amount: 100000,
       order_id: orderId

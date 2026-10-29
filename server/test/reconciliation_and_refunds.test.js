@@ -893,6 +893,111 @@ async function runTests() {
     assert.strictEqual(failedSigPayment.length, 1, 'Exactly one payment record must exist in ledger');
     assert.strictEqual(failedSigPayment[0].status, 'Refunded');
 
+    // [P1] Stop stale payment verifications from entering delayed recovery on zero stock
+    // Ensure category exists for foreign key
+    db.prepare(`
+      INSERT OR IGNORE INTO categories (id, name, slug, description)
+      VALUES (1, 'Paithani', 'paithani', 'Heritage Paithani Sarees')
+    `).run();
+
+    // Create a product with 0 available stock (reservation consumed the last item)
+    const zeroStockProd = db.prepare(`
+      INSERT INTO products (name, slug, category_id, fabric, occasion, price, mrp, discount_percent, stock_quantity, description)
+      VALUES ('Last Unit Luxury Saree', 'last-unit-luxury-saree', 1, 'Silk', 'Wedding', 10000, 12000, 16, 0, 'Last unit test')
+    `).run();
+    const zeroStockProdId = zeroStockProd.lastInsertRowid;
+
+    const staleRaceOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, address_data)
+      VALUES ('PAL-STALE-RACE-1', ?, 10000, 10000, 'Razorpay', 'Pending', 'order_mock_stale_race_1', 'Pending', '{}')
+    `).run(cancelOrder.user_id);
+    const staleRaceOrderId = staleRaceOrderInsert.lastInsertRowid;
+
+    db.prepare(`
+      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+      VALUES (?, ?, 'Last Unit Luxury Saree', 10000, 1)
+    `).run(staleRaceOrderId, zeroStockProdId);
+
+    // Two simultaneous verification calls for the same pending order
+    const [raceRes1, raceRes2] = await Promise.all([
+      request('/api/payments/verify', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${cancelUserToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: {
+          orderId: staleRaceOrderId,
+          razorpay_order_id: 'order_mock_stale_race_1',
+          razorpay_payment_id: 'pay_mock_stale_race_1',
+          razorpay_signature: 'mock_sig_stale_race_1'
+        }
+      }),
+      request('/api/payments/verify', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${cancelUserToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: {
+          orderId: staleRaceOrderId,
+          razorpay_order_id: 'order_mock_stale_race_1',
+          razorpay_payment_id: 'pay_mock_stale_race_1',
+          razorpay_signature: 'mock_sig_stale_race_1'
+        }
+      })
+    ]);
+
+    assert.strictEqual(raceRes1.status, 200, 'First callback must succeed');
+    assert.strictEqual(raceRes2.status, 200, 'Second concurrent callback must also succeed without entering delayed recovery');
+    assert.strictEqual(raceRes1.body.success, true);
+    assert.strictEqual(raceRes2.body.success, true);
+
+    const raceOrderAfter = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(staleRaceOrderId);
+    assert.strictEqual(raceOrderAfter.status, 'Placed', 'Order must remain Placed');
+    assert.strictEqual(raceOrderAfter.payment_status, 'Paid', 'Order must remain Paid and NOT be refunded');
+
+    // [P1] Keep captured payments reconcilable after signature rejection
+    // An order where the gateway captured payment (order_mock_captured_...) but callback signature fails
+    const capturedSigFailOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, address_data)
+      VALUES ('PAL-CAPTURED-SIG-FAIL-1', ?, 8000, 8000, 'Razorpay', 'Pending', 'order_mock_captured_sig_fail_1', 'Pending', '{}')
+    `).run(cancelOrder.user_id);
+    const capturedSigFailOrderId = capturedSigFailOrderInsert.lastInsertRowid;
+
+    db.prepare(`
+      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+      VALUES (?, ?, 'Captured Test Saree', 8000, 1)
+    `).run(capturedSigFailOrderId, zeroStockProdId);
+
+    const capturedSigFailRes = await request('/api/payments/verify', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cancelUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        orderId: capturedSigFailOrderId,
+        razorpay_order_id: 'order_mock_captured_sig_fail_1',
+        razorpay_payment_id: 'pay_mock_sig_fail_1',
+        razorpay_signature: 'invalid_malformed_sig_test'
+      }
+    });
+
+    assert.strictEqual(capturedSigFailRes.status, 400, 'Rejected signature must return 400 with refund initiated');
+    assert.strictEqual(capturedSigFailRes.body.payment_status, 'Refunded', 'Must be routed into refund recovery');
+    assert.strictEqual(capturedSigFailRes.body.refunded, true);
+
+    const capturedFailOrderInDb = db.prepare('SELECT status, payment_status, razorpay_payment_id, refund_id FROM orders WHERE id = ?').get(capturedSigFailOrderId);
+    assert.strictEqual(capturedFailOrderInDb.status, 'Cancelled');
+    assert.strictEqual(capturedFailOrderInDb.payment_status, 'Refunded');
+    assert.strictEqual(capturedFailOrderInDb.razorpay_payment_id, 'pay_mock_sig_fail_1');
+    assert.ok(capturedFailOrderInDb.refund_id, 'Refund ID must be recorded');
+
+    const capturedFailPayment = db.prepare('SELECT status FROM payments WHERE razorpay_payment_id = ?').all('pay_mock_sig_fail_1');
+    assert.strictEqual(capturedFailPayment.length, 1, 'Payment must be recorded in payments ledger');
+    assert.strictEqual(capturedFailPayment[0].status, 'Refunded');
+
     console.log('✅ PASS: [P2] Order cancellation updates payment ledger status to Refunded on immediate full refund');
 
     // --- TEST SUITE P2: Runtime Product URL Preservation & Real 404 Routing ---
