@@ -261,6 +261,9 @@ async function fetchRazorpayOrderPayments(orderId) {
 
 async function fetchRazorpayPayment(paymentId) {
   if (!paymentId) return null;
+  if (paymentId.startsWith('pay_mock_failed_lookup_')) {
+    throw new Error('Simulated gateway payment lookup failure');
+  }
   if (paymentId.startsWith('pay_mock_refund_failed_')) {
     return {
       id: paymentId,

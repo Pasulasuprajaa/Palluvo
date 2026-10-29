@@ -998,6 +998,49 @@ async function runTests() {
     assert.strictEqual(capturedFailPayment.length, 1, 'Payment must be recorded in payments ledger');
     assert.strictEqual(capturedFailPayment[0].status, 'Refunded');
 
+    // [P1] Keep order retryable while gateway status is unknown (do NOT release inventory or mark Failed)
+    const unknownGatewayOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, address_data)
+      VALUES ('PAL-UNKNOWN-GW-1', ?, 7500, 7500, 'Razorpay', 'Pending', 'order_mock_failed_lookup_1', 'Pending', '{}')
+    `).run(cancelOrder.user_id);
+    const unknownGatewayOrderId = unknownGatewayOrderInsert.lastInsertRowid;
+
+    // Item attached with stock tracking
+    const trackedProd = db.prepare(`
+      INSERT INTO products (name, slug, category_id, fabric, occasion, price, mrp, discount_percent, stock_quantity, description)
+      VALUES ('Tracked Retry Saree', 'tracked-retry-saree', 1, 'Silk', 'Wedding', 7500, 9000, 16, 5, 'Stock test')
+    `).run();
+    const trackedProdId = trackedProd.lastInsertRowid;
+
+    db.prepare(`
+      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+      VALUES (?, ?, 'Tracked Retry Saree', 7500, 1)
+    `).run(unknownGatewayOrderId, trackedProdId);
+
+    const unknownGatewayRes = await request('/api/payments/verify', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cancelUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        orderId: unknownGatewayOrderId,
+        razorpay_order_id: 'order_mock_failed_lookup_1',
+        razorpay_payment_id: 'pay_mock_failed_lookup_1',
+        razorpay_signature: 'invalid_sig_unknown_gw'
+      }
+    });
+
+    assert.strictEqual(unknownGatewayRes.status, 400, 'Must return 400 Bad Request');
+    assert.ok(unknownGatewayRes.body.error.includes('could not be verified'), 'Error message must explain gateway status could not be verified');
+
+    const orderStillPending = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(unknownGatewayOrderId);
+    assert.strictEqual(orderStillPending.status, 'Pending', 'Order status must remain Pending');
+    assert.strictEqual(orderStillPending.payment_status, 'Pending', 'Payment status must remain Pending and NOT be Failed');
+
+    const prodStockStillPreserved = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(trackedProdId);
+    assert.strictEqual(prodStockStillPreserved.stock_quantity, 5, 'Inventory must NOT be prematurely released');
+
     console.log('✅ PASS: [P2] Order cancellation updates payment ledger status to Refunded on immediate full refund');
 
     // --- TEST SUITE P2: Runtime Product URL Preservation & Real 404 Routing ---

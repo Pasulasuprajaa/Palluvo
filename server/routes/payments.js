@@ -1214,27 +1214,41 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
       // Check if the payment was actually captured at the gateway despite signature rejection (malformed callback/signature)
       let isPaymentCaptured = false;
       let confirmedPayment = null;
+      let gatewayCheckSuccess = false;
 
-      try {
-        if (order.razorpay_order_id) {
+      if (order.razorpay_order_id) {
+        try {
           const orderPayments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
+          gatewayCheckSuccess = true;
           const matched = Array.isArray(orderPayments) && orderPayments.find(p => (p.id === razorpay_payment_id || p.status === 'captured') && (p.status === 'captured' || p.status === 'authorized'));
           if (matched) {
             isPaymentCaptured = true;
             confirmedPayment = matched;
           }
+        } catch (orderPaymentsErr) {
+          console.warn(`Gateway order payments check failed for order ${order.id}:`, orderPaymentsErr.message);
         }
-        if (!isPaymentCaptured && razorpay_payment_id) {
-          try {
-            const p = await fetchRazorpayPayment(razorpay_payment_id);
-            if (p && (p.order_id === order.razorpay_order_id || p.order_id === razorpay_order_id) && (p.status === 'captured' || p.status === 'authorized')) {
-              isPaymentCaptured = true;
-              confirmedPayment = p;
-            }
-          } catch (e) {}
+      }
+
+      if (!isPaymentCaptured && razorpay_payment_id) {
+        try {
+          const p = await fetchRazorpayPayment(razorpay_payment_id);
+          gatewayCheckSuccess = true;
+          if (p && (p.order_id === order.razorpay_order_id || p.order_id === razorpay_order_id) && (p.status === 'captured' || p.status === 'authorized')) {
+            isPaymentCaptured = true;
+            confirmedPayment = p;
+          }
+        } catch (paymentErr) {
+          console.warn(`Gateway payment lookup failed for payment ${razorpay_payment_id}:`, paymentErr.message);
         }
-      } catch (gatewayErr) {
-        console.warn(`Gateway payment check failed for order ${order.id}:`, gatewayErr.message);
+      }
+
+      // If the gateway status is UNKNOWN (both lookup calls failed / network error),
+      // DO NOT cancel the order and DO NOT release inventory. Keep the order Pending and retryable.
+      if (!gatewayCheckSuccess) {
+        return res.status(400).json({
+          error: 'Payment signature verification failed and gateway payment status could not be verified. Your reservation remains active; please retry verification or contact support.'
+        });
       }
 
       if (isPaymentCaptured && confirmedPayment) {
@@ -1335,7 +1349,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
         }
       }
 
-      // Signature verification failed and payment was not captured: release reserved stock and coupon ONLY IF
+      // Gateway affirmatively confirmed payment was NOT captured: release reserved stock and coupon ONLY IF
       // the conditional transition from Pending -> Failed succeeds
       const releaseTx = db.transaction(() => {
         const updateRes = db.prepare(`
