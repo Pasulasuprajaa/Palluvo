@@ -937,6 +937,7 @@ export default function AdminPage({ onNavigate }) {
                   className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl font-medium"
                 >
                   <option value="Placed">Placed</option>
+                  <option value="Processing">Processing</option>
                   <option value="Packed">Packed</option>
                   <option value="Shipped">Shipped</option>
                   <option value="Out for Delivery">Out for Delivery</option>

@@ -1577,6 +1577,44 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(finalOrderCheck.status, 'Cancelled', 'Cancelled status must not be overwritten');
     assert.strictEqual(finalOrderCheck.version, orderAfterMutation.version, 'Version must not be overwritten');
 
+    // 7h. [P2] Status-only and tracking-only requests without client version baseline must be rejected with 400 Bad Request
+    const statusOnlyNoVersionRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Processing' // Status-only mutation omitting expected_version and version
+      })
+    });
+    assert.strictEqual(statusOnlyNoVersionRes.status, 400, 'Status-only mutation without version token must be rejected with 400 Bad Request');
+    const statusOnlyNoVersionData = await statusOnlyNoVersionRes.json();
+    assert.ok(
+      statusOnlyNoVersionData.error.includes('expected_version') || statusOnlyNoVersionData.error.includes('version'),
+      'Must reject missing version token'
+    );
+
+    const trackingOnlyNoVersionRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Packed',
+        tracking_number: 'AWB-12345' // Tracking-only mutation omitting expected_version
+      })
+    });
+    assert.strictEqual(trackingOnlyNoVersionRes.status, 400, 'Tracking mutation without version token must be rejected with 400 Bad Request');
+
+    // 7i. [P3] AdminPage.jsx includes <option value="Processing">Processing</option> in lifecycle select
+    const adminPageSource = fs.readFileSync(path.resolve(__dirname, '../../client/src/pages/AdminPage.jsx'), 'utf8');
+    assert.ok(
+      adminPageSource.includes('<option value="Processing">Processing</option>'),
+      'AdminPage.jsx must include <option value="Processing">Processing</option> in lifecycle select'
+    );
+
     console.log('✅ PASS: [P2] Admin recovery endpoints strictly attribute recovery to authenticated admin ID and enforce atomic, idempotent batches');
   } finally {
     adminServer.close();

@@ -488,13 +488,20 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
     const currentVersion = ord.version != null ? Number(ord.version) : 1;
     const providedVersion = expected_version !== undefined ? expected_version : clientVersion;
 
+    // Reject missing version tokens for every mutation to prevent stale overwrite
+    if (providedVersion === undefined || providedVersion === null || String(providedVersion).trim() === '' || isNaN(Number(providedVersion))) {
+      return res.status(400).json({
+        error: 'Concurrency baseline (expected_version or version) is required for order lifecycle updates to prevent stale overwrite.'
+      });
+    }
+
+    const clientExpectedVersion = Number(providedVersion);
+
     // Check version token (monotonic row version with finer resolution than SQLite CURRENT_TIMESTAMP)
-    if (providedVersion !== undefined && providedVersion !== null) {
-      if (Number(providedVersion) !== currentVersion) {
-        return res.status(409).json({
-          error: 'Order was modified by another session (version conflict). Please reload and retry.'
-        });
-      }
+    if (clientExpectedVersion !== currentVersion) {
+      return res.status(409).json({
+        error: 'Order was modified by another session (version conflict). Please reload and retry.'
+      });
     }
 
     // Check timestamp token if provided
@@ -520,7 +527,7 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
 
     // Concurrency baseline required for carrier-changing requests (no unguarded fallback)
     if (isCarrierDifferentFromDb) {
-      if (!hasCarrierBaseline || providedVersion === undefined || providedVersion === null) {
+      if (!hasCarrierBaseline) {
         return res.status(400).json({
           error: 'Concurrency baseline (expected_version and loaded_courier_partner) is required for carrier updates to prevent stale overwrite.'
         });
@@ -590,7 +597,7 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
         estimated_delivery !== undefined ? estimated_delivery : null,
         isExplicitCarrier,
         ord.carrier_assigned_explicitly || 0,
-        currentVersion,
+        clientExpectedVersion,
         ord.order_number,
         operatorId
       );
