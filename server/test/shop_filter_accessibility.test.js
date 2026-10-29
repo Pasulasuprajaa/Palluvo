@@ -1720,12 +1720,141 @@ async function testShopFilterAccessibility() {
     const auditCountAfterClear = dbModule.prepare("SELECT COUNT(*) as count FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").get().count;
     assert.strictEqual(auditCountAfterClear, auditCountBeforeClear, 'Past carrier assignment audit history must be preserved');
 
+    // 7l. [P2] Preserve the persisted Confirmed status in canonical set and AdminPage
+    assert.ok(
+      adminPageSource.includes('<option value="Confirmed">Confirmed</option>'),
+      'AdminPage.jsx must include <option value="Confirmed">Confirmed</option> in lifecycle select'
+    );
+
+    const ordBeforeConfirmed = dbModule.prepare("SELECT version FROM orders WHERE id = ?").get(testOrderId);
+    const confirmedRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Confirmed',
+        expected_version: ordBeforeConfirmed.version
+      })
+    });
+    assert.strictEqual(confirmedRes.status, 200, 'Confirmed status must be accepted by admin status update');
+    const ordAfterConfirmed = dbModule.prepare("SELECT status FROM orders WHERE id = ?").get(testOrderId);
+    assert.strictEqual(ordAfterConfirmed.status, 'Confirmed');
+
+    // Resending Confirmed while updating tracking/courier must succeed without 400
+    const ordBeforeConfirmedTrack = dbModule.prepare("SELECT version FROM orders WHERE id = ?").get(testOrderId);
+    const confirmedTrackRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${testOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Confirmed',
+        tracking_number: 'CONF-TRK-12345',
+        expected_version: ordBeforeConfirmedTrack.version
+      })
+    });
+    assert.strictEqual(confirmedTrackRes.status, 200, 'Resending Confirmed while updating tracking must succeed');
+
+    // 7m. [P1] Route admin cancellation through the refund workflow
+    // Pick an existing product and variant to test inventory restoration
+    const testProd = dbModule.prepare("SELECT id, stock_quantity FROM products LIMIT 1").get();
+    const testVariant = dbModule.prepare("SELECT id, stock_quantity FROM product_variants WHERE product_id = ? LIMIT 1").get(testProd.id)
+      || dbModule.prepare("SELECT id, product_id, stock_quantity FROM product_variants LIMIT 1").get();
+    const prodStockBefore = testProd.stock_quantity;
+    const variantStockBefore = testVariant ? testVariant.stock_quantity : null;
+
+    // Create a coupon fixture
+    const testCouponCode = `CANCEL_COUPON_${Date.now()}`;
+    dbModule.prepare(`
+      INSERT INTO coupons (code, title, discount_percent, times_used)
+      VALUES (?, 'Cancel Test Coupon', 10, 5)
+    `).run(testCouponCode);
+
+    // Create a paid order with order_items and payments record
+    const cancelOrderInsert = dbModule.prepare(`
+      INSERT INTO orders (order_number, user_id, address_data, subtotal, total_amount, status, payment_status, razorpay_payment_id, coupon_code, version)
+      VALUES ('PAL-ADMIN-CANCEL-TEST', ?, '{}', 10000, 9000, 'Processing', 'Paid', 'pay_mock_admin_cancel_1', ?, 1)
+    `).run(testUserId, testCouponCode);
+    const cancelOrderId = cancelOrderInsert.lastInsertRowid;
+
+    // Insert order item referencing the product and variant
+    dbModule.prepare(`
+      INSERT INTO order_items (order_id, product_id, variant_id, product_name, variant_name, price, quantity)
+      VALUES (?, ?, ?, 'Cancel Test Saree', 'Ruby Red', 9000, 2)
+    `).run(cancelOrderId, testProd.id, testVariant ? testVariant.id : null);
+
+    // Insert payment record for the order
+    dbModule.prepare(`
+      INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, status)
+      VALUES (?, 'order_admin_cancel_mock_1', 'pay_mock_admin_cancel_1', 'sig_admin_cancel_mock_1', 900000, 'Captured')
+    `).run(cancelOrderId);
+
+    // Admin cancels the paid order via PUT /api/admin/orders/:id/status
+    const cancelAdminRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${cancelOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Cancelled',
+        expected_version: 1
+      })
+    });
+    assert.strictEqual(cancelAdminRes.status, 200, 'Admin cancellation of order must succeed');
+    const cancelAdminData = await cancelAdminRes.json();
+    assert.strictEqual(cancelAdminData.order.status, 'Cancelled');
+    assert.strictEqual(cancelAdminData.order.payment_status, 'Refunded', 'Order payment_status must be updated to Refunded');
+
+    // Verify payments ledger was updated to Refunded
+    const paymentRecord = dbModule.prepare("SELECT status FROM payments WHERE order_id = ?").get(cancelOrderId);
+    assert.strictEqual(paymentRecord.status, 'Refunded', 'Payments ledger must be updated to Refunded');
+
+    // Verify product and variant inventory were restored (+2)
+    const productAfterCancel = dbModule.prepare("SELECT stock_quantity FROM products WHERE id = ?").get(testProd.id);
+    assert.strictEqual(productAfterCancel.stock_quantity, prodStockBefore + 2, 'Product stock must be restored by item quantity');
+    if (testVariant) {
+      const variantAfterCancel = dbModule.prepare("SELECT stock_quantity FROM product_variants WHERE id = ?").get(testVariant.id);
+      assert.strictEqual(variantAfterCancel.stock_quantity, variantStockBefore + 2, 'Variant stock must be restored by item quantity');
+    }
+
+    // Verify coupon usage was decremented (5 -> 4)
+    const couponAfterCancel = dbModule.prepare("SELECT times_used FROM coupons WHERE code = ?").get(testCouponCode);
+    assert.strictEqual(couponAfterCancel.times_used, 4, 'Coupon times_used must be decremented');
+
+    // Verify that attempting to cancel an already Shipped order is rejected with 400
+    dbModule.prepare("UPDATE orders SET status = 'Shipped', version = 3 WHERE id = ?").run(cancelOrderId);
+    const cancelShippedRes = await fetch(`http://127.0.0.1:${adminPort}/api/admin/orders/${cancelOrderId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
+      body: JSON.stringify({
+        status: 'Cancelled',
+        expected_version: 3
+      })
+    });
+    assert.strictEqual(cancelShippedRes.status, 400, 'Attempting to cancel a shipped order must return 400 Bad Request');
+
     console.log('✅ PASS: [P2] Admin recovery endpoints strictly attribute recovery to authenticated admin ID and enforce atomic, idempotent batches');
   } finally {
     adminServer.close();
     try {
-      dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
-      dbModule.prepare("DELETE FROM orders WHERE order_number = 'PAL-ADMIN-REC-TEST-1'").run();
+      dbModule.prepare("DELETE FROM carrier_assignment_audit WHERE order_number IN ('PAL-ADMIN-REC-TEST-1', 'PAL-ADMIN-CANCEL-TEST')").run();
+      dbModule.prepare("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE order_number IN ('PAL-ADMIN-REC-TEST-1', 'PAL-ADMIN-CANCEL-TEST'))").run();
+      dbModule.prepare("DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE order_number IN ('PAL-ADMIN-REC-TEST-1', 'PAL-ADMIN-CANCEL-TEST'))").run();
+      dbModule.prepare("DELETE FROM orders WHERE order_number IN ('PAL-ADMIN-REC-TEST-1', 'PAL-ADMIN-CANCEL-TEST')").run();
+      if (typeof testProdId !== 'undefined') {
+        dbModule.prepare("DELETE FROM product_variants WHERE product_id = ?").run(testProdId);
+        dbModule.prepare("DELETE FROM products WHERE id = ?").run(testProdId);
+      }
+      if (typeof testCouponCode !== 'undefined') {
+        dbModule.prepare("DELETE FROM coupons WHERE code = ?").run(testCouponCode);
+      }
       if (createdAdminId) {
         dbModule.prepare("DELETE FROM users WHERE id = ?").run(createdAdminId);
       }

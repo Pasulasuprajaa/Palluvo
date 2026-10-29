@@ -6,6 +6,7 @@ const db = require('../db/database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
 const { getMetaForRoute, injectMetaTags } = require('../services/seoRenderer');
+const { cancelOrder } = require('../services/orderCancellation');
 
 function publishProductRoute(productData) {
   try {
@@ -463,6 +464,7 @@ router.get('/orders', (req, res) => {
 // Canonical order lifecycle statuses supported across storefront tracking and admin dashboard
 const CANONICAL_ORDER_STATUSES = [
   'Placed',
+  'Confirmed',
   'Processing',
   'Packed',
   'Shipped',
@@ -472,7 +474,7 @@ const CANONICAL_ORDER_STATUSES = [
 ];
 
 // PUT /api/admin/orders/:id/status (Update order lifecycle status)
-router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
+router.put('/orders/:id/status', requireDurableStorage, async (req, res) => {
   try {
     const {
       status,
@@ -579,6 +581,29 @@ router.put('/orders/:id/status', requireDurableStorage, (req, res) => {
 
     const isExplicitCarrier = isCarrierChanged;
     const operatorId = req.user && req.user.id != null ? String(req.user.id) : (req.user?.email || 'admin');
+
+    // If transitioning to Cancelled, route through the complete cancellation and refund workflow
+    if (trimmedStatus === 'Cancelled' && ord.status !== 'Cancelled') {
+      const cancelResult = await cancelOrder(ord.id, {
+        expectedVersion: clientExpectedVersion,
+        actor: 'admin',
+        operatorId,
+        courierPartner: finalCarrier,
+        trackingNumber: tracking_number !== undefined ? tracking_number : null,
+        estimatedDelivery: estimated_delivery !== undefined ? estimated_delivery : null,
+        isExplicitCarrier,
+        existingExplicit: ord.carrier_assigned_explicitly || 0
+      });
+
+      if (!cancelResult.success) {
+        return res.status(cancelResult.statusCode || 400).json({ error: cancelResult.error });
+      }
+
+      return res.json({
+        message: 'Order status updated to "Cancelled".',
+        order: cancelResult.order
+      });
+    }
 
     // Atomic compare-and-swap update: increment monotonic row version and ensure version match in WHERE clause
     const updateOrderStatusAndAudit = db.transaction((orderId, statusVal, trackingVal, carrierVal, estDeliveryVal, isExplicit, existingExplicit, expectedVer, orderNum, opId) => {
