@@ -498,89 +498,72 @@ async function reconcileExpiredReservations(options = {}) {
           continue;
         }
 
-        // If Razorpay reports that the customer actually completed payment:
-        const isPaid = gatewayOrder.status === 'paid' || (gatewayOrder.amount_paid && gatewayOrder.amount_paid > 0);
-        if (isPaid) {
-          let payments = [];
-          try {
-            payments = await fetchRazorpayOrderPayments(expOrder.razorpay_order_id);
-          } catch (pErr) {
-            console.warn(`Gateway payments fetch failed for order ${expOrder.id}:`, pErr.message);
-          }
-          const successfulPayment = payments.find(p => p.status === 'captured') || payments[0];
-          const paymentId = successfulPayment ? successfulPayment.id : `pay_rec_${Date.now()}`;
-
-          const paidTx = db.transaction(() => {
-            const updateRes = db.prepare(`
-              UPDATE orders
-              SET payment_status = 'Paid',
-                  status = 'Placed',
-                  razorpay_payment_id = ?,
-                  updated_at = CURRENT_TIMESTAMP
-              WHERE id = ? AND payment_status = 'Pending'
-            `).run(paymentId, expOrder.id);
-
-            if (updateRes.changes > 0) {
-              db.prepare(`
-                INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
-                VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
-              `).run(expOrder.id, expOrder.razorpay_order_id, paymentId, (gatewayOrder.amount_paid || expOrder.total_amount * 100));
-
-              db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(expOrder.user_id);
-              return true;
-            }
-            return false;
-          });
-
-          if (paidTx()) {
-            reconciledCount++;
-            continue; // Successfully recovered as Paid, DO NOT cancel or release stock
-          }
-        }
-
-        // Gateway order exists and is not reported paid.
-        // Check payments list to verify no captured payment exists
         let payments = [];
         try {
           payments = await fetchRazorpayOrderPayments(expOrder.razorpay_order_id);
         } catch (pErr) {
-          console.warn(`Gateway payments check failed for order ${expOrder.id}; preserving reservation:`, pErr.message);
+          console.warn(`Gateway payments fetch failed for order ${expOrder.id}; preserving reservation:`, pErr.message);
           // Payment state unknown: keep pending and retry
           continue;
         }
 
-        const capturedPayment = payments.find(p => p.status === 'captured');
-        if (capturedPayment) {
-          const paymentId = capturedPayment.id;
-          const paidTx = db.transaction(() => {
-            const updateRes = db.prepare(`
-              UPDATE orders
-              SET payment_status = 'Paid',
-                  status = 'Placed',
-                  razorpay_payment_id = ?,
-                  updated_at = CURRENT_TIMESTAMP
-              WHERE id = ? AND payment_status = 'Pending'
-            `).run(paymentId, expOrder.id);
+        // Check if Razorpay reports payment captured or authorized
+        const successfulPayment = Array.isArray(payments) && payments.find(p => (p.status === 'captured' || p.status === 'authorized') && p.id);
+        const isPaid = (gatewayOrder.status === 'paid' || (gatewayOrder.amount_paid && gatewayOrder.amount_paid > 0)) || Boolean(successfulPayment);
 
-            if (updateRes.changes > 0) {
-              db.prepare(`
-                INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
-                VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
-              `).run(expOrder.id, expOrder.razorpay_order_id, paymentId, (capturedPayment.amount || expOrder.total_amount * 100));
+        if (isPaid) {
+          if (successfulPayment && successfulPayment.id) {
+            const paymentId = successfulPayment.id;
+            const paidAmount = successfulPayment.amount || gatewayOrder.amount_paid || Math.round(expOrder.total_amount * 100);
 
-              db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(expOrder.user_id);
-              return true;
+            const paidTx = db.transaction(() => {
+              const updateRes = db.prepare(`
+                UPDATE orders
+                SET payment_status = 'Paid',
+                    status = 'Placed',
+                    razorpay_payment_id = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND payment_status = 'Pending'
+              `).run(paymentId, expOrder.id);
+
+              if (updateRes.changes > 0) {
+                db.prepare(`
+                  INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+                  VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
+                  ON CONFLICT(razorpay_payment_id) DO UPDATE SET
+                    status = 'Captured',
+                    amount = excluded.amount
+                `).run(expOrder.id, expOrder.razorpay_order_id, paymentId, paidAmount);
+
+                db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(expOrder.user_id);
+                return true;
+              }
+              return false;
+            });
+
+            if (paidTx()) {
+              reconciledCount++;
+              continue; // Successfully recovered as Paid, DO NOT cancel or release stock
             }
-            return false;
-          });
-
-          if (paidTx()) {
-            reconciledCount++;
-            continue;
           }
+
+          // If gateway order reports paid but we do NOT yet have a confirmed captured/authorized payment ID,
+          // preserve retryable/reconcilable state until confirmed on a future run
+          continue;
         }
 
-        // Positively confirmed unpaid: gateway order exists, amount_paid == 0, and no captured payments
+        // Gateway order exists and is not reported paid.
+        // Require terminal expired/cancelled gateway order state with no captured or authorized payments:
+        const isTerminalUnpaid = (gatewayOrder.status === 'expired' || gatewayOrder.status === 'cancelled') &&
+          (!Array.isArray(payments) || !payments.some(p => p.status === 'captured' || p.status === 'authorized'));
+
+        if (!isTerminalUnpaid) {
+          // Status is not terminal (e.g. 'created', 'attempted'): a late authorization might still occur.
+          // Preserve a retryable/reconcilable state!
+          continue;
+        }
+
+        // Positively confirmed unpaid: gateway order exists in terminal status with no captured/authorized payments
         gatewayConfirmedUnpaid = true;
       } else {
         // No gateway order ID was ever created for this order
@@ -671,41 +654,6 @@ async function reconcileSingleExpiredOrder(orderId, now = Date.now()) {
 
     if (!gatewayOrder) return false;
 
-    if (gatewayOrder.status === 'paid' || (gatewayOrder.amount_paid && gatewayOrder.amount_paid > 0)) {
-      let payments = [];
-      try {
-        payments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
-      } catch (pErr) {
-        console.warn(`Gateway payments fetch failed for order ${order.id}:`, pErr.message);
-      }
-      const successfulPayment = payments.find(p => p.status === 'captured') || payments[0];
-      const paymentId = successfulPayment ? successfulPayment.id : `pay_rec_${Date.now()}`;
-
-      const paidTx = db.transaction(() => {
-        const updateRes = db.prepare(`
-          UPDATE orders
-          SET payment_status = 'Paid',
-              status = 'Placed',
-              razorpay_payment_id = ?,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND payment_status = 'Pending'
-        `).run(paymentId, order.id);
-
-        if (updateRes.changes > 0) {
-          db.prepare(`
-            INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
-            VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
-          `).run(order.id, order.razorpay_order_id, paymentId, (gatewayOrder.amount_paid || order.total_amount * 100));
-
-          db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(order.user_id);
-          return true;
-        }
-        return false;
-      });
-
-      return paidTx();
-    }
-
     let payments = [];
     try {
       payments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
@@ -714,32 +662,53 @@ async function reconcileSingleExpiredOrder(orderId, now = Date.now()) {
       return false;
     }
 
-    const capturedPayment = payments.find(p => p.status === 'captured');
-    if (capturedPayment) {
-      const paymentId = capturedPayment.id;
-      const paidTx = db.transaction(() => {
-        const updateRes = db.prepare(`
-          UPDATE orders
-          SET payment_status = 'Paid',
-              status = 'Placed',
-              razorpay_payment_id = ?,
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND payment_status = 'Pending'
-        `).run(paymentId, order.id);
+    const successfulPayment = Array.isArray(payments) && payments.find(p => (p.status === 'captured' || p.status === 'authorized') && p.id);
+    const isPaid = (gatewayOrder.status === 'paid' || (gatewayOrder.amount_paid && gatewayOrder.amount_paid > 0)) || Boolean(successfulPayment);
 
-        if (updateRes.changes > 0) {
-          db.prepare(`
-            INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
-            VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
-          `).run(order.id, order.razorpay_order_id, paymentId, (capturedPayment.amount || order.total_amount * 100));
+    if (isPaid) {
+      if (successfulPayment && successfulPayment.id) {
+        const paymentId = successfulPayment.id;
+        const paidAmount = successfulPayment.amount || gatewayOrder.amount_paid || Math.round(order.total_amount * 100);
 
-          db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(order.user_id);
-          return true;
-        }
-        return false;
-      });
+        const paidTx = db.transaction(() => {
+          const updateRes = db.prepare(`
+            UPDATE orders
+            SET payment_status = 'Paid',
+                status = 'Placed',
+                razorpay_payment_id = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND payment_status = 'Pending'
+          `).run(paymentId, order.id);
 
-      return paidTx();
+          if (updateRes.changes > 0) {
+            db.prepare(`
+              INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+              VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
+              ON CONFLICT(razorpay_payment_id) DO UPDATE SET
+                status = 'Captured',
+                amount = excluded.amount
+            `).run(order.id, order.razorpay_order_id, paymentId, paidAmount);
+
+            db.prepare('DELETE FROM cart_items WHERE user_id = ?').run(order.user_id);
+            return true;
+          }
+          return false;
+        });
+
+        return paidTx();
+      }
+
+      // Paid at gateway but payment ID not confirmed yet: preserve retryable state
+      return false;
+    }
+
+    // Require terminal expired/cancelled gateway order state with no captured or authorized payments:
+    const isTerminalUnpaid = (gatewayOrder.status === 'expired' || gatewayOrder.status === 'cancelled') &&
+      (!Array.isArray(payments) || !payments.some(p => p.status === 'captured' || p.status === 'authorized'));
+
+    if (!isTerminalUnpaid) {
+      // Non-terminal state (e.g. 'created', 'attempted'): preserve retryable/reconcilable state!
+      return false;
     }
 
     gatewayConfirmedUnpaid = true;

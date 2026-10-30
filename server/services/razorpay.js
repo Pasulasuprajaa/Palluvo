@@ -219,6 +219,14 @@ async function fetchRazorpayOrder(orderId) {
       is_mock: true
     };
   }
+  if (orderId.startsWith('order_mock_attempted_')) {
+    return {
+      id: orderId,
+      status: 'attempted',
+      amount_paid: 0,
+      is_mock: true
+    };
+  }
   if (orderId.startsWith('order_mock_failed_lookup_')) {
     throw new Error('Simulated gateway lookup failure (network timeout)');
   }
@@ -248,6 +256,15 @@ async function fetchRazorpayOrderPayments(orderId) {
   if (!orderId) return [];
   if (orderId.startsWith('order_mock_paid_unconfirmed_')) {
     return [];
+  }
+  if (orderId.startsWith('order_mock_authorized_')) {
+    const prefixLen = 22;
+    return [{
+      id: `pay_mock_auth_${orderId.slice(prefixLen) || 'test'}`,
+      status: 'authorized',
+      amount: 100000,
+      order_id: orderId
+    }];
   }
   if (orderId.startsWith('order_mock_paid_') || orderId.startsWith('order_mock_captured_')) {
     const prefixLen = orderId.startsWith('order_mock_paid_') ? 16 : 20;

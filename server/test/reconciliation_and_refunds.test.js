@@ -1167,6 +1167,88 @@ async function runTests() {
     const mismatchedPaymentInDb = db.prepare('SELECT * FROM payments WHERE razorpay_payment_id = ?').all('pay_mock_mismatched_1');
     assert.strictEqual(mismatchedPaymentInDb.length, 0, 'Mismatched payment ID must NOT be recorded in payments ledger');
 
+    // [P1] Scheduled expiry scan preserves retryable/reconcilable state until unpaid status is terminal
+    // 1. Order with non-terminal gateway state ('attempted') and no visible payments must NOT be expired or cancelled
+    const pastTime = Date.now() - 3600000; // 1 hour ago (past reservation TTL)
+    const attemptedOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, expires_at, address_data)
+      VALUES ('PAL-EXPIRY-ATTEMPTED-1', ?, 9000, 9000, 'Razorpay', 'Pending', 'order_mock_attempted_1', 'Pending', ?, '{}')
+    `).run(cancelOrder.user_id, pastTime);
+    const attemptedOrderId = attemptedOrderInsert.lastInsertRowid;
+
+    const attemptedProd = db.prepare(`
+      INSERT INTO products (name, slug, category_id, fabric, occasion, price, mrp, discount_percent, stock_quantity, description)
+      VALUES ('Attempted Saree', 'attempted-saree', 1, 'Silk', 'Wedding', 9000, 10000, 10, 2, 'Stock attempted')
+    `).run();
+    const attemptedProdId = attemptedProd.lastInsertRowid;
+
+    db.prepare(`
+      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+      VALUES (?, ?, 'Attempted Saree', 9000, 1)
+    `).run(attemptedOrderId, attemptedProdId);
+
+    // Run scheduled expiry sweep
+    await reconcileExpiredReservations();
+
+    const attemptedOrderDb = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(attemptedOrderId);
+    assert.strictEqual(attemptedOrderDb.status, 'Pending', 'Non-terminal attempted order must remain Pending during scheduled sweep');
+    assert.strictEqual(attemptedOrderDb.payment_status, 'Pending');
+    const attemptedProdStock = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(attemptedProdId);
+    assert.strictEqual(attemptedProdStock.stock_quantity, 2, 'Stock must NOT be released for non-terminal gateway order');
+
+    // 2. Order with authorized payment must be reconciled to Paid/Placed with confirmed payment ID
+    const authorizedProd = db.prepare(`
+      INSERT INTO products (name, slug, category_id, fabric, occasion, price, mrp, discount_percent, stock_quantity, description)
+      VALUES ('Auth Saree', 'auth-saree', 1, 'Silk', 'Festival', 9000, 10000, 10, 4, 'Stock auth')
+    `).run();
+    const authorizedProdId = authorizedProd.lastInsertRowid;
+
+    const authorizedOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, expires_at, address_data)
+      VALUES ('PAL-EXPIRY-AUTH-1', ?, 9000, 9000, 'Razorpay', 'Pending', 'order_mock_authorized_1', 'Pending', ?, '{}')
+    `).run(cancelOrder.user_id, pastTime);
+    const authorizedOrderId = authorizedOrderInsert.lastInsertRowid;
+
+    db.prepare(`
+      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+      VALUES (?, ?, 'Auth Saree', 9000, 1)
+    `).run(authorizedOrderId, authorizedProdId);
+
+    await reconcileExpiredReservations();
+
+    const authorizedOrderDb = db.prepare('SELECT status, payment_status, razorpay_payment_id FROM orders WHERE id = ?').get(authorizedOrderId);
+    assert.strictEqual(authorizedOrderDb.status, 'Placed', 'Authorized order must be reconciled to Placed');
+    assert.strictEqual(authorizedOrderDb.payment_status, 'Paid', 'Authorized order must be reconciled to Paid');
+    assert.strictEqual(authorizedOrderDb.razorpay_payment_id, 'pay_mock_auth_1', 'Confirmed payment ID must be recorded');
+    const authProdStock = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(authorizedProdId);
+    assert.strictEqual(authProdStock.stock_quantity, 4, 'Stock must NOT be released for successfully reconciled authorized order');
+
+    // 3. Order with terminal expired gateway state must be cancelled/expired and stock released
+    const expiredSweepProd = db.prepare(`
+      INSERT INTO products (name, slug, category_id, fabric, occasion, price, mrp, discount_percent, stock_quantity, description)
+      VALUES ('Expired Sweep Saree', 'expired-sweep-saree', 1, 'Silk', 'Party', 9000, 10000, 10, 5, 'Stock expired sweep')
+    `).run();
+    const expiredSweepProdId = expiredSweepProd.lastInsertRowid;
+
+    const expiredSweepOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, expires_at, address_data)
+      VALUES ('PAL-EXPIRY-TERMINAL-1', ?, 9000, 9000, 'Razorpay', 'Pending', 'order_mock_expired_sweep_1', 'Pending', ?, '{}')
+    `).run(cancelOrder.user_id, pastTime);
+    const expiredSweepOrderId = expiredSweepOrderInsert.lastInsertRowid;
+
+    db.prepare(`
+      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+      VALUES (?, ?, 'Expired Sweep Saree', 9000, 1)
+    `).run(expiredSweepOrderId, expiredSweepProdId);
+
+    await reconcileExpiredReservations();
+
+    const expiredSweepOrderDb = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(expiredSweepOrderId);
+    assert.strictEqual(expiredSweepOrderDb.status, 'Cancelled', 'Terminal expired order must be Cancelled');
+    assert.strictEqual(expiredSweepOrderDb.payment_status, 'Expired', 'Terminal expired order must be Expired');
+    const finalProdStock = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(expiredSweepProdId);
+    assert.strictEqual(finalProdStock.stock_quantity, 6, 'Stock safely released after terminal expiry (5 + 1 = 6)');
+
     console.log('✅ PASS: [P2] Order cancellation updates payment ledger status to Refunded on immediate full refund');
 
     // --- TEST SUITE P2: Runtime Product URL Preservation & Real 404 Routing ---
