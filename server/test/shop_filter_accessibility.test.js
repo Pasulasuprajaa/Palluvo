@@ -2781,32 +2781,69 @@ async function testShopFilterAccessibility() {
     assert.ok(!productDetailSource.includes('role="tab"'), 'ProductDetailPage must not use role="tab" for thumbnails');
     assert.ok(!productDetailSource.includes('aria-controls="gallery-main-image"'), 'ProductDetailPage must not point aria-controls at a button');
 
-    // Both galleries express selection via aria-pressed
+    // Both galleries express selection via aria-pressed and expose accessible group naming via role="group"
     assert.ok(quickViewFreshSource.includes('aria-pressed={selectedImageIndex === idx}'), 'QuickViewModal thumbnails must express selection via aria-pressed');
     assert.ok(productDetailSource.includes('aria-pressed={isSelected}'), 'ProductDetailPage thumbnails must express selection via aria-pressed');
+    assert.ok(
+      quickViewFreshSource.includes('role="group"') && quickViewFreshSource.includes('aria-label="Product thumbnail gallery"'),
+      'QuickViewModal thumbnails container must provide role="group" to expose aria-label'
+    );
+    assert.ok(
+      productDetailSource.includes('role="group"') && productDetailSource.includes('aria-label="Product image gallery thumbnails"'),
+      'ProductDetailPage thumbnails container must provide role="group" to expose aria-label'
+    );
 
-    console.log('✅ PASS: [P2] Gallery thumbnails drop fake tab roles and express selection via aria-pressed across QuickViewModal and ProductDetailPage');
+    console.log('✅ PASS: [P2/P3] Gallery thumbnails use role="group" with aria-label and express selection via aria-pressed across QuickViewModal and ProductDetailPage');
 
     // 7. [P2] Sitemap and Robots Generation & Server Endpoints
-    const { generateSitemapXml, generateRobotsTxt, getAllCatalogRoutes } = require('../services/sitemap');
+    const { generateSitemapXml, generateRobotsTxt, getAllCatalogRoutes, getCanonicalCatalogRoutes } = require('../services/sitemap');
     const catalog = require('../data/catalog.json');
 
-    const allRoutes = getAllCatalogRoutes(catalog);
-    assert.strictEqual(allRoutes.length, 91, 'Catalog route enumeration must match 91 crawlable routes (21 static + 24 category + 46 product)');
+    const canonicalRoutes = getCanonicalCatalogRoutes(catalog);
+    assert.strictEqual(canonicalRoutes.length, 44, 'Canonical route enumeration must match 44 canonical indexable routes (13 static + 8 category + 23 product)');
 
     const generatedSitemap = generateSitemapXml(catalog);
     assert.ok(generatedSitemap.startsWith('<?xml version="1.0" encoding="UTF-8"?>'), 'Sitemap must have XML declaration');
     assert.ok(generatedSitemap.includes('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'), 'Sitemap must contain urlset');
     assert.ok(generatedSitemap.includes('<loc>https://palluvo.com/</loc>'), 'Sitemap must include root route');
-    assert.ok(generatedSitemap.includes('<loc>https://palluvo.com/sarees</loc>'), 'Sitemap must include /sarees route');
-    assert.ok(generatedSitemap.includes('<loc>https://palluvo.com/sarees/banarasi-sarees</loc>') || generatedSitemap.includes('<loc>https://palluvo.com/sarees/category/banarasi-sarees</loc>'), 'Sitemap must include category routes');
-    assert.ok(generatedSitemap.includes('<lastmod>'), 'Sitemap must contain lastmod elements');
+    assert.ok(generatedSitemap.includes('<loc>https://palluvo.com/sarees</loc>'), 'Sitemap must include canonical /sarees route');
+    assert.ok(generatedSitemap.includes('<loc>https://palluvo.com/sarees?category=banarasi-sarees</loc>'), 'Sitemap must include canonical category query route');
+    assert.ok(generatedSitemap.includes('<loc>https://palluvo.com/sarees/royal-crimson-banarasi-katan-silk-saree</loc>'), 'Sitemap must include canonical product route');
+
+    // Verify private pages and duplicate non-canonical forms are excluded from sitemap.xml
+    const nonCanonicalPaths = [
+      '/cart',
+      '/checkout',
+      '/order-success',
+      '/track-order',
+      '/account',
+      '/wishlist',
+      '/admin',
+      '<loc>https://palluvo.com/shop</loc>',
+      '/sarees/category/',
+      '/category/',
+      '/product/'
+    ];
+    for (const badPath of nonCanonicalPaths) {
+      assert.ok(!generatedSitemap.includes(badPath), `Sitemap must NOT advertise private or non-canonical duplicate path: ${badPath}`);
+    }
+
+    // Verify lastmod is not uniformly stamped with build date across all URLs
+    const lastmodMatches = generatedSitemap.match(/<lastmod>([^<]+)<\/lastmod>/g) || [];
+    // Static routes omit lastmod
+    assert.ok(!generatedSitemap.includes('<loc>https://palluvo.com/</loc>\n    <lastmod>'), 'Static routes without distinct timestamps must omit lastmod');
+
     assert.ok(generatedSitemap.includes('<changefreq>'), 'Sitemap must contain changefreq elements');
     assert.ok(generatedSitemap.includes('<priority>'), 'Sitemap must contain priority elements');
 
     const generatedRobots = generateRobotsTxt();
     assert.ok(generatedRobots.includes('User-agent: *'), 'Robots.txt must specify User-agent: *');
     assert.ok(generatedRobots.includes('Allow: /'), 'Robots.txt must allow root');
+    assert.ok(generatedRobots.includes('Disallow: /admin'), 'Robots.txt must disallow /admin');
+    assert.ok(generatedRobots.includes('Disallow: /checkout'), 'Robots.txt must disallow /checkout');
+    assert.ok(generatedRobots.includes('Disallow: /cart'), 'Robots.txt must disallow /cart');
+    assert.ok(generatedRobots.includes('Disallow: /account'), 'Robots.txt must disallow /account');
+    assert.ok(generatedRobots.includes('Disallow: /order-success'), 'Robots.txt must disallow /order-success');
     assert.ok(generatedRobots.includes('Sitemap: https://palluvo.com/sitemap.xml'), 'Robots.txt must reference sitemap.xml');
 
     // Verify files exist in client/public and client/dist
@@ -2835,11 +2872,12 @@ async function testShopFilterAccessibility() {
       const sitemapBody = await sitemapRes.text();
       assert.ok(sitemapBody.includes('<urlset'), 'GET /sitemap.xml must return valid urlset XML');
       assert.ok(sitemapBody.includes('<loc>https://palluvo.com/</loc>'), 'GET /sitemap.xml must contain homepage');
+      assert.ok(!sitemapBody.includes('/cart'), 'GET /sitemap.xml must not contain private routes');
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }
 
-    console.log('✅ PASS: [P2] sitemap.xml (91 routes with lastmod) and robots.txt verified in prerender, client/public, and server endpoints');
+    console.log('✅ PASS: [P2] Canonical sitemap.xml (44 indexable routes) and robots.txt verified in prerender, client/public, and server endpoints');
   } catch (renderErr) {
     console.error('SSR test error:', renderErr);
     throw renderErr;

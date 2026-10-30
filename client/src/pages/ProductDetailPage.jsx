@@ -270,6 +270,7 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
           {product.images && product.images.length > 1 && (
             <div
               
+              role="group"
               aria-label="Product image gallery thumbnails"
               className="flex sm:flex-col gap-3 overflow-x-auto sm:overflow-y-auto max-h-[520px] pb-2 sm:pb-0 scrollbar-none"
             >

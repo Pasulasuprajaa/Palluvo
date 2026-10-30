@@ -180,6 +180,7 @@ export default function QuickViewModal({ onNavigate }) {
           {images.length > 1 && (
             <div
               
+              role="group"
               aria-label="Product thumbnail gallery"
               className="flex gap-2 mt-4 overflow-x-auto max-w-full pb-1"
             >

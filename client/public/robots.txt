@@ -6,5 +6,7 @@ Disallow: /checkout
 Disallow: /cart
 Disallow: /account
 Disallow: /order-success
+Disallow: /track-order
+Disallow: /wishlist
 
 Sitemap: https://palluvo.com/sitemap.xml
