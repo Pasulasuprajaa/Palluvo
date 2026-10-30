@@ -507,14 +507,15 @@ async function reconcileExpiredReservations(options = {}) {
           continue;
         }
 
-        // Check if Razorpay reports payment captured or authorized
-        const successfulPayment = Array.isArray(payments) && payments.find(p => (p.status === 'captured' || p.status === 'authorized') && p.id);
-        const isPaid = (gatewayOrder.status === 'paid' || (gatewayOrder.amount_paid && gatewayOrder.amount_paid > 0)) || Boolean(successfulPayment);
+        // Check if Razorpay reports a confirmed captured payment
+        const capturedPayment = Array.isArray(payments) && payments.find(p => p.status === 'captured' && p.id);
+        const hasAuthorizedPayment = Array.isArray(payments) && payments.some(p => p.status === 'authorized');
+        const isPaid = (gatewayOrder.status === 'paid' || (gatewayOrder.amount_paid && gatewayOrder.amount_paid > 0)) || Boolean(capturedPayment);
 
         if (isPaid) {
-          if (successfulPayment && successfulPayment.id) {
-            const paymentId = successfulPayment.id;
-            const paidAmount = successfulPayment.amount || gatewayOrder.amount_paid || Math.round(expOrder.total_amount * 100);
+          if (capturedPayment && capturedPayment.id) {
+            const paymentId = capturedPayment.id;
+            const paidAmount = capturedPayment.amount || gatewayOrder.amount_paid || Math.round(expOrder.total_amount * 100);
 
             const paidTx = db.transaction(() => {
               const updateRes = db.prepare(`
@@ -547,23 +548,20 @@ async function reconcileExpiredReservations(options = {}) {
             }
           }
 
-          // If gateway order reports paid but we do NOT yet have a confirmed captured/authorized payment ID,
+          // If gateway order reports paid but we do NOT yet have a confirmed captured payment ID,
           // preserve retryable/reconcilable state until confirmed on a future run
           continue;
         }
 
-        // Gateway order exists and is not reported paid.
-        // Require terminal expired/cancelled gateway order state with no captured or authorized payments:
-        const isTerminalUnpaid = (gatewayOrder.status === 'expired' || gatewayOrder.status === 'cancelled') &&
-          (!Array.isArray(payments) || !payments.some(p => p.status === 'captured' || p.status === 'authorized'));
-
-        if (!isTerminalUnpaid) {
-          // Status is not terminal (e.g. 'created', 'attempted'): a late authorization might still occur.
-          // Preserve a retryable/reconcilable state!
+        // An authorized payment needs capture and must not be marked captured without calling capture.
+        // Keep authorization retryable in the meantime: do NOT expire or cancel the reservation!
+        if (hasAuthorizedPayment) {
           continue;
         }
 
-        // Positively confirmed unpaid: gateway order exists in terminal status with no captured/authorized payments
+        // In Razorpay, order statuses are 'created', 'attempted', and 'paid'.
+        // Unpaid terminality is determined from payment attempts plus the reservation expiry policy:
+        // Order has passed reservation TTL, amount_paid == 0, and has no captured or authorized payments.
         gatewayConfirmedUnpaid = true;
       } else {
         // No gateway order ID was ever created for this order
@@ -610,6 +608,62 @@ async function reconcileExpiredReservations(options = {}) {
     } catch (err) {
       console.error(`Error during payment-aware reconciliation for order ${expOrder.id}:`, err);
     }
+  }
+
+  // 3. Late Capture Recovery: Check expired/cancelled orders for late captured payments and claim them into refund
+  try {
+    const lateOrders = db.prepare(`
+      SELECT id, order_number, user_id, razorpay_order_id, coupon_code, total_amount, payment_status, status, version, refund_idempotency_key
+      FROM orders
+      WHERE (status = 'Cancelled' OR payment_status = 'Expired' OR payment_status = 'Failed')
+        AND payment_status NOT IN ('Refunded', 'Refund_Pending')
+        AND razorpay_order_id IS NOT NULL
+        AND created_at >= datetime('now', '-7 days')
+    `).all();
+
+    for (const lateOrder of lateOrders) {
+      try {
+        const latePayments = await fetchRazorpayOrderPayments(lateOrder.razorpay_order_id);
+        const lateCaptured = Array.isArray(latePayments) && latePayments.find(p => p.status === 'captured' && p.id);
+        if (lateCaptured) {
+          const paymentId = lateCaptured.id;
+          const initialIdempotencyKey = lateOrder.refund_idempotency_key || `rfnd_${lateOrder.id}_${lateOrder.order_number}`;
+
+          const claimLateTx = db.transaction(() => {
+            const claimRes = db.prepare(`
+              UPDATE orders SET
+                payment_status = 'Refund_Pending',
+                status = 'Cancelled',
+                razorpay_payment_id = ?,
+                refund_idempotency_key = COALESCE(refund_idempotency_key, ?),
+                version = COALESCE(version, 1) + 1,
+                updated_at = CURRENT_TIMESTAMP
+              WHERE id = ? AND payment_status NOT IN ('Refunded', 'Refund_Pending')
+            `).run(paymentId, initialIdempotencyKey, lateOrder.id);
+
+            if (claimRes.changes > 0) {
+              db.prepare(`
+                INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+                VALUES (?, ?, ?, 'gateway_reconciled', ?, 'INR', 'Captured', 'Razorpay')
+                ON CONFLICT(razorpay_payment_id) DO UPDATE SET
+                  status = 'Captured',
+                  amount = excluded.amount
+              `).run(lateOrder.id, lateOrder.razorpay_order_id, paymentId, (lateCaptured.amount || Math.round(lateOrder.total_amount * 100)));
+              return true;
+            }
+            return false;
+          });
+
+          if (claimLateTx()) {
+            reconciledCount++;
+          }
+        }
+      } catch (lateErr) {
+        // Continue scanning other orders if one order check fails
+      }
+    }
+  } catch (scanErr) {
+    console.warn('Late payment recovery scan notice:', scanErr.message);
   }
 
   return reconciledCount;
@@ -662,13 +716,14 @@ async function reconcileSingleExpiredOrder(orderId, now = Date.now()) {
       return false;
     }
 
-    const successfulPayment = Array.isArray(payments) && payments.find(p => (p.status === 'captured' || p.status === 'authorized') && p.id);
-    const isPaid = (gatewayOrder.status === 'paid' || (gatewayOrder.amount_paid && gatewayOrder.amount_paid > 0)) || Boolean(successfulPayment);
+    const capturedPayment = Array.isArray(payments) && payments.find(p => p.status === 'captured' && p.id);
+    const hasAuthorizedPayment = Array.isArray(payments) && payments.some(p => p.status === 'authorized');
+    const isPaid = (gatewayOrder.status === 'paid' || (gatewayOrder.amount_paid && gatewayOrder.amount_paid > 0)) || Boolean(capturedPayment);
 
     if (isPaid) {
-      if (successfulPayment && successfulPayment.id) {
-        const paymentId = successfulPayment.id;
-        const paidAmount = successfulPayment.amount || gatewayOrder.amount_paid || Math.round(order.total_amount * 100);
+      if (capturedPayment && capturedPayment.id) {
+        const paymentId = capturedPayment.id;
+        const paidAmount = capturedPayment.amount || gatewayOrder.amount_paid || Math.round(order.total_amount * 100);
 
         const paidTx = db.transaction(() => {
           const updateRes = db.prepare(`
@@ -702,15 +757,12 @@ async function reconcileSingleExpiredOrder(orderId, now = Date.now()) {
       return false;
     }
 
-    // Require terminal expired/cancelled gateway order state with no captured or authorized payments:
-    const isTerminalUnpaid = (gatewayOrder.status === 'expired' || gatewayOrder.status === 'cancelled') &&
-      (!Array.isArray(payments) || !payments.some(p => p.status === 'captured' || p.status === 'authorized'));
-
-    if (!isTerminalUnpaid) {
-      // Non-terminal state (e.g. 'created', 'attempted'): preserve retryable/reconcilable state!
+    // Keep authorization retryable in the meantime:
+    if (hasAuthorizedPayment) {
       return false;
     }
 
+    // Unpaid terminality determined from payment attempts plus reservation expiry policy:
     gatewayConfirmedUnpaid = true;
   } else {
     gatewayConfirmedUnpaid = true;
@@ -1192,11 +1244,15 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
         try {
           orderPayments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
           if (Array.isArray(orderPayments)) {
-            const capturedInList = orderPayments.find(p => (p.status === 'captured' || p.status === 'authorized') && p.id);
+            const capturedInList = orderPayments.find(p => p.status === 'captured' && p.id);
+            const hasAuthInList = orderPayments.some(p => p.status === 'authorized');
             if (capturedInList) {
               isPaymentCaptured = true;
               confirmedPayment = capturedInList;
               specificPaymentConfirmed = true;
+            } else if (hasAuthInList) {
+              // Authorized payment needs capture; keep retryable without marking affirmatively unpaid
+              gatewayOrderIsPaidWithoutPaymentId = true;
             } else if (razorpay_payment_id && orderPayments.some(p => p.id === razorpay_payment_id)) {
               // The specific payment is present in the order payments list and confirmed not captured
               specificPaymentConfirmed = true;
@@ -1218,9 +1274,11 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
             );
             if (belongsToOrder) {
               specificPaymentConfirmed = true;
-              if (p.status === 'captured' || p.status === 'authorized') {
+              if (p.status === 'captured') {
                 isPaymentCaptured = true;
                 confirmedPayment = p;
+              } else if (p.status === 'authorized') {
+                gatewayOrderIsPaidWithoutPaymentId = true;
               }
             } else {
               console.warn(`Payment ${razorpay_payment_id} does not belong to order ${order.id} (expected order ${order.razorpay_order_id}, got ${p.order_id})`);
@@ -1242,7 +1300,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
                 try {
                   const retryPayments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
                   if (Array.isArray(retryPayments)) {
-                    const capturedInRetry = retryPayments.find(p => (p.status === 'captured' || p.status === 'authorized') && p.id);
+                    const capturedInRetry = retryPayments.find(p => p.status === 'captured' && p.id);
                     if (capturedInRetry) {
                       isPaymentCaptured = true;
                       confirmedPayment = capturedInRetry;
@@ -1259,7 +1317,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
                 // Do NOT mark as captured with an unconfirmed / callback-supplied ID. Preserve retryable state!
                 gatewayOrderIsPaidWithoutPaymentId = true;
               }
-            } else if (gatewayOrder.status === 'expired' || gatewayOrder.status === 'cancelled') {
+            } else if (orderPayments && orderPayments.length > 0 && orderPayments.every(p => p.status === 'failed')) {
               terminalUnpaidStateConfirmed = true;
             }
           }
@@ -1422,7 +1480,7 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
 
     // If order was terminally cancelled or failed, do NOT resurrect it as paid without reservation.
     // Persist refund intent before gateway call and make payment ledger insertion idempotent.
-    if (order.status === 'Cancelled' || order.payment_status === 'Cancelled' || order.payment_status === 'Failed') {
+    if (order.status === 'Cancelled' || order.payment_status === 'Cancelled' || order.payment_status === 'Failed' || order.payment_status === 'Expired') {
       const initialIdempotencyKey = order.refund_idempotency_key || `rfnd_${order.id}_${order.order_number}`;
 
       // Claim the order's refund transition atomically before calling Razorpay:
@@ -1437,8 +1495,8 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
             version = COALESCE(version, 1) + 1,
             updated_at = CURRENT_TIMESTAMP
           WHERE id = ? AND user_id = ?
-            AND (status = 'Cancelled' OR payment_status = 'Failed')
-            AND payment_status IN ('Cancelled', 'Pending', 'Failed')
+            AND (status = 'Cancelled' OR payment_status = 'Failed' OR payment_status = 'Expired')
+            AND payment_status IN ('Cancelled', 'Pending', 'Failed', 'Expired')
             AND (version = ? OR (version IS NULL AND ? = 1))
         `).run(razorpay_payment_id, initialIdempotencyKey, order.id, req.user.id, order.version, order.version);
 

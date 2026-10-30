@@ -320,6 +320,16 @@ async function fetchRazorpayPayment(paymentId) {
       is_mock: true
     };
   }
+  if (paymentId.startsWith('pay_mock_declined_')) {
+    return {
+      id: paymentId,
+      status: 'failed',
+      order_id: 'order_mock_declined_1',
+      amount: 100000,
+      amount_refunded: 0,
+      is_mock: true
+    };
+  }
   if (paymentId.startsWith('pay_mock_refund_failed_')) {
     return {
       id: paymentId,

@@ -1085,10 +1085,10 @@ async function runTests() {
     const partialStockPreserved = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(partialTrackedProdId);
     assert.strictEqual(partialStockPreserved.stock_quantity, 4, 'Inventory must NOT be released when specific payment status is unknown');
 
-    // [P1] Release inventory only when order is confirmed in a terminal unpaid state (e.g. expired order)
+    // [P1] Release inventory only when order is confirmed in a terminal unpaid state (e.g. confirmed declined payment)
     const expiredGwOrderInsert = db.prepare(`
       INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, address_data)
-      VALUES ('PAL-EXPIRED-GW-1', ?, 8200, 8200, 'Razorpay', 'Pending', 'order_mock_expired_1', 'Pending', '{}')
+      VALUES ('PAL-EXPIRED-GW-1', ?, 8200, 8200, 'Razorpay', 'Pending', 'order_mock_declined_1', 'Pending', '{}')
     `).run(cancelOrder.user_id);
     const expiredGwOrderId = expiredGwOrderInsert.lastInsertRowid;
 
@@ -1105,16 +1105,16 @@ async function runTests() {
       },
       body: {
         orderId: expiredGwOrderId,
-        razorpay_order_id: 'order_mock_expired_1',
-        razorpay_payment_id: 'pay_mock_failed_lookup_3',
+        razorpay_order_id: 'order_mock_declined_1',
+        razorpay_payment_id: 'pay_mock_declined_1',
         razorpay_signature: 'invalid_sig_expired_gw'
       }
     });
 
     assert.strictEqual(expiredGwRes.status, 400, 'Must return 400 Bad Request');
     const expiredOrderInDb = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(expiredGwOrderId);
-    assert.strictEqual(expiredOrderInDb.status, 'Cancelled', 'Expired gateway order must transition to Cancelled');
-    assert.strictEqual(expiredOrderInDb.payment_status, 'Failed', 'Expired gateway order must transition to Failed');
+    assert.strictEqual(expiredOrderInDb.status, 'Cancelled', 'Declined gateway order must transition to Cancelled');
+    assert.strictEqual(expiredOrderInDb.payment_status, 'Failed', 'Declined gateway order must transition to Failed');
 
     const expiredStockReleased = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(partialTrackedProdId);
     assert.strictEqual(expiredStockReleased.stock_quantity, 5, 'Inventory must be safely released when order is confirmed in terminal unpaid state');
@@ -1168,35 +1168,16 @@ async function runTests() {
     assert.strictEqual(mismatchedPaymentInDb.length, 0, 'Mismatched payment ID must NOT be recorded in payments ledger');
 
     // [P1] Scheduled expiry scan preserves retryable/reconcilable state until unpaid status is terminal
-    // 1. Order with non-terminal gateway state ('attempted') and no visible payments must NOT be expired or cancelled
+    // 1. Order with non-terminal gateway state ('attempted') and no visible payments past TTL is confirmed unpaid under expiry policy
     const pastTime = Date.now() - 3600000; // 1 hour ago (past reservation TTL)
-    const attemptedOrderInsert = db.prepare(`
-      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, expires_at, address_data)
-      VALUES ('PAL-EXPIRY-ATTEMPTED-1', ?, 9000, 9000, 'Razorpay', 'Pending', 'order_mock_attempted_1', 'Pending', ?, '{}')
-    `).run(cancelOrder.user_id, pastTime);
-    const attemptedOrderId = attemptedOrderInsert.lastInsertRowid;
-
     const attemptedProd = db.prepare(`
       INSERT INTO products (name, slug, category_id, fabric, occasion, price, mrp, discount_percent, stock_quantity, description)
       VALUES ('Attempted Saree', 'attempted-saree', 1, 'Silk', 'Wedding', 9000, 10000, 10, 2, 'Stock attempted')
     `).run();
     const attemptedProdId = attemptedProd.lastInsertRowid;
 
-    db.prepare(`
-      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
-      VALUES (?, ?, 'Attempted Saree', 9000, 1)
-    `).run(attemptedOrderId, attemptedProdId);
-
-    // Run scheduled expiry sweep
-    await reconcileExpiredReservations();
-
-    const attemptedOrderDb = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(attemptedOrderId);
-    assert.strictEqual(attemptedOrderDb.status, 'Pending', 'Non-terminal attempted order must remain Pending during scheduled sweep');
-    assert.strictEqual(attemptedOrderDb.payment_status, 'Pending');
-    const attemptedProdStock = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(attemptedProdId);
-    assert.strictEqual(attemptedProdStock.stock_quantity, 2, 'Stock must NOT be released for non-terminal gateway order');
-
-    // 2. Order with authorized payment must be reconciled to Paid/Placed with confirmed payment ID
+    // 2. [P1] An authorized payment needs capture and must NOT be marked as Paid/Placed or written as Captured.
+    // It must remain retryable (Pending) and active without releasing reservation.
     const authorizedProd = db.prepare(`
       INSERT INTO products (name, slug, category_id, fabric, occasion, price, mrp, discount_percent, stock_quantity, description)
       VALUES ('Auth Saree', 'auth-saree', 1, 'Silk', 'Festival', 9000, 10000, 10, 4, 'Stock auth')
@@ -1217,13 +1198,14 @@ async function runTests() {
     await reconcileExpiredReservations();
 
     const authorizedOrderDb = db.prepare('SELECT status, payment_status, razorpay_payment_id FROM orders WHERE id = ?').get(authorizedOrderId);
-    assert.strictEqual(authorizedOrderDb.status, 'Placed', 'Authorized order must be reconciled to Placed');
-    assert.strictEqual(authorizedOrderDb.payment_status, 'Paid', 'Authorized order must be reconciled to Paid');
-    assert.strictEqual(authorizedOrderDb.razorpay_payment_id, 'pay_mock_auth_1', 'Confirmed payment ID must be recorded');
+    assert.strictEqual(authorizedOrderDb.status, 'Pending', 'Authorized payment must NOT be marked Placed; must remain Pending and retryable');
+    assert.strictEqual(authorizedOrderDb.payment_status, 'Pending', 'Authorized payment must NOT be marked Paid without capture');
+    assert.strictEqual(authorizedOrderDb.razorpay_payment_id, null, 'Authorized payment must NOT be finalized without capture');
     const authProdStock = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(authorizedProdId);
-    assert.strictEqual(authProdStock.stock_quantity, 4, 'Stock must NOT be released for successfully reconciled authorized order');
+    assert.strictEqual(authProdStock.stock_quantity, 4, 'Stock must NOT be released while authorization is active');
 
-    // 3. Order with terminal expired gateway state must be cancelled/expired and stock released
+    // 3. [P1] Order with standard gateway status ('attempted'/'created') and no captured/authorized payments
+    // past reservation TTL is terminally unpaid under the reservation expiry policy; releases stock and expires
     const expiredSweepProd = db.prepare(`
       INSERT INTO products (name, slug, category_id, fabric, occasion, price, mrp, discount_percent, stock_quantity, description)
       VALUES ('Expired Sweep Saree', 'expired-sweep-saree', 1, 'Silk', 'Party', 9000, 10000, 10, 5, 'Stock expired sweep')
@@ -1232,7 +1214,7 @@ async function runTests() {
 
     const expiredSweepOrderInsert = db.prepare(`
       INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, expires_at, address_data)
-      VALUES ('PAL-EXPIRY-TERMINAL-1', ?, 9000, 9000, 'Razorpay', 'Pending', 'order_mock_expired_sweep_1', 'Pending', ?, '{}')
+      VALUES ('PAL-EXPIRY-TERMINAL-1', ?, 9000, 9000, 'Razorpay', 'Pending', 'order_mock_attempted_1', 'Pending', ?, '{}')
     `).run(cancelOrder.user_id, pastTime);
     const expiredSweepOrderId = expiredSweepOrderInsert.lastInsertRowid;
 
@@ -1244,10 +1226,32 @@ async function runTests() {
     await reconcileExpiredReservations();
 
     const expiredSweepOrderDb = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(expiredSweepOrderId);
-    assert.strictEqual(expiredSweepOrderDb.status, 'Cancelled', 'Terminal expired order must be Cancelled');
-    assert.strictEqual(expiredSweepOrderDb.payment_status, 'Expired', 'Terminal expired order must be Expired');
+    assert.strictEqual(expiredSweepOrderDb.status, 'Cancelled', 'Expired order must be Cancelled under reservation expiry policy');
+    assert.strictEqual(expiredSweepOrderDb.payment_status, 'Expired', 'Expired order must transition to Expired');
     const finalProdStock = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(expiredSweepProdId);
-    assert.strictEqual(finalProdStock.stock_quantity, 6, 'Stock safely released after terminal expiry (5 + 1 = 6)');
+    assert.strictEqual(finalProdStock.stock_quantity, 6, 'Stock safely released after reservation expiry (5 + 1 = 6)');
+
+    // 4. [P1] Late capture recovery: If an order was expired but later shows a captured payment on the gateway,
+    // the reconciler discovers it and routes it into refund recovery
+    const lateCaptureProd = db.prepare(`
+      INSERT INTO products (name, slug, category_id, fabric, occasion, price, mrp, discount_percent, stock_quantity, description)
+      VALUES ('Late Saree', 'late-saree', 1, 'Silk', 'Party', 9000, 10000, 10, 3, 'Stock late')
+    `).run();
+    const lateCaptureProdId = lateCaptureProd.lastInsertRowid;
+
+    const lateCaptureOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, expires_at, address_data, created_at)
+      VALUES ('PAL-LATE-CAPTURE-1', ?, 9000, 9000, 'Razorpay', 'Expired', 'order_mock_paid_late_1', 'Cancelled', ?, '{}', datetime('now', '-1 day'))
+    `).run(cancelOrder.user_id, pastTime);
+    const lateCaptureOrderId = lateCaptureOrderInsert.lastInsertRowid;
+
+    // Run sweep: must discover order_mock_paid_late_1 captured payment and claim it into Refund_Pending
+    await reconcileExpiredReservations();
+
+    const lateCaptureOrderDb = db.prepare('SELECT status, payment_status, razorpay_payment_id FROM orders WHERE id = ?').get(lateCaptureOrderId);
+    assert.strictEqual(lateCaptureOrderDb.status, 'Cancelled', 'Late capture order remains Cancelled');
+    assert.strictEqual(lateCaptureOrderDb.payment_status, 'Refund_Pending', 'Late capture on expired order must enter Refund_Pending');
+    assert.strictEqual(lateCaptureOrderDb.razorpay_payment_id, 'pay_mock_late_1', 'Late captured payment ID must be claimed');
 
     console.log('✅ PASS: [P2] Order cancellation updates payment ledger status to Refunded on immediate full refund');
 
