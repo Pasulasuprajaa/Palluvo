@@ -1216,13 +1216,14 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
       let confirmedPayment = null;
       let specificPaymentConfirmed = false;
       let terminalUnpaidStateConfirmed = false;
+      let gatewayOrderIsPaidWithoutPaymentId = false;
 
       let orderPayments = null;
       if (order.razorpay_order_id) {
         try {
           orderPayments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
           if (Array.isArray(orderPayments)) {
-            const capturedInList = orderPayments.find(p => (p.id === razorpay_payment_id || p.status === 'captured') && (p.status === 'captured' || p.status === 'authorized'));
+            const capturedInList = orderPayments.find(p => (p.status === 'captured' || p.status === 'authorized') && p.id);
             if (capturedInList) {
               isPaymentCaptured = true;
               confirmedPayment = capturedInList;
@@ -1241,10 +1242,19 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
         try {
           const p = await fetchRazorpayPayment(razorpay_payment_id);
           if (p) {
-            specificPaymentConfirmed = true;
-            if ((p.order_id === order.razorpay_order_id || p.order_id === razorpay_order_id) && (p.status === 'captured' || p.status === 'authorized')) {
-              isPaymentCaptured = true;
-              confirmedPayment = p;
+            const belongsToOrder = Boolean(
+              p.order_id
+                ? (p.order_id === order.razorpay_order_id || p.order_id === razorpay_order_id)
+                : (p.is_mock && !p.order_id)
+            );
+            if (belongsToOrder) {
+              specificPaymentConfirmed = true;
+              if (p.status === 'captured' || p.status === 'authorized') {
+                isPaymentCaptured = true;
+                confirmedPayment = p;
+              }
+            } else {
+              console.warn(`Payment ${razorpay_payment_id} does not belong to order ${order.id} (expected order ${order.razorpay_order_id}, got ${p.order_id})`);
             }
           }
         } catch (paymentErr) {
@@ -1252,14 +1262,34 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
         }
       }
 
-      // If the specific payment was not visible in the payments list and direct lookup failed,
-      // check if the gateway order has reached a terminal unpaid state (e.g. expired or cancelled).
-      if (!isPaymentCaptured && !specificPaymentConfirmed && order.razorpay_order_id) {
+      // Check order-level status at the gateway:
+      if (!isPaymentCaptured && order.razorpay_order_id) {
         try {
           const gatewayOrder = await fetchRazorpayOrder(order.razorpay_order_id);
           if (gatewayOrder) {
             if (gatewayOrder.status === 'paid' || (gatewayOrder.amount_paid && gatewayOrder.amount_paid > 0)) {
-              isPaymentCaptured = true;
+              // If the order is reported paid at the gateway, try to discover the confirmed payment ID from order payments
+              if (!orderPayments || orderPayments.length === 0) {
+                try {
+                  const retryPayments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
+                  if (Array.isArray(retryPayments)) {
+                    const capturedInRetry = retryPayments.find(p => (p.status === 'captured' || p.status === 'authorized') && p.id);
+                    if (capturedInRetry) {
+                      isPaymentCaptured = true;
+                      confirmedPayment = capturedInRetry;
+                      specificPaymentConfirmed = true;
+                    }
+                  }
+                } catch (retryErr) {
+                  console.warn(`Retry gateway order payments check failed for order ${order.id}:`, retryErr.message);
+                }
+              }
+
+              if (!isPaymentCaptured) {
+                // Gateway order is paid, but the captured payment ID is not yet confirmed and tied to this order.
+                // Do NOT mark as captured with an unconfirmed / callback-supplied ID. Preserve retryable state!
+                gatewayOrderIsPaidWithoutPaymentId = true;
+              }
             } else if (gatewayOrder.status === 'expired' || gatewayOrder.status === 'cancelled') {
               terminalUnpaidStateConfirmed = true;
             }
@@ -1269,32 +1299,31 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
         }
       }
 
-      // If the payment status is UNKNOWN (the specific payment is not confirmed and gateway order is not terminal unpaid),
-      // DO NOT cancel the order and DO NOT release inventory. Keep the order Pending and retryable.
-      if (!isPaymentCaptured && !specificPaymentConfirmed && !terminalUnpaidStateConfirmed) {
-        return res.status(400).json({
-          error: 'Payment signature verification failed and gateway payment status could not be verified. Your reservation remains active; please retry verification or contact support.'
-        });
-      }
+      // If the payment is not confirmed captured with an identified payment ID tied to this order:
+      if (!isPaymentCaptured || !confirmedPayment || !confirmedPayment.id) {
+        const isAffirmativelyUnpaid = (specificPaymentConfirmed || terminalUnpaidStateConfirmed) && !gatewayOrderIsPaidWithoutPaymentId;
+        if (!isAffirmativelyUnpaid) {
+          // Status is UNKNOWN (or order is paid at gateway without confirmed payment ID yet):
+          // DO NOT cancel the order, DO NOT release inventory, and DO NOT refund unconfirmed ID.
+          // Keep the order Pending and retryable.
+          return res.status(400).json({
+            error: 'Payment signature verification failed and gateway payment status could not be verified. Your reservation remains active; please retry verification or contact support.'
+          });
+        }
 
-      if (isPaymentCaptured) {
-        const paymentId = (confirmedPayment && confirmedPayment.id) || razorpay_payment_id;
-        const initialIdempotencyKey = order.refund_idempotency_key || `rfnd_${order.id}_${order.order_number}`;
-
-        // Route confirmed captures into refund recovery before dropping the reservation
-        const claimRefundTx = db.transaction(() => {
-          const claimRes = db.prepare(`
-            UPDATE orders SET
-              payment_status = 'Refund_Pending',
-              status = 'Cancelled',
-              razorpay_payment_id = ?,
-              refund_idempotency_key = COALESCE(refund_idempotency_key, ?),
-              version = COALESCE(version, 1) + 1,
-              updated_at = CURRENT_TIMESTAMP
+        // Affirmatively confirmed NOT captured: release reserved stock and coupon ONLY IF
+        // the conditional transition from Pending -> Failed succeeds
+        const releaseTx = db.transaction(() => {
+          const updateRes = db.prepare(`
+            UPDATE orders 
+            SET payment_status = 'Failed', 
+                status = 'Cancelled', 
+                version = COALESCE(version, 1) + 1,
+                updated_at = CURRENT_TIMESTAMP 
             WHERE id = ? AND user_id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
-          `).run(paymentId, initialIdempotencyKey, order.id, req.user.id);
+          `).run(order.id, req.user.id);
 
-          if (claimRes.changes > 0) {
+          if (updateRes.changes > 0) {
             const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
             for (const item of items) {
               db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')
@@ -1308,86 +1337,32 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
               db.prepare('UPDATE coupons SET times_used = MAX(0, times_used - 1) WHERE code = ?')
                 .run(order.coupon_code);
             }
-
-            db.prepare(`
-              INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
-              VALUES (?, ?, ?, ?, ?, 'INR', 'Captured', 'Razorpay')
-              ON CONFLICT(razorpay_payment_id) DO UPDATE SET
-                status = 'Captured',
-                amount = excluded.amount
-            `).run(order.id, order.razorpay_order_id, paymentId, razorpay_signature || 'rejected_signature', Math.round(order.total_amount * 100));
-
             return true;
           }
           return false;
         });
+        releaseTx();
 
-        const didClaimRefund = claimRefundTx();
-
-        if (didClaimRefund) {
-          let refundResult = null;
-          let refundError = null;
-          try {
-            const refundPayload = buildRefundPayload(order, initialIdempotencyKey);
-            if (refundPayload.notes) {
-              refundPayload.notes.reason = 'signature_verification_rejected_refund';
-            }
-            refundResult = await refundRazorpayPayment(paymentId, refundPayload);
-          } catch (refErr) {
-            console.error('Automated refund error for rejected signature order:', refErr);
-            refundError = refErr.message || 'Refund initiation failed';
-          }
-
-          const isRefundProcessed = Boolean(refundResult && refundResult.status === 'processed');
-          const isRefundPending = Boolean(refundResult && refundResult.status === 'pending');
-          const isRefundFull = isRefundProcessed && (!refundResult.amount || refundResult.amount >= Math.round(order.total_amount * 100));
-          const refundId = refundResult ? refundResult.id : null;
-          const finalPaymentStatus = isRefundFull ? 'Refunded' : 'Refund_Pending';
-          const paymentRecordStatus = isRefundFull ? 'Refunded' : (isRefundPending ? 'Refund_Pending' : 'Captured');
-
-          db.transaction(() => {
-            db.prepare(`
-              UPDATE orders SET
-                payment_status = ?,
-                refund_id = COALESCE(?, refund_id),
-                refund_error = ?,
-                version = COALESCE(version, 1) + 1,
-                updated_at = CURRENT_TIMESTAMP
-              WHERE id = ? AND user_id = ?
-            `).run(finalPaymentStatus, refundId, refundError, order.id, req.user.id);
-
-            db.prepare(`
-              INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
-              VALUES (?, ?, ?, ?, ?, 'INR', ?, 'Razorpay')
-              ON CONFLICT(razorpay_payment_id) DO UPDATE SET
-                status = excluded.status,
-                amount = excluded.amount
-            `).run(order.id, order.razorpay_order_id, paymentId, razorpay_signature || 'rejected_signature', Math.round(order.total_amount * 100), paymentRecordStatus);
-          })();
-
-          return res.status(400).json({
-            error: 'Payment signature verification failed. As your payment was captured by the gateway, a full refund has been initiated.',
-            payment_status: finalPaymentStatus,
-            refunded: isRefundFull,
-            refund_id: refundId,
-            order_number: order.order_number
-          });
-        }
+        return res.status(400).json({ error: 'Payment signature verification failed. Please try again or contact support.' });
       }
 
-      // Gateway affirmatively confirmed payment was NOT captured: release reserved stock and coupon ONLY IF
-      // the conditional transition from Pending -> Failed succeeds
-      const releaseTx = db.transaction(() => {
-        const updateRes = db.prepare(`
-          UPDATE orders 
-          SET payment_status = 'Failed', 
-              status = 'Cancelled', 
-              version = COALESCE(version, 1) + 1,
-              updated_at = CURRENT_TIMESTAMP 
-          WHERE id = ? AND user_id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
-        `).run(order.id, req.user.id);
+      const paymentId = confirmedPayment.id;
+      const initialIdempotencyKey = order.refund_idempotency_key || `rfnd_${order.id}_${order.order_number}`;
 
-        if (updateRes.changes > 0) {
+      // Route confirmed captures into refund recovery before dropping the reservation
+      const claimRefundTx = db.transaction(() => {
+        const claimRes = db.prepare(`
+          UPDATE orders SET
+            payment_status = 'Refund_Pending',
+            status = 'Cancelled',
+            razorpay_payment_id = ?,
+            refund_idempotency_key = COALESCE(refund_idempotency_key, ?),
+            version = COALESCE(version, 1) + 1,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND user_id = ? AND payment_status = 'Pending' AND status != 'Cancelled'
+        `).run(paymentId, initialIdempotencyKey, order.id, req.user.id);
+
+        if (claimRes.changes > 0) {
           const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
           for (const item of items) {
             db.prepare('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?')
@@ -1401,13 +1376,77 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
             db.prepare('UPDATE coupons SET times_used = MAX(0, times_used - 1) WHERE code = ?')
               .run(order.coupon_code);
           }
+
+          db.prepare(`
+            INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+            VALUES (?, ?, ?, ?, ?, 'INR', 'Captured', 'Razorpay')
+            ON CONFLICT(razorpay_payment_id) DO UPDATE SET
+              status = 'Captured',
+              amount = excluded.amount
+          `).run(order.id, order.razorpay_order_id, paymentId, razorpay_signature || 'rejected_signature', Math.round(order.total_amount * 100));
+
           return true;
         }
         return false;
       });
-      releaseTx();
 
-      return res.status(400).json({ error: 'Payment signature verification failed. Please try again or contact support.' });
+      const didClaimRefund = claimRefundTx();
+
+      if (didClaimRefund) {
+        let refundResult = null;
+        let refundError = null;
+        try {
+          const refundPayload = buildRefundPayload(order, initialIdempotencyKey);
+          if (refundPayload.notes) {
+            refundPayload.notes.reason = 'signature_verification_rejected_refund';
+          }
+          refundResult = await refundRazorpayPayment(paymentId, refundPayload);
+        } catch (refErr) {
+          console.error('Automated refund error for rejected signature order:', refErr);
+          refundError = refErr.message || 'Refund initiation failed';
+        }
+
+        const isRefundProcessed = Boolean(refundResult && refundResult.status === 'processed');
+        const isRefundPending = Boolean(refundResult && refundResult.status === 'pending');
+        const isRefundFull = isRefundProcessed && (!refundResult.amount || refundResult.amount >= Math.round(order.total_amount * 100));
+        const refundId = refundResult ? refundResult.id : null;
+        const finalPaymentStatus = isRefundFull ? 'Refunded' : 'Refund_Pending';
+        const paymentRecordStatus = isRefundFull ? 'Refunded' : (isRefundPending ? 'Refund_Pending' : 'Captured');
+
+        db.transaction(() => {
+          db.prepare(`
+            UPDATE orders SET
+              payment_status = ?,
+              refund_id = COALESCE(?, refund_id),
+              refund_error = ?,
+              version = COALESCE(version, 1) + 1,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND user_id = ?
+          `).run(finalPaymentStatus, refundId, refundError, order.id, req.user.id);
+
+          db.prepare(`
+            INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature, amount, currency, status, method)
+            VALUES (?, ?, ?, ?, ?, 'INR', ?, 'Razorpay')
+            ON CONFLICT(razorpay_payment_id) DO UPDATE SET
+              status = excluded.status,
+              amount = excluded.amount
+          `).run(order.id, order.razorpay_order_id, paymentId, razorpay_signature || 'rejected_signature', Math.round(order.total_amount * 100), paymentRecordStatus);
+        })();
+
+        return res.status(400).json({
+          error: 'Payment signature verification failed. As your payment was captured by the gateway, a full refund has been initiated.',
+          payment_status: finalPaymentStatus,
+          refunded: isRefundFull,
+          refund_id: refundId,
+          order_number: order.order_number
+        });
+      }
+
+      return res.status(400).json({
+        error: 'Payment signature verification failed. Payment was captured by the gateway; refund processing is in progress.',
+        payment_status: 'Refund_Pending',
+        order_number: order.order_number
+      });
     }
 
     // 5. Signature IS VALID: Customer was charged at gateway

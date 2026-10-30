@@ -1119,6 +1119,54 @@ async function runTests() {
     const expiredStockReleased = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(partialTrackedProdId);
     assert.strictEqual(expiredStockReleased.stock_quantity, 5, 'Inventory must be safely released when order is confirmed in terminal unpaid state');
 
+    // [P1] Preserve retryable state when gateway order is "paid" but captured payment ID is not confirmed and tied to this order
+    const paidUnconfirmedGwOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, address_data)
+      VALUES ('PAL-PAID-UNCONFIRMED-1', ?, 8500, 8500, 'Razorpay', 'Pending', 'order_mock_paid_unconfirmed_1', 'Pending', '{}')
+    `).run(cancelOrder.user_id);
+    const paidUnconfirmedGwOrderId = paidUnconfirmedGwOrderInsert.lastInsertRowid;
+
+    const paidUnconfirmedTrackedProd = db.prepare(`
+      INSERT INTO products (name, slug, category_id, fabric, occasion, price, mrp, discount_percent, stock_quantity, description)
+      VALUES ('Paid Unconfirmed Saree', 'paid-unconfirmed-saree', 1, 'Silk', 'Wedding', 8500, 9900, 14, 3, 'Stock test paid unconfirmed')
+    `).run();
+    const paidUnconfirmedProdId = paidUnconfirmedTrackedProd.lastInsertRowid;
+
+    db.prepare(`
+      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+      VALUES (?, ?, 'Paid Unconfirmed Saree', 8500, 1)
+    `).run(paidUnconfirmedGwOrderId, paidUnconfirmedProdId);
+
+    // order_mock_paid_unconfirmed_1 has status 'paid' at gateway order level,
+    // but order-payments list is empty and submitted payment ID pay_mock_mismatched_1 belongs to another order.
+    const paidUnconfirmedRes = await request('/api/payments/verify', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cancelUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        orderId: paidUnconfirmedGwOrderId,
+        razorpay_order_id: 'order_mock_paid_unconfirmed_1',
+        razorpay_payment_id: 'pay_mock_mismatched_1',
+        razorpay_signature: 'invalid_sig_mismatched_pay'
+      }
+    });
+
+    assert.strictEqual(paidUnconfirmedRes.status, 400, 'Must return 400 Bad Request');
+    assert.ok(paidUnconfirmedRes.body.error.includes('could not be verified'), 'Must return retryable status error');
+
+    const orderStillPendingPaidUnconfirmed = db.prepare('SELECT status, payment_status, razorpay_payment_id FROM orders WHERE id = ?').get(paidUnconfirmedGwOrderId);
+    assert.strictEqual(orderStillPendingPaidUnconfirmed.status, 'Pending', 'Order status must remain Pending until captured payment ID is confirmed');
+    assert.strictEqual(orderStillPendingPaidUnconfirmed.payment_status, 'Pending', 'Payment status must remain Pending');
+    assert.strictEqual(orderStillPendingPaidUnconfirmed.razorpay_payment_id, null, 'Mismatched payment ID must NOT be persisted');
+
+    const stockStillPreservedPaidUnconfirmed = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(paidUnconfirmedProdId);
+    assert.strictEqual(stockStillPreservedPaidUnconfirmed.stock_quantity, 3, 'Inventory must remain active and reserved');
+
+    const mismatchedPaymentInDb = db.prepare('SELECT * FROM payments WHERE razorpay_payment_id = ?').all('pay_mock_mismatched_1');
+    assert.strictEqual(mismatchedPaymentInDb.length, 0, 'Mismatched payment ID must NOT be recorded in payments ledger');
+
     console.log('✅ PASS: [P2] Order cancellation updates payment ledger status to Refunded on immediate full refund');
 
     // --- TEST SUITE P2: Runtime Product URL Preservation & Real 404 Routing ---

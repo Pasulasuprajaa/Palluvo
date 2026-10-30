@@ -246,6 +246,9 @@ async function fetchRazorpayOrder(orderId) {
 
 async function fetchRazorpayOrderPayments(orderId) {
   if (!orderId) return [];
+  if (orderId.startsWith('order_mock_paid_unconfirmed_')) {
+    return [];
+  }
   if (orderId.startsWith('order_mock_paid_') || orderId.startsWith('order_mock_captured_')) {
     const prefixLen = orderId.startsWith('order_mock_paid_') ? 16 : 20;
     return [{
@@ -279,6 +282,26 @@ async function fetchRazorpayPayment(paymentId) {
   if (!paymentId) return null;
   if (paymentId.startsWith('pay_mock_failed_lookup_')) {
     throw new Error('Simulated gateway payment lookup failure');
+  }
+  if (paymentId.startsWith('pay_mock_mismatched_')) {
+    return {
+      id: paymentId,
+      status: 'captured',
+      order_id: 'order_mock_other_different_1',
+      amount: 100000,
+      amount_refunded: 0,
+      is_mock: true
+    };
+  }
+  if (paymentId.startsWith('pay_mock_failed_sig_')) {
+    return {
+      id: paymentId,
+      status: 'failed',
+      order_id: 'order_mock_failed_sig_1',
+      amount: 100000,
+      amount_refunded: 0,
+      is_mock: true
+    };
   }
   if (paymentId.startsWith('pay_mock_refund_failed_')) {
     return {
