@@ -1214,16 +1214,23 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
       // Check if the payment was actually captured at the gateway despite signature rejection (malformed callback/signature)
       let isPaymentCaptured = false;
       let confirmedPayment = null;
-      let gatewayCheckSuccess = false;
+      let specificPaymentConfirmed = false;
+      let terminalUnpaidStateConfirmed = false;
 
+      let orderPayments = null;
       if (order.razorpay_order_id) {
         try {
-          const orderPayments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
-          gatewayCheckSuccess = true;
-          const matched = Array.isArray(orderPayments) && orderPayments.find(p => (p.id === razorpay_payment_id || p.status === 'captured') && (p.status === 'captured' || p.status === 'authorized'));
-          if (matched) {
-            isPaymentCaptured = true;
-            confirmedPayment = matched;
+          orderPayments = await fetchRazorpayOrderPayments(order.razorpay_order_id);
+          if (Array.isArray(orderPayments)) {
+            const capturedInList = orderPayments.find(p => (p.id === razorpay_payment_id || p.status === 'captured') && (p.status === 'captured' || p.status === 'authorized'));
+            if (capturedInList) {
+              isPaymentCaptured = true;
+              confirmedPayment = capturedInList;
+              specificPaymentConfirmed = true;
+            } else if (razorpay_payment_id && orderPayments.some(p => p.id === razorpay_payment_id)) {
+              // The specific payment is present in the order payments list and confirmed not captured
+              specificPaymentConfirmed = true;
+            }
           }
         } catch (orderPaymentsErr) {
           console.warn(`Gateway order payments check failed for order ${order.id}:`, orderPaymentsErr.message);
@@ -1233,26 +1240,45 @@ router.post('/verify', authenticateToken, requireDurableStorage, async (req, res
       if (!isPaymentCaptured && razorpay_payment_id) {
         try {
           const p = await fetchRazorpayPayment(razorpay_payment_id);
-          gatewayCheckSuccess = true;
-          if (p && (p.order_id === order.razorpay_order_id || p.order_id === razorpay_order_id) && (p.status === 'captured' || p.status === 'authorized')) {
-            isPaymentCaptured = true;
-            confirmedPayment = p;
+          if (p) {
+            specificPaymentConfirmed = true;
+            if ((p.order_id === order.razorpay_order_id || p.order_id === razorpay_order_id) && (p.status === 'captured' || p.status === 'authorized')) {
+              isPaymentCaptured = true;
+              confirmedPayment = p;
+            }
           }
         } catch (paymentErr) {
           console.warn(`Gateway payment lookup failed for payment ${razorpay_payment_id}:`, paymentErr.message);
         }
       }
 
-      // If the gateway status is UNKNOWN (both lookup calls failed / network error),
+      // If the specific payment was not visible in the payments list and direct lookup failed,
+      // check if the gateway order has reached a terminal unpaid state (e.g. expired or cancelled).
+      if (!isPaymentCaptured && !specificPaymentConfirmed && order.razorpay_order_id) {
+        try {
+          const gatewayOrder = await fetchRazorpayOrder(order.razorpay_order_id);
+          if (gatewayOrder) {
+            if (gatewayOrder.status === 'paid' || (gatewayOrder.amount_paid && gatewayOrder.amount_paid > 0)) {
+              isPaymentCaptured = true;
+            } else if (gatewayOrder.status === 'expired' || gatewayOrder.status === 'cancelled') {
+              terminalUnpaidStateConfirmed = true;
+            }
+          }
+        } catch (orderErr) {
+          console.warn(`Gateway order lookup failed for order ${order.id}:`, orderErr.message);
+        }
+      }
+
+      // If the payment status is UNKNOWN (the specific payment is not confirmed and gateway order is not terminal unpaid),
       // DO NOT cancel the order and DO NOT release inventory. Keep the order Pending and retryable.
-      if (!gatewayCheckSuccess) {
+      if (!isPaymentCaptured && !specificPaymentConfirmed && !terminalUnpaidStateConfirmed) {
         return res.status(400).json({
           error: 'Payment signature verification failed and gateway payment status could not be verified. Your reservation remains active; please retry verification or contact support.'
         });
       }
 
-      if (isPaymentCaptured && confirmedPayment) {
-        const paymentId = confirmedPayment.id || razorpay_payment_id;
+      if (isPaymentCaptured) {
+        const paymentId = (confirmedPayment && confirmedPayment.id) || razorpay_payment_id;
         const initialIdempotencyKey = order.refund_idempotency_key || `rfnd_${order.id}_${order.order_number}`;
 
         // Route confirmed captures into refund recovery before dropping the reservation

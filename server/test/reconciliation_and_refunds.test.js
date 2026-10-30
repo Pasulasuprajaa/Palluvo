@@ -1041,6 +1041,84 @@ async function runTests() {
     const prodStockStillPreserved = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(trackedProdId);
     assert.strictEqual(prodStockStillPreserved.stock_quantity, 5, 'Inventory must NOT be prematurely released');
 
+    // [P1] Keep order retryable when order-payments list succeeds but omits payment ID and payment-by-ID lookup fails
+    const partialGwOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, address_data)
+      VALUES ('PAL-UNKNOWN-PAYID-1', ?, 8200, 8200, 'Razorpay', 'Pending', 'order_mock_test_omit_pay_1', 'Pending', '{}')
+    `).run(cancelOrder.user_id);
+    const partialGwOrderId = partialGwOrderInsert.lastInsertRowid;
+
+    const partialTrackedProd = db.prepare(`
+      INSERT INTO products (name, slug, category_id, fabric, occasion, price, mrp, discount_percent, stock_quantity, description)
+      VALUES ('Partial Retry Saree', 'partial-retry-saree', 1, 'Silk', 'Festival', 8200, 9500, 14, 4, 'Stock test partial')
+    `).run();
+    const partialTrackedProdId = partialTrackedProd.lastInsertRowid;
+
+    db.prepare(`
+      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+      VALUES (?, ?, 'Partial Retry Saree', 8200, 1)
+    `).run(partialGwOrderId, partialTrackedProdId);
+
+    // order_mock_test_omit_pay_1 returns [] for order payments (does not contain payment ID),
+    // and pay_mock_failed_lookup_2 fails on direct payment-by-ID lookup.
+    const partialGwRes = await request('/api/payments/verify', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cancelUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        orderId: partialGwOrderId,
+        razorpay_order_id: 'order_mock_test_omit_pay_1',
+        razorpay_payment_id: 'pay_mock_failed_lookup_2',
+        razorpay_signature: 'invalid_sig_partial_gw'
+      }
+    });
+
+    assert.strictEqual(partialGwRes.status, 400, 'Must return 400 Bad Request');
+    assert.ok(partialGwRes.body.error.includes('could not be verified'), 'Error message must explain gateway status could not be verified');
+
+    const partialOrderStillPending = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(partialGwOrderId);
+    assert.strictEqual(partialOrderStillPending.status, 'Pending', 'Order status must remain Pending when payment omitted from list and lookup fails');
+    assert.strictEqual(partialOrderStillPending.payment_status, 'Pending', 'Payment status must remain Pending');
+
+    const partialStockPreserved = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(partialTrackedProdId);
+    assert.strictEqual(partialStockPreserved.stock_quantity, 4, 'Inventory must NOT be released when specific payment status is unknown');
+
+    // [P1] Release inventory only when order is confirmed in a terminal unpaid state (e.g. expired order)
+    const expiredGwOrderInsert = db.prepare(`
+      INSERT INTO orders (order_number, user_id, subtotal, total_amount, payment_method, payment_status, razorpay_order_id, status, address_data)
+      VALUES ('PAL-EXPIRED-GW-1', ?, 8200, 8200, 'Razorpay', 'Pending', 'order_mock_expired_1', 'Pending', '{}')
+    `).run(cancelOrder.user_id);
+    const expiredGwOrderId = expiredGwOrderInsert.lastInsertRowid;
+
+    db.prepare(`
+      INSERT INTO order_items (order_id, product_id, product_name, price, quantity)
+      VALUES (?, ?, 'Partial Retry Saree', 8200, 1)
+    `).run(expiredGwOrderId, partialTrackedProdId);
+
+    const expiredGwRes = await request('/api/payments/verify', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cancelUserToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        orderId: expiredGwOrderId,
+        razorpay_order_id: 'order_mock_expired_1',
+        razorpay_payment_id: 'pay_mock_failed_lookup_3',
+        razorpay_signature: 'invalid_sig_expired_gw'
+      }
+    });
+
+    assert.strictEqual(expiredGwRes.status, 400, 'Must return 400 Bad Request');
+    const expiredOrderInDb = db.prepare('SELECT status, payment_status FROM orders WHERE id = ?').get(expiredGwOrderId);
+    assert.strictEqual(expiredOrderInDb.status, 'Cancelled', 'Expired gateway order must transition to Cancelled');
+    assert.strictEqual(expiredOrderInDb.payment_status, 'Failed', 'Expired gateway order must transition to Failed');
+
+    const expiredStockReleased = db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get(partialTrackedProdId);
+    assert.strictEqual(expiredStockReleased.stock_quantity, 5, 'Inventory must be safely released when order is confirmed in terminal unpaid state');
+
     console.log('✅ PASS: [P2] Order cancellation updates payment ledger status to Refunded on immediate full refund');
 
     // --- TEST SUITE P2: Runtime Product URL Preservation & Real 404 Routing ---

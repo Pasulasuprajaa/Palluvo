@@ -203,6 +203,22 @@ async function fetchRazorpayOrder(orderId) {
       is_mock: true
     };
   }
+  if (orderId.startsWith('order_mock_expired_')) {
+    return {
+      id: orderId,
+      status: 'expired',
+      amount_paid: 0,
+      is_mock: true
+    };
+  }
+  if (orderId.startsWith('order_mock_cancelled_')) {
+    return {
+      id: orderId,
+      status: 'cancelled',
+      amount_paid: 0,
+      is_mock: true
+    };
+  }
   if (orderId.startsWith('order_mock_failed_lookup_')) {
     throw new Error('Simulated gateway lookup failure (network timeout)');
   }
