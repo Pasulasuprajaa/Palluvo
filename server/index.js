@@ -80,14 +80,6 @@ const clientDist = path.join(__dirname, '..', 'client', 'dist');
 const clientIndex = path.join(clientDist, 'index.html');
 const devIndex = path.join(__dirname, '..', 'client', 'index.html');
 
-if (fs.existsSync(clientDist)) {
-  app.use(express.static(clientDist, { index: false }));
-}
-const clientPublic = path.join(__dirname, '..', 'client', 'public');
-if (fs.existsSync(clientPublic)) {
-  app.use(express.static(clientPublic, { index: false }));
-}
-
 // Robots.txt endpoint
 app.get('/robots.txt', (req, res) => {
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -98,19 +90,25 @@ app.get('/robots.txt', (req, res) => {
   return res.send(generateRobotsTxt());
 });
 
-// Sitemap.xml endpoint
+// Sitemap.xml endpoint (served dynamically from current catalog / DB data)
 app.get('/sitemap.xml', (req, res) => {
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-  const distFile = path.join(clientDist, 'sitemap.xml');
-  const pubFile = path.join(clientPublic, 'sitemap.xml');
-  if (fs.existsSync(distFile)) return res.sendFile(distFile);
-  if (fs.existsSync(pubFile)) return res.sendFile(pubFile);
   let catalog = null;
   try {
     catalog = require('./data/catalog.json');
   } catch (e) {}
   return res.send(generateSitemapXml(catalog));
 });
+
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist, { index: false }));
+}
+const clientPublic = path.join(__dirname, '..', 'client', 'public');
+if (fs.existsSync(clientPublic)) {
+  app.use(express.static(clientPublic, { index: false }));
+}
+
+
 
 
 function renderPageWithSeo(targetPath, query, req, res, next) {

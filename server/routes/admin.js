@@ -7,6 +7,7 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
 const { getMetaForRoute, injectMetaTags } = require('../services/seoRenderer');
 const { cancelOrder } = require('../services/orderCancellation');
+const { refreshSitemapFiles } = require('../services/sitemap');
 
 function publishProductRoute(productData) {
   try {
@@ -88,6 +89,7 @@ function publishProductRoute(productData) {
       writeRoute(`/sarees/${slug}`);
       writeRoute(`/product/${slug}`);
     }
+    refreshSitemapFiles();
   } catch (err) {
     console.warn('Publish product route warning:', err.message);
   }
@@ -117,6 +119,7 @@ function unpublishProductRoute(slug) {
     };
     removeDir(`/sarees/${slug}`);
     removeDir(`/product/${slug}`);
+    refreshSitemapFiles();
   } catch (e) {}
 }
 

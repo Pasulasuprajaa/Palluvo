@@ -2796,8 +2796,13 @@ async function testShopFilterAccessibility() {
     console.log('✅ PASS: [P2/P3] Gallery thumbnails use role="group" with aria-label and express selection via aria-pressed across QuickViewModal and ProductDetailPage');
 
     // 7. [P2] Sitemap and Robots Generation & Server Endpoints
-    const { generateSitemapXml, generateRobotsTxt, getAllCatalogRoutes, getCanonicalCatalogRoutes } = require('../services/sitemap');
+    const { generateSitemapXml, generateRobotsTxt, getAllCatalogRoutes, getCanonicalCatalogRoutes, formatLastmod } = require('../services/sitemap');
     const catalog = require('../data/catalog.json');
+
+    // [P3] Verify SQLite CURRENT_TIMESTAMP early-UTC timestamp does not shift day in local timezones
+    assert.strictEqual(formatLastmod('2026-10-09 00:30:00'), '2026-10-09', 'Early-UTC timestamp must not shift to previous day');
+    assert.strictEqual(formatLastmod('2026-10-09 04:15:22'), '2026-10-09', 'Early-UTC morning hours must preserve calendar date');
+    assert.strictEqual(formatLastmod('2026-10-09T00:30:00Z'), '2026-10-09', 'ISO UTC string must preserve calendar date');
 
     const canonicalRoutes = getCanonicalCatalogRoutes(catalog);
     assert.strictEqual(canonicalRoutes.length, 44, 'Canonical route enumeration must match 44 canonical indexable routes (13 static + 8 category + 23 product)');
@@ -2873,6 +2878,25 @@ async function testShopFilterAccessibility() {
       assert.ok(sitemapBody.includes('<urlset'), 'GET /sitemap.xml must return valid urlset XML');
       assert.ok(sitemapBody.includes('<loc>https://palluvo.com/</loc>'), 'GET /sitemap.xml must contain homepage');
       assert.ok(!sitemapBody.includes('/cart'), 'GET /sitemap.xml must not contain private routes');
+
+      // [P2] Verify sitemap endpoint serves current dynamic data rather than stale build artifact
+      const distSitemapPath = path.resolve(__dirname, '../../client/dist/sitemap.xml');
+      const origDistSitemap = fs.existsSync(distSitemapPath) ? fs.readFileSync(distSitemapPath, 'utf8') : null;
+      try {
+        if (fs.existsSync(path.dirname(distSitemapPath))) {
+          fs.writeFileSync(distSitemapPath, '<?xml version="1.0"?><urlset><url><loc>https://palluvo.com/stale-old-route</loc></url></urlset>', 'utf8');
+        }
+        const dynamicSitemapRes = await fetch(`http://127.0.0.1:${testPort}/sitemap.xml`);
+        const dynamicBody = await dynamicSitemapRes.text();
+        assert.ok(!dynamicBody.includes('/stale-old-route'), 'GET /sitemap.xml must serve current data and NOT stale build artifact');
+        assert.ok(dynamicBody.includes('<loc>https://palluvo.com/sarees</loc>'), 'Dynamic sitemap must include current catalog routes');
+      } finally {
+        if (origDistSitemap !== null) {
+          fs.writeFileSync(distSitemapPath, origDistSitemap, 'utf8');
+        } else if (fs.existsSync(distSitemapPath)) {
+          fs.unlinkSync(distSitemapPath);
+        }
+      }
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

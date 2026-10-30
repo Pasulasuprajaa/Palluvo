@@ -33,13 +33,51 @@ function getDb() {
 }
 
 /**
+ * Parses and formats date string or object to YYYY-MM-DD.
+ * Handles SQLite CURRENT_TIMESTAMP (UTC YYYY-MM-DD HH:MM:SS) without local-timezone day-shift.
+ */
+function formatLastmod(val) {
+  if (!val) return null;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+    try {
+      const utcString = trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T') + 'Z';
+      return new Date(utcString).toISOString().split('T')[0];
+    } catch (e) {
+      return null;
+    }
+  }
+  if (val instanceof Date) {
+    return val.toISOString().split('T')[0];
+  }
+  return null;
+}
+
+function getCatalogData(catalog) {
+  if (catalog && Array.isArray(catalog.categories) && Array.isArray(catalog.products)) {
+    return catalog;
+  }
+  try {
+    const catalogPath = path.join(__dirname, '..', 'data', 'catalog.json');
+    if (fs.existsSync(catalogPath)) {
+      return JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+    }
+  } catch (e) {}
+  return catalog || { categories: [], products: [] };
+}
+
+/**
  * Returns canonical, indexable routes for sitemap generation.
  * - Drops private/noindex pages (/cart, /checkout, /order-success, /track-order, /account, /wishlist, /admin)
  * - Keeps /sarees rather than non-canonical alias /shop
  * - Keeps single canonical category form: /sarees?category=<slug>
  * - Keeps single canonical product form: /sarees/<slug>
+ * - Derives lastmod from product updated_at in database without timezone shifts
  */
-function getCanonicalCatalogRoutes(catalog) {
+function getCanonicalCatalogRoutes(catalogInput) {
+  const catalog = getCatalogData(catalogInput);
   const routes = [];
 
   // 1. Static routes (13 canonical routes)
@@ -56,6 +94,7 @@ function getCanonicalCatalogRoutes(catalog) {
   // 2. Canonical category routes (1 per category: /sarees?category=<slug>)
   const categories = catalog?.categories || [];
   for (const cat of categories) {
+    if (!cat.slug) continue;
     routes.push({
       path: `/sarees?category=${cat.slug}`,
       loc: `${BASE_URL}/sarees?category=${encodeURIComponent(cat.slug)}`,
@@ -75,24 +114,18 @@ function getCanonicalCatalogRoutes(catalog) {
       const rows = database.prepare('SELECT slug, updated_at FROM products WHERE updated_at IS NOT NULL').all();
       for (const row of rows) {
         if (row.slug && row.updated_at) {
-          try {
-            const dateStr = new Date(row.updated_at).toISOString().split('T')[0];
-            productDates.set(row.slug, dateStr);
-          } catch (e) {}
+          const formatted = formatLastmod(row.updated_at);
+          if (formatted) {
+            productDates.set(row.slug, formatted);
+          }
         }
       }
     } catch (e) {}
   }
 
   for (const prod of products) {
-    let lastmod = null;
-    if (productDates.has(prod.slug)) {
-      lastmod = productDates.get(prod.slug);
-    } else if (prod.updated_at) {
-      try {
-        lastmod = new Date(prod.updated_at).toISOString().split('T')[0];
-      } catch (e) {}
-    }
+    if (!prod.slug) continue;
+    const lastmod = productDates.get(prod.slug) || formatLastmod(prod.updated_at) || null;
 
     routes.push({
       path: `/sarees/${prod.slug}`,
@@ -149,11 +182,33 @@ function generateRobotsTxt(baseUrl = BASE_URL) {
   ].join('\n');
 }
 
+function refreshSitemapFiles(catalogInput) {
+  try {
+    const catalog = getCatalogData(catalogInput);
+    const xml = generateSitemapXml(catalog);
+    const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
+    const clientPublic = path.join(__dirname, '..', '..', 'client', 'public');
+
+    if (fs.existsSync(clientDist)) {
+      fs.writeFileSync(path.join(clientDist, 'sitemap.xml'), xml, 'utf8');
+    }
+    if (fs.existsSync(clientPublic)) {
+      fs.writeFileSync(path.join(clientPublic, 'sitemap.xml'), xml, 'utf8');
+    }
+    return xml;
+  } catch (err) {
+    console.warn('Could not refresh sitemap files on disk:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   BASE_URL,
   CANONICAL_STATIC_ROUTES,
+  formatLastmod,
   getCanonicalCatalogRoutes,
   getAllCatalogRoutes,
   generateSitemapXml,
-  generateRobotsTxt
+  generateRobotsTxt,
+  refreshSitemapFiles
 };
