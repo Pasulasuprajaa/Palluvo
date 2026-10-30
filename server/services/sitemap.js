@@ -55,17 +55,42 @@ function formatLastmod(val) {
   return null;
 }
 
+let lastKnownGoodCatalog = null;
+try {
+  const initialPath = path.join(__dirname, '..', 'data', 'catalog.json');
+  if (fs.existsSync(initialPath)) {
+    const raw = fs.readFileSync(initialPath, 'utf8').replace(/^\uFEFF/, '');
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.categories) && Array.isArray(parsed.products)) {
+      lastKnownGoodCatalog = parsed;
+    }
+  }
+} catch (e) {}
+
 function getCatalogData(catalog) {
   if (catalog && Array.isArray(catalog.categories) && Array.isArray(catalog.products)) {
+    lastKnownGoodCatalog = catalog;
     return catalog;
   }
   try {
     const catalogPath = path.join(__dirname, '..', 'data', 'catalog.json');
     if (fs.existsSync(catalogPath)) {
-      return JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+      const raw = fs.readFileSync(catalogPath, 'utf8').replace(/^\uFEFF/, '');
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.categories) && Array.isArray(parsed.products)) {
+        lastKnownGoodCatalog = parsed;
+        return parsed;
+      }
+      throw new Error('Invalid catalog schema: categories and products arrays required');
     }
-  } catch (e) {}
-  return catalog || { categories: [], products: [] };
+  } catch (err) {
+    console.error('Failed to parse catalog.json for sitemap:', err.message);
+    if (lastKnownGoodCatalog) {
+      console.warn('Falling back to last known good catalog for sitemap generation');
+      return lastKnownGoodCatalog;
+    }
+  }
+  return lastKnownGoodCatalog || catalog || { categories: [], products: [] };
 }
 
 /**
@@ -210,5 +235,6 @@ module.exports = {
   getAllCatalogRoutes,
   generateSitemapXml,
   generateRobotsTxt,
-  refreshSitemapFiles
+  refreshSitemapFiles,
+  getCatalogData
 };

@@ -2897,6 +2897,51 @@ async function testShopFilterAccessibility() {
           fs.unlinkSync(distSitemapPath);
         }
       }
+
+      // [P2] Verify runtime modification of catalog.json is immediately reflected in GET /sitemap.xml (no require cache pinning)
+      const catalogPath = path.resolve(__dirname, '../data/catalog.json');
+      const origCatalogRaw = fs.readFileSync(catalogPath, 'utf8');
+
+      try {
+        const modifiedCatalog = JSON.parse(origCatalogRaw.replace(/^\uFEFF/, ''));
+        modifiedCatalog.products.push({
+          id: 99999,
+          name: 'Runtime Published Saree',
+          slug: 'runtime-published-saree-unique-123',
+          category: 'banarasi',
+          category_slug: 'banarasi'
+        });
+        fs.writeFileSync(catalogPath, JSON.stringify(modifiedCatalog, null, 2), 'utf8');
+
+        const runtimeRes = await fetch(`http://127.0.0.1:${testPort}/sitemap.xml`);
+        const runtimeBody = await runtimeRes.text();
+        assert.ok(
+          runtimeBody.includes('https://palluvo.com/sarees/runtime-published-saree-unique-123'),
+          'GET /sitemap.xml must immediately reflect catalog.json runtime changes without process restart'
+        );
+
+        // [P2] Verify UTF-8 BOM handling and malformed catalog fallback to last known good
+        // 1. UTF-8 BOM prefix
+        fs.writeFileSync(catalogPath, '\uFEFF' + JSON.stringify(modifiedCatalog, null, 2), 'utf8');
+        const bomRes = await fetch(`http://127.0.0.1:${testPort}/sitemap.xml`);
+        const bomBody = await bomRes.text();
+        assert.ok(
+          bomBody.includes('https://palluvo.com/sarees/runtime-published-saree-unique-123'),
+          'GET /sitemap.xml must handle UTF-8 BOM prefix seamlessly'
+        );
+
+        // 2. Malformed JSON fallback to last known good
+        fs.writeFileSync(catalogPath, '{"broken_json: [malformed', 'utf8');
+        const malformedRes = await fetch(`http://127.0.0.1:${testPort}/sitemap.xml`);
+        const malformedBody = await malformedRes.text();
+        assert.strictEqual(malformedRes.status, 200, 'GET /sitemap.xml must still return 200 on malformed catalog');
+        assert.ok(
+          malformedBody.includes('https://palluvo.com/sarees/runtime-published-saree-unique-123'),
+          'GET /sitemap.xml must fall back to lastKnownGoodCatalog when catalog.json is malformed instead of degrading to 13 static routes'
+        );
+      } finally {
+        fs.writeFileSync(catalogPath, origCatalogRaw, 'utf8');
+      }
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

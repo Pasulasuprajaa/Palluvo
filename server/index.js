@@ -93,11 +93,7 @@ app.get('/robots.txt', (req, res) => {
 // Sitemap.xml endpoint (served dynamically from current catalog / DB data)
 app.get('/sitemap.xml', (req, res) => {
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-  let catalog = null;
-  try {
-    catalog = require('./data/catalog.json');
-  } catch (e) {}
-  return res.send(generateSitemapXml(catalog));
+  return res.send(generateSitemapXml());
 });
 
 if (fs.existsSync(clientDist)) {
