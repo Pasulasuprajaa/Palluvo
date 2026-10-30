@@ -1,8 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const { getMetaForRoute, injectMetaTags } = require('../services/seoRenderer');
+const { generateSitemapXml, generateRobotsTxt } = require('../services/sitemap');
 
 const distDir = path.join(__dirname, '..', '..', 'client', 'dist');
+const publicDir = path.join(__dirname, '..', '..', 'client', 'public');
 const templatePath = path.join(distDir, 'index.html');
 
 if (!fs.existsSync(templatePath)) {
@@ -102,6 +104,22 @@ try {
   }
 
   console.log(`✅ Prerendered ${staticRoutes.length + categories.length * 3 + products.length * 2} route files without server db dependency.`);
+
+  // 5. Emit sitemap.xml and robots.txt
+  const sitemapXml = generateSitemapXml(catalog);
+  const robotsTxt = generateRobotsTxt();
+
+  // Write to client/dist (for production deployment / Vercel outputDirectory)
+  fs.writeFileSync(path.join(distDir, 'sitemap.xml'), sitemapXml, 'utf8');
+  fs.writeFileSync(path.join(distDir, 'robots.txt'), robotsTxt, 'utf8');
+
+  // Also write to client/public (source-controlled and copied on build)
+  if (fs.existsSync(publicDir)) {
+    fs.writeFileSync(path.join(publicDir, 'sitemap.xml'), sitemapXml, 'utf8');
+    fs.writeFileSync(path.join(publicDir, 'robots.txt'), robotsTxt, 'utf8');
+  }
+
+  console.log('✅ Generated sitemap.xml and robots.txt referencing catalog routes.');
 } catch (err) {
   console.error('❌ Prerender script error:', err);
   process.exit(1);

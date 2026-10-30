@@ -269,7 +269,7 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
           {/* Vertical Thumbnails */}
           {product.images && product.images.length > 1 && (
             <div
-              role="tablist"
+              
               aria-label="Product image gallery thumbnails"
               className="flex sm:flex-col gap-3 overflow-x-auto sm:overflow-y-auto max-h-[520px] pb-2 sm:pb-0 scrollbar-none"
             >
@@ -279,10 +279,10 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                 return (
                   <button
                     key={idx}
-                    role="tab"
+                    type="button"
                     id={`gallery-thumb-${idx}`}
-                    aria-selected={isSelected}
-                    aria-controls="gallery-main-image"
+                    aria-pressed={isSelected}
+                    
                     aria-label={`View image ${idx + 1} of ${product.images.length}`}
                     onClick={() => setSelectedImageIndex(idx)}
                     className={`relative w-16 h-20 sm:w-20 sm:h-24 rounded-xl overflow-hidden border-2 shrink-0 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none ${

@@ -75,6 +75,7 @@ app.get('/api/health', (req, res) => {
 // Serve client build static assets if present
 const fs = require('fs');
 const { getMetaForRoute, injectMetaTags } = require('./services/seoRenderer');
+const { generateSitemapXml, generateRobotsTxt } = require('./services/sitemap');
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 const clientIndex = path.join(clientDist, 'index.html');
 const devIndex = path.join(__dirname, '..', 'client', 'index.html');
@@ -86,6 +87,31 @@ const clientPublic = path.join(__dirname, '..', 'client', 'public');
 if (fs.existsSync(clientPublic)) {
   app.use(express.static(clientPublic, { index: false }));
 }
+
+// Robots.txt endpoint
+app.get('/robots.txt', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  const distFile = path.join(clientDist, 'robots.txt');
+  const pubFile = path.join(clientPublic, 'robots.txt');
+  if (fs.existsSync(distFile)) return res.sendFile(distFile);
+  if (fs.existsSync(pubFile)) return res.sendFile(pubFile);
+  return res.send(generateRobotsTxt());
+});
+
+// Sitemap.xml endpoint
+app.get('/sitemap.xml', (req, res) => {
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  const distFile = path.join(clientDist, 'sitemap.xml');
+  const pubFile = path.join(clientPublic, 'sitemap.xml');
+  if (fs.existsSync(distFile)) return res.sendFile(distFile);
+  if (fs.existsSync(pubFile)) return res.sendFile(pubFile);
+  let catalog = null;
+  try {
+    catalog = require('./data/catalog.json');
+  } catch (e) {}
+  return res.send(generateSitemapXml(catalog));
+});
+
 
 function renderPageWithSeo(targetPath, query, req, res, next) {
   const htmlPath = fs.existsSync(clientIndex) ? clientIndex : (fs.existsSync(devIndex) ? devIndex : null);

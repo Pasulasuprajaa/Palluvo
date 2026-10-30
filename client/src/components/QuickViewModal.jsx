@@ -179,7 +179,7 @@ export default function QuickViewModal({ onNavigate }) {
           {/* Thumbnails */}
           {images.length > 1 && (
             <div
-              role="tablist"
+              
               aria-label="Product thumbnail gallery"
               className="flex gap-2 mt-4 overflow-x-auto max-w-full pb-1"
             >
@@ -188,8 +188,8 @@ export default function QuickViewModal({ onNavigate }) {
                 return (
                   <button
                     key={idx}
-                    role="tab"
-                    aria-selected={selectedImageIndex === idx}
+                    type="button"
+                    aria-pressed={selectedImageIndex === idx}
                     aria-label={`View image ${idx + 1}`}
                     onClick={() => setSelectedImageIndex(idx)}
                     className={`w-14 h-16 rounded-lg overflow-hidden border-2 transition cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none ${

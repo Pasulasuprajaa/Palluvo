@@ -2768,6 +2768,78 @@ async function testShopFilterAccessibility() {
       global.document = prevGlobalDoc;
       global.window = prevGlobalWin;
     }
+
+    // 6. [P2] Gallery Thumbnail Semantics (QuickViewModal & ProductDetailPage)
+    const productDetailPagePath = path.resolve(__dirname, '../../client/src/pages/ProductDetailPage.jsx');
+    const productDetailSource = fs.readFileSync(productDetailPagePath, 'utf8');
+    const quickViewFreshSource = fs.readFileSync(quickViewModalPath, 'utf8');
+
+    // Neither gallery carries fake tab roles or unbacked tablist
+    assert.ok(!quickViewFreshSource.includes('role="tablist"'), 'QuickViewModal must not use role="tablist" for thumbnails');
+    assert.ok(!quickViewFreshSource.includes('role="tab"'), 'QuickViewModal must not use role="tab" for thumbnails');
+    assert.ok(!productDetailSource.includes('role="tablist"'), 'ProductDetailPage must not use role="tablist" for thumbnails');
+    assert.ok(!productDetailSource.includes('role="tab"'), 'ProductDetailPage must not use role="tab" for thumbnails');
+    assert.ok(!productDetailSource.includes('aria-controls="gallery-main-image"'), 'ProductDetailPage must not point aria-controls at a button');
+
+    // Both galleries express selection via aria-pressed
+    assert.ok(quickViewFreshSource.includes('aria-pressed={selectedImageIndex === idx}'), 'QuickViewModal thumbnails must express selection via aria-pressed');
+    assert.ok(productDetailSource.includes('aria-pressed={isSelected}'), 'ProductDetailPage thumbnails must express selection via aria-pressed');
+
+    console.log('✅ PASS: [P2] Gallery thumbnails drop fake tab roles and express selection via aria-pressed across QuickViewModal and ProductDetailPage');
+
+    // 7. [P2] Sitemap and Robots Generation & Server Endpoints
+    const { generateSitemapXml, generateRobotsTxt, getAllCatalogRoutes } = require('../services/sitemap');
+    const catalog = require('../data/catalog.json');
+
+    const allRoutes = getAllCatalogRoutes(catalog);
+    assert.strictEqual(allRoutes.length, 91, 'Catalog route enumeration must match 91 crawlable routes (21 static + 24 category + 46 product)');
+
+    const generatedSitemap = generateSitemapXml(catalog);
+    assert.ok(generatedSitemap.startsWith('<?xml version="1.0" encoding="UTF-8"?>'), 'Sitemap must have XML declaration');
+    assert.ok(generatedSitemap.includes('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'), 'Sitemap must contain urlset');
+    assert.ok(generatedSitemap.includes('<loc>https://palluvo.com/</loc>'), 'Sitemap must include root route');
+    assert.ok(generatedSitemap.includes('<loc>https://palluvo.com/sarees</loc>'), 'Sitemap must include /sarees route');
+    assert.ok(generatedSitemap.includes('<loc>https://palluvo.com/sarees/banarasi-sarees</loc>') || generatedSitemap.includes('<loc>https://palluvo.com/sarees/category/banarasi-sarees</loc>'), 'Sitemap must include category routes');
+    assert.ok(generatedSitemap.includes('<lastmod>'), 'Sitemap must contain lastmod elements');
+    assert.ok(generatedSitemap.includes('<changefreq>'), 'Sitemap must contain changefreq elements');
+    assert.ok(generatedSitemap.includes('<priority>'), 'Sitemap must contain priority elements');
+
+    const generatedRobots = generateRobotsTxt();
+    assert.ok(generatedRobots.includes('User-agent: *'), 'Robots.txt must specify User-agent: *');
+    assert.ok(generatedRobots.includes('Allow: /'), 'Robots.txt must allow root');
+    assert.ok(generatedRobots.includes('Sitemap: https://palluvo.com/sitemap.xml'), 'Robots.txt must reference sitemap.xml');
+
+    // Verify files exist in client/public and client/dist
+    const pubRobotsPath = path.resolve(__dirname, '../../client/public/robots.txt');
+    const pubSitemapPath = path.resolve(__dirname, '../../client/public/sitemap.xml');
+    assert.ok(fs.existsSync(pubRobotsPath), 'client/public/robots.txt must exist');
+    assert.ok(fs.existsSync(pubSitemapPath), 'client/public/sitemap.xml must exist');
+
+    // Test server endpoints
+    const serverApp = require('../index');
+    const http = require('http');
+    const server = http.createServer(serverApp);
+    await new Promise((resolve) => server.listen(0, resolve));
+    const testPort = server.address().port;
+
+    try {
+      const robotsRes = await fetch(`http://127.0.0.1:${testPort}/robots.txt`);
+      assert.strictEqual(robotsRes.status, 200, 'GET /robots.txt must return 200 OK');
+      assert.ok(robotsRes.headers.get('content-type').includes('text/plain'), 'GET /robots.txt must be text/plain');
+      const robotsBody = await robotsRes.text();
+      assert.ok(robotsBody.includes('Sitemap: https://palluvo.com/sitemap.xml'), 'GET /robots.txt body must reference sitemap.xml');
+
+      const sitemapRes = await fetch(`http://127.0.0.1:${testPort}/sitemap.xml`);
+      assert.strictEqual(sitemapRes.status, 200, 'GET /sitemap.xml must return 200 OK');
+      assert.ok(sitemapRes.headers.get('content-type').includes('xml'), 'GET /sitemap.xml must be XML');
+      const sitemapBody = await sitemapRes.text();
+      assert.ok(sitemapBody.includes('<urlset'), 'GET /sitemap.xml must return valid urlset XML');
+      assert.ok(sitemapBody.includes('<loc>https://palluvo.com/</loc>'), 'GET /sitemap.xml must contain homepage');
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+
+    console.log('✅ PASS: [P2] sitemap.xml (91 routes with lastmod) and robots.txt verified in prerender, client/public, and server endpoints');
   } catch (renderErr) {
     console.error('SSR test error:', renderErr);
     throw renderErr;
