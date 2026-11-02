@@ -112,10 +112,11 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
 
           {!isLogin && (
             <div>
-              <label className="block text-xs font-medium text-[#1F1A1C] mb-1">Full Name</label>
+              <label htmlFor="auth-full-name" className="block text-xs font-medium text-[#1F1A1C] mb-1">Full Name</label>
               <div className="relative">
                 <User className="w-4 h-4 text-[#6E6467] absolute left-3 top-3" />
                 <input
+                  id="auth-full-name"
                   type="text"
                   required
                   value={formData.name}
@@ -128,10 +129,11 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
           )}
 
           <div>
-            <label className="block text-xs font-medium text-[#1F1A1C] mb-1">Email Address</label>
+            <label htmlFor="auth-email-address" className="block text-xs font-medium text-[#1F1A1C] mb-1">Email Address</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-[#6E6467] absolute left-3 top-3" />
               <input
+                id="auth-email-address"
                 type="email"
                 required
                 value={formData.email}
@@ -143,10 +145,11 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-[#1F1A1C] mb-1">Password</label>
+            <label htmlFor="auth-password" className="block text-xs font-medium text-[#1F1A1C] mb-1">Password</label>
             <div className="relative">
               <Lock className="w-4 h-4 text-[#6E6467] absolute left-3 top-3" />
               <input
+                id="auth-password"
                 type="password"
                 required
                 value={formData.password}
@@ -159,10 +162,11 @@ export default function AuthModal({ isOpen, onClose, onSuccess }) {
 
           {!isLogin && (
             <div>
-              <label className="block text-xs font-medium text-[#1F1A1C] mb-1">Mobile Number (Optional)</label>
+              <label htmlFor="auth-mobile-phone" className="block text-xs font-medium text-[#1F1A1C] mb-1">Mobile Number (Optional)</label>
               <div className="relative">
                 <Phone className="w-4 h-4 text-[#6E6467] absolute left-3 top-3" />
                 <input
+                  id="auth-mobile-phone"
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}

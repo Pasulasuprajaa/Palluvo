@@ -234,8 +234,9 @@ export default function CheckoutPage({ onNavigate }) {
                 <form onSubmit={handleSaveAddress} className="space-y-4 pt-2">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-[#1F1A1C] mb-1">Full Recipient Name *</label>
+                      <label htmlFor="checkout-address-name" className="block text-xs font-semibold text-[#1F1A1C] mb-1">Full Recipient Name *</label>
                       <input
+                        id="checkout-address-name"
                         type="text"
                         required
                         value={addressForm.name}
@@ -245,8 +246,9 @@ export default function CheckoutPage({ onNavigate }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[#1F1A1C] mb-1">Mobile Number *</label>
+                      <label htmlFor="checkout-address-phone" className="block text-xs font-semibold text-[#1F1A1C] mb-1">Mobile Number *</label>
                       <input
+                        id="checkout-address-phone"
                         type="tel"
                         required
                         value={addressForm.phone}
@@ -259,8 +261,9 @@ export default function CheckoutPage({ onNavigate }) {
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-[#1F1A1C] mb-1">Pincode *</label>
+                      <label htmlFor="checkout-address-pincode" className="block text-xs font-semibold text-[#1F1A1C] mb-1">Pincode *</label>
                       <input
+                        id="checkout-address-pincode"
                         type="text"
                         required
                         maxLength="6"
@@ -271,8 +274,9 @@ export default function CheckoutPage({ onNavigate }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[#1F1A1C] mb-1">City *</label>
+                      <label htmlFor="checkout-address-city" className="block text-xs font-semibold text-[#1F1A1C] mb-1">City *</label>
                       <input
+                        id="checkout-address-city"
                         type="text"
                         required
                         value={addressForm.city}
@@ -282,8 +286,9 @@ export default function CheckoutPage({ onNavigate }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[#1F1A1C] mb-1">State *</label>
+                      <label htmlFor="checkout-address-state" className="block text-xs font-semibold text-[#1F1A1C] mb-1">State *</label>
                       <input
+                        id="checkout-address-state"
                         type="text"
                         required
                         value={addressForm.state}
@@ -295,8 +300,9 @@ export default function CheckoutPage({ onNavigate }) {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-[#1F1A1C] mb-1">House / Flat / Building *</label>
+                    <label htmlFor="checkout-address-house" className="block text-xs font-semibold text-[#1F1A1C] mb-1">House / Flat / Building *</label>
                     <input
+                      id="checkout-address-house"
                       type="text"
                       required
                       value={addressForm.house_flat}
@@ -307,8 +313,9 @@ export default function CheckoutPage({ onNavigate }) {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-[#1F1A1C] mb-1">Area / Street / Sector *</label>
+                    <label htmlFor="checkout-address-area" className="block text-xs font-semibold text-[#1F1A1C] mb-1">Area / Street / Sector *</label>
                     <input
+                      id="checkout-address-area"
                       type="text"
                       required
                       value={addressForm.area}

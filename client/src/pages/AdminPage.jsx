@@ -711,8 +711,9 @@ export default function AdminPage({ onNavigate }) {
 
             <form onSubmit={handleSaveProduct} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="block font-semibold text-[#1F1A1C]">Saree Title *</label>
+                <label htmlFor="admin-product-name" className="block font-semibold text-[#1F1A1C]">Saree Title *</label>
                 <input
+                  id="admin-product-name"
                   type="text"
                   required
                   value={productForm.name}
@@ -723,8 +724,9 @@ export default function AdminPage({ onNavigate }) {
               </div>
 
               <div className="space-y-1">
-                <label className="block font-semibold text-[#1F1A1C]">Tagline / Subtitle</label>
+                <label htmlFor="admin-product-tagline" className="block font-semibold text-[#1F1A1C]">Tagline / Subtitle</label>
                 <input
+                  id="admin-product-tagline"
                   type="text"
                   value={productForm.tagline || ''}
                   onChange={(e) => setProductForm({ ...productForm, tagline: e.target.value })}
@@ -735,8 +737,9 @@ export default function AdminPage({ onNavigate }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="block font-semibold text-[#1F1A1C]">Category *</label>
+                  <label htmlFor="admin-product-category" className="block font-semibold text-[#1F1A1C]">Category *</label>
                   <select
+                    id="admin-product-category"
                     value={productForm.category_id}
                     onChange={(e) => setProductForm({ ...productForm, category_id: parseInt(e.target.value) })}
                     className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl font-medium"
@@ -753,8 +756,9 @@ export default function AdminPage({ onNavigate }) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block font-semibold text-[#1F1A1C]">Fabric Type *</label>
+                  <label htmlFor="admin-product-fabric" className="block font-semibold text-[#1F1A1C]">Fabric Type *</label>
                   <input
+                    id="admin-product-fabric"
                     type="text"
                     required
                     value={productForm.fabric}
@@ -765,8 +769,9 @@ export default function AdminPage({ onNavigate }) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block font-semibold text-[#1F1A1C]">Occasion *</label>
+                  <label htmlFor="admin-product-occasion" className="block font-semibold text-[#1F1A1C]">Occasion *</label>
                   <select
+                    id="admin-product-occasion"
                     value={productForm.occasion}
                     onChange={(e) => setProductForm({ ...productForm, occasion: e.target.value })}
                     className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl font-medium"
@@ -783,8 +788,9 @@ export default function AdminPage({ onNavigate }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="block font-semibold text-[#1F1A1C]">Offer Price (₹) *</label>
+                  <label htmlFor="admin-product-price" className="block font-semibold text-[#1F1A1C]">Offer Price (₹) *</label>
                   <input
+                    id="admin-product-price"
                     type="number"
                     required
                     min="1"
@@ -795,8 +801,9 @@ export default function AdminPage({ onNavigate }) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block font-semibold text-[#1F1A1C]">MRP (₹) *</label>
+                  <label htmlFor="admin-product-mrp" className="block font-semibold text-[#1F1A1C]">MRP (₹) *</label>
                   <input
+                    id="admin-product-mrp"
                     type="number"
                     required
                     min="1"
@@ -807,8 +814,9 @@ export default function AdminPage({ onNavigate }) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block font-semibold text-[#1F1A1C]">Stock Units *</label>
+                  <label htmlFor="admin-product-stock" className="block font-semibold text-[#1F1A1C]">Stock Units *</label>
                   <input
+                    id="admin-product-stock"
                     type="number"
                     required
                     min="0"
@@ -821,8 +829,9 @@ export default function AdminPage({ onNavigate }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="block font-semibold text-[#1F1A1C]">Color Shade Name</label>
+                  <label htmlFor="admin-product-color-name" className="block font-semibold text-[#1F1A1C]">Color Shade Name</label>
                   <input
+                    id="admin-product-color-name"
                     type="text"
                     value={productForm.color_name || 'Wine Red'}
                     onChange={(e) => setProductForm({ ...productForm, color_name: e.target.value })}
@@ -832,9 +841,10 @@ export default function AdminPage({ onNavigate }) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block font-semibold text-[#1F1A1C]">Color Swatch Hex</label>
+                  <label htmlFor="admin-product-color-hex" className="block font-semibold text-[#1F1A1C]">Color Swatch Hex</label>
                   <div className="flex items-center gap-2">
                     <input
+                      id="admin-product-color-hex"
                       type="color"
                       value={productForm.color_hex || '#5B1425'}
                       onChange={(e) => setProductForm({ ...productForm, color_hex: e.target.value })}
@@ -852,9 +862,10 @@ export default function AdminPage({ onNavigate }) {
               </div>
 
               <div className="space-y-1">
-                <label className="block font-semibold text-[#1F1A1C]">High-Res Saree Image URL *</label>
+                <label htmlFor="admin-product-image-url" className="block font-semibold text-[#1F1A1C]">High-Res Saree Image URL *</label>
                 <div className="flex gap-2 items-start">
                   <input
+                    id="admin-product-image-url"
                     type="url"
                     required
                     value={productForm.images[0] || ''}
@@ -874,8 +885,9 @@ export default function AdminPage({ onNavigate }) {
               </div>
 
               <div className="space-y-1">
-                <label className="block font-semibold text-[#1F1A1C]">Craftsmanship & Weave Description *</label>
+                <label htmlFor="admin-product-description" className="block font-semibold text-[#1F1A1C]">Craftsmanship & Weave Description *</label>
                 <textarea
+                  id="admin-product-description"
                   rows="3"
                   required
                   value={productForm.description}
@@ -930,8 +942,9 @@ export default function AdminPage({ onNavigate }) {
 
             <form onSubmit={handleUpdateOrderStatus} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="block font-semibold text-[#1F1A1C]">Lifecycle Stage</label>
+                <label htmlFor="admin-order-status" className="block font-semibold text-[#1F1A1C]">Lifecycle Stage</label>
                 <select
+                  id="admin-order-status"
                   value={orderStatusForm.status}
                   onChange={(e) => setOrderStatusForm({ ...orderStatusForm, status: e.target.value })}
                   className="w-full bg-white border border-[#EAE2D7] focus:border-[#5B1425] focus:outline-none p-2.5 rounded-xl font-medium"
@@ -948,8 +961,9 @@ export default function AdminPage({ onNavigate }) {
               </div>
 
               <div className="space-y-1">
-                <label className="block font-semibold text-[#1F1A1C]">Courier AWB / Tracking Number</label>
+                <label htmlFor="admin-order-tracking" className="block font-semibold text-[#1F1A1C]">Courier AWB / Tracking Number</label>
                 <input
+                  id="admin-order-tracking"
                   type="text"
                   value={orderStatusForm.tracking_number}
                   onChange={(e) => setOrderStatusForm({ ...orderStatusForm, tracking_number: e.target.value })}
@@ -959,8 +973,9 @@ export default function AdminPage({ onNavigate }) {
               </div>
 
               <div className="space-y-1">
-                <label className="block font-semibold text-[#1F1A1C]">Courier Partner</label>
+                <label htmlFor="admin-order-courier" className="block font-semibold text-[#1F1A1C]">Courier Partner</label>
                 <input
+                  id="admin-order-courier"
                   type="text"
                   value={orderStatusForm.courier_partner}
                   onChange={(e) => setOrderStatusForm({ ...orderStatusForm, courier_partner: e.target.value })}
@@ -1013,8 +1028,9 @@ export default function AdminPage({ onNavigate }) {
 
             <form onSubmit={handleSaveCoupon} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="block font-semibold text-[#1F1A1C]">Coupon Code *</label>
+                <label htmlFor="admin-coupon-code" className="block font-semibold text-[#1F1A1C]">Coupon Code *</label>
                 <input
+                  id="admin-coupon-code"
                   type="text"
                   required
                   value={couponForm.code}
@@ -1025,8 +1041,9 @@ export default function AdminPage({ onNavigate }) {
               </div>
 
               <div className="space-y-1">
-                <label className="block font-semibold text-[#1F1A1C]">Offer Title *</label>
+                <label htmlFor="admin-coupon-title" className="block font-semibold text-[#1F1A1C]">Offer Title *</label>
                 <input
+                  id="admin-coupon-title"
                   type="text"
                   required
                   value={couponForm.title}
@@ -1038,8 +1055,9 @@ export default function AdminPage({ onNavigate }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="block font-semibold text-[#1F1A1C]">Discount (%) *</label>
+                  <label htmlFor="admin-coupon-discount" className="block font-semibold text-[#1F1A1C]">Discount (%) *</label>
                   <input
+                    id="admin-coupon-discount"
                     type="number"
                     required
                     min="1"
@@ -1051,8 +1069,9 @@ export default function AdminPage({ onNavigate }) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block font-semibold text-[#1F1A1C]">Min Order (₹) *</label>
+                  <label htmlFor="admin-coupon-min-order" className="block font-semibold text-[#1F1A1C]">Min Order (₹) *</label>
                   <input
+                    id="admin-coupon-min-order"
                     type="number"
                     required
                     min="0"

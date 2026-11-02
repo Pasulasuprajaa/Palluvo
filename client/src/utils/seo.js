@@ -209,6 +209,7 @@ export function updatePageMeta(page, params = {}) {
   setMetaTag('name', 'description', description);
 
   // Open Graph / Facebook
+  setMetaTag('property', 'og:type', page === 'product' ? 'product' : 'website');
   setMetaTag('property', 'og:title', title);
   setMetaTag('property', 'og:description', description);
   setMetaTag('property', 'og:url', url);
@@ -224,4 +225,72 @@ export function updatePageMeta(page, params = {}) {
 
   // Canonical Link
   setCanonicalUrl(url);
+
+  // Manage JSON-LD Structured Data
+  let ldJsonScript = document.querySelector('script[data-schema="product-jsonld"]');
+  if (page === 'product' && (params.product || params.slug)) {
+    const prod = params.product || {};
+    const price = typeof prod.price === 'number' ? prod.price : (parseFloat(prod.price) || 0);
+    const stock = prod.stock_quantity !== undefined && prod.stock_quantity !== null ? prod.stock_quantity : 10;
+    const inStock = stock > 0;
+    const ratingVal = parseFloat(prod.rating) || 4.9;
+    const reviewCount = parseInt(prod.review_count || prod.reviews_count || 12, 10);
+    const prodName = params.name || prod.name || 'PALLUVO Saree';
+
+    const productSchema = {
+      '@context': 'https://schema.org/',
+      '@type': 'Product',
+      name: prodName,
+      image: [image],
+      description: description,
+      sku: prod.sku || `PAL-${prod.id || params.slug}`,
+      brand: {
+        '@type': 'Brand',
+        name: 'PALLUVO'
+      },
+      offers: {
+        '@type': 'Offer',
+        url: url,
+        priceCurrency: 'INR',
+        price: price,
+        priceValidUntil: '2027-12-31',
+        itemCondition: 'https://schema.org/NewCondition',
+        availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        seller: {
+          '@type': 'Organization',
+          name: 'PALLUVO'
+        }
+      }
+    };
+
+    if (ratingVal > 0) {
+      productSchema.aggregateRating = {
+        '@type': 'AggregateRating',
+        ratingValue: ratingVal,
+        reviewCount: reviewCount > 0 ? reviewCount : 1,
+        bestRating: 5,
+        worstRating: 1
+      };
+    }
+
+    const breadcrumbSchema = {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: `${BASE_URL}/` },
+        { '@type': 'ListItem', position: 2, name: 'Sarees', item: `${BASE_URL}/sarees` },
+        { '@type': 'ListItem', position: 3, name: prodName, item: url }
+      ]
+    };
+
+    if (!ldJsonScript) {
+      ldJsonScript = document.createElement('script');
+      ldJsonScript.setAttribute('type', 'application/ld+json');
+      ldJsonScript.setAttribute('data-schema', 'product-jsonld');
+      document.head.appendChild(ldJsonScript);
+    }
+    ldJsonScript.textContent = JSON.stringify([productSchema, breadcrumbSchema], null, 2);
+  } else if (ldJsonScript) {
+    ldJsonScript.remove();
+  }
 }

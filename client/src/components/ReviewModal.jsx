@@ -97,13 +97,14 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
           {/* Star Rating Picker */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+            <label htmlFor="review-rating-star-1" className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
               Overall Rating *
             </label>
             <div className="flex items-center gap-2">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
+                  id={star === 1 ? 'review-rating-star-1' : undefined}
                   type="button"
                   onClick={() => setRating(star)}
                   onMouseEnter={() => setHoverRating(star)}
@@ -132,8 +133,9 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
           {/* Quick Fit & Fabric Chips */}
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
-              <label className="block font-semibold text-gray-700 mb-1">Drape Fall & Feel</label>
+              <label htmlFor="review-fabric-feel" className="block font-semibold text-gray-700 mb-1">Drape Fall & Feel</label>
               <select
+                id="review-fabric-feel"
                 value={fabricFeel}
                 onChange={(e) => setFabricFeel(e.target.value)}
                 className="w-full p-2 bg-white rounded-lg border border-[#E8E1D5] text-xs focus:ring-1 focus:ring-[#5B1425] outline-none"
@@ -144,8 +146,9 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
               </select>
             </div>
             <div>
-              <label className="block font-semibold text-gray-700 mb-1">Zari & Weave Finish</label>
+              <label htmlFor="review-zari-finish" className="block font-semibold text-gray-700 mb-1">Zari & Weave Finish</label>
               <select
+                id="review-zari-finish"
                 value={fitRating}
                 onChange={(e) => setFitRating(e.target.value)}
                 className="w-full p-2 bg-white rounded-lg border border-[#E8E1D5] text-xs focus:ring-1 focus:ring-[#5B1425] outline-none"
@@ -159,10 +162,11 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
           {/* Review Headline */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+            <label htmlFor="review-headline" className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
               Headline / Title
             </label>
             <input
+              id="review-headline"
               type="text"
               placeholder="e.g. Stunning Banarasi Saree, got so many compliments!"
               value={title}
@@ -173,10 +177,11 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
           {/* Review Comment */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+            <label htmlFor="review-comment" className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
               Your Drape Experience & Review *
             </label>
             <textarea
+              id="review-comment"
               rows={4}
               placeholder="Tell others about the fabric luster, pleat formation, softness, unboxing packaging, and how you styled it..."
               value={comment}
@@ -188,7 +193,7 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
           {/* Photos Showcase */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+            <label htmlFor="review-attach-photo" className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
               Add Drape Photos (Optional)
             </label>
             <div className="flex flex-wrap gap-2 items-center">
@@ -207,6 +212,7 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
               {photos.length < 3 && (
                 <button
+                  id="review-attach-photo"
                   type="button"
                   onClick={() => handleAddSamplePhoto(product.primary_image || '/images/categories/banarasi.jpg')}
                   className="flex flex-col items-center justify-center w-16 h-16 rounded-lg border-2 border-dashed border-[#C5A059] bg-white text-gray-500 hover:text-[#5B1425] hover:bg-[#FAF0E6] transition cursor-pointer text-[10px]"

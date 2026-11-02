@@ -86,11 +86,12 @@ export default function ReturnModal({ isOpen, onClose, order, onReturnSuccess })
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
           {/* Action Type Toggle */}
           <div>
-            <label className="block font-semibold uppercase text-gray-700 tracking-wider mb-2">
+            <label htmlFor="return-action-exchange" className="block font-semibold uppercase text-gray-700 tracking-wider mb-2">
               Select Action *
             </label>
             <div className="grid grid-cols-2 gap-3">
               <button
+                id="return-action-exchange"
                 type="button"
                 onClick={() => setReturnType('Exchange')}
                 className={`p-3 rounded-xl border text-left transition cursor-pointer ${
@@ -120,10 +121,11 @@ export default function ReturnModal({ isOpen, onClose, order, onReturnSuccess })
 
           {/* Reason Selector */}
           <div>
-            <label className="block font-semibold uppercase text-gray-700 tracking-wider mb-1.5">
+            <label htmlFor="return-reason-select" className="block font-semibold uppercase text-gray-700 tracking-wider mb-1.5">
               Reason for {returnType} *
             </label>
             <select
+              id="return-reason-select"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               className="w-full p-2.5 bg-white rounded-xl border border-[#E8E1D5] text-xs focus:ring-1 focus:ring-[#5B1425] outline-none"
@@ -136,10 +138,11 @@ export default function ReturnModal({ isOpen, onClose, order, onReturnSuccess })
 
           {/* Additional details */}
           <div>
-            <label className="block font-semibold uppercase text-gray-700 tracking-wider mb-1">
+            <label htmlFor="return-comments" className="block font-semibold uppercase text-gray-700 tracking-wider mb-1">
               Comments / Special Instructions
             </label>
             <textarea
+              id="return-comments"
               rows={2}
               placeholder="Tell our concierge team any additional instructions..."
               value={comments}
@@ -150,12 +153,13 @@ export default function ReturnModal({ isOpen, onClose, order, onReturnSuccess })
 
           {/* Pickup Date Selection */}
           <div>
-            <label className="block font-semibold uppercase text-gray-700 tracking-wider mb-1">
+            <label htmlFor="return-pickup-date" className="block font-semibold uppercase text-gray-700 tracking-wider mb-1">
               Preferred Doorstep Pickup Date *
             </label>
             <div className="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-[#E8E1D5]">
               <Calendar className="w-4 h-4 text-[#5B1425]" />
               <input
+                id="return-pickup-date"
                 type="date"
                 value={pickupDate}
                 onChange={(e) => setPickupDate(e.target.value)}

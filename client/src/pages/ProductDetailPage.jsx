@@ -588,8 +588,9 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
             {blouseOption === 'standard' && (
               <div className="grid grid-cols-2 gap-3 pt-2 text-xs">
                 <div>
-                  <label className="block text-[11px] font-semibold text-gray-700 mb-1">Standard Size</label>
+                  <label htmlFor="pdp-blouse-size" className="block text-[11px] font-semibold text-gray-700 mb-1">Standard Size</label>
                   <select
+                    id="pdp-blouse-size"
                     value={blouseSize}
                     onChange={(e) => setBlouseSize(e.target.value)}
                     className="w-full p-2 bg-[#FAF7F2] rounded-lg border border-[#E8E1D5] text-xs outline-none"
@@ -603,8 +604,9 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-gray-700 mb-1">Neckline Cut</label>
+                  <label htmlFor="pdp-blouse-neckline" className="block text-[11px] font-semibold text-gray-700 mb-1">Neckline Cut</label>
                   <select
+                    id="pdp-blouse-neckline"
                     value={blouseNeckline}
                     onChange={(e) => setBlouseNeckline(e.target.value)}
                     className="w-full p-2 bg-[#FAF7F2] rounded-lg border border-[#E8E1D5] text-xs outline-none"

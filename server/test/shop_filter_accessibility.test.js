@@ -2947,6 +2947,114 @@ async function testShopFilterAccessibility() {
     }
 
     console.log('✅ PASS: [P2] Canonical sitemap.xml (44 indexable routes) and robots.txt verified in prerender, client/public, and server endpoints');
+
+    // 10. Verify [P2] Product Structured Data (JSON-LD) and og:type
+    const { getMetaForRoute, injectMetaTags } = require('../services/seoRenderer');
+    const productMeta = getMetaForRoute('/sarees/royal-crimson-banarasi-katan-silk-saree');
+    assert.strictEqual(productMeta.ogType, 'product', 'Product route meta must have ogType="product"');
+    assert.ok(Array.isArray(productMeta.structuredData), 'Product route meta must contain structuredData array');
+    assert.strictEqual(productMeta.structuredData.length, 2, 'Product structuredData must contain Product and BreadcrumbList');
+
+    const productSchema = productMeta.structuredData.find(s => s['@type'] === 'Product');
+    assert.ok(productSchema, 'Structured data must include @type Product');
+    assert.ok(productSchema.name, 'Product schema must include name');
+    assert.ok(Array.isArray(productSchema.image) && productSchema.image.length > 0, 'Product schema must include image array');
+    assert.ok(productSchema.offers, 'Product schema must include offers');
+    assert.strictEqual(productSchema.offers.priceCurrency, 'INR', 'Product offer priceCurrency must be INR');
+    assert.ok(productSchema.offers.price > 0, 'Product offer price must be > 0');
+    assert.ok(productSchema.offers.availability.includes('InStock'), 'Product offer availability must be InStock');
+    assert.ok(productSchema.aggregateRating, 'Product schema must include aggregateRating');
+    assert.ok(productSchema.aggregateRating.ratingValue > 0, 'Product aggregateRating must have ratingValue');
+
+    const breadcrumbSchema = productMeta.structuredData.find(s => s['@type'] === 'BreadcrumbList');
+    assert.ok(breadcrumbSchema, 'Structured data must include @type BreadcrumbList');
+    assert.ok(Array.isArray(breadcrumbSchema.itemListElement) && breadcrumbSchema.itemListElement.length >= 3, 'BreadcrumbList must have at least 3 levels');
+
+    const sampleHtml = '<!DOCTYPE html><html><head><title>Test</title><meta property="og:type" content="website" /></head><body></body></html>';
+    const renderedHtml = injectMetaTags(sampleHtml, productMeta);
+    assert.ok(renderedHtml.includes('property="og:type" content="product"'), 'Rendered HTML must switch og:type to product');
+    assert.ok(renderedHtml.includes('application/ld+json'), 'Rendered HTML must inject application/ld+json script tags');
+    assert.ok(renderedHtml.includes('"@type": "Product"'), 'Rendered HTML must contain Product schema');
+    assert.ok(renderedHtml.includes('"@type": "BreadcrumbList"'), 'Rendered HTML must contain BreadcrumbList schema');
+
+    const staticMeta = getMetaForRoute('/sarees');
+    assert.strictEqual(staticMeta.ogType, 'website', 'Non-product route meta must have ogType="website"');
+    const renderedStatic = injectMetaTags(sampleHtml, staticMeta);
+    assert.ok(renderedStatic.includes('property="og:type" content="website"'), 'Rendered static HTML must preserve og:type website');
+    console.log('✅ PASS: [P2] Product structured data (JSON-LD Product and BreadcrumbList) and og:type="product" verified');
+
+    // 11. Verify [P2] Form Labels Programmatically Associated Across client/src
+    function scanLabels(dir) {
+      let results = [];
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          results = results.concat(scanLabels(fullPath));
+        } else if (entry.name.endsWith('.jsx') || entry.name.endsWith('.js')) {
+          results.push(fullPath);
+        }
+      }
+      return results;
+    }
+
+    const clientSrcDir = path.resolve(__dirname, '../../client/src');
+    const clientFiles = scanLabels(clientSrcDir);
+    let totalClientLabels = 0;
+    const unassociatedLabels = [];
+
+    for (const filePath of clientFiles) {
+      const source = fs.readFileSync(filePath, 'utf8');
+      const labelRegex = /<label\b([^>]*)>/g;
+      let match;
+      while ((match = labelRegex.exec(source)) !== null) {
+        totalClientLabels++;
+        const attrs = match[1];
+        const htmlForMatch = attrs.match(/htmlFor=["']([^"']+)["']/);
+
+        if (htmlForMatch) {
+          const targetId = htmlForMatch[1];
+          const idRegex = new RegExp(`id=(?:["']${targetId}["']|\\{[^}]*['"\`]${targetId}['"\`][^}]*\\})`);
+          const hasMatchingId = idRegex.test(source);
+          if (!hasMatchingId) {
+            unassociatedLabels.push({
+              file: path.relative(clientSrcDir, filePath),
+              label: match[0],
+              issue: `htmlFor="${targetId}" does not match any element with id="${targetId}" in the file`
+            });
+          }
+        } else {
+          // Check if this <label> wraps a form control element (<input, <select, <textarea, <button)
+          const labelStart = match.index;
+          const labelEnd = source.indexOf('</label>', labelStart);
+          if (labelEnd > labelStart) {
+            const innerContent = source.substring(labelStart, labelEnd);
+            const wrapsControl = /<(input|select|textarea|button)\b/.test(innerContent);
+            if (!wrapsControl) {
+              unassociatedLabels.push({
+                file: path.relative(clientSrcDir, filePath),
+                label: match[0],
+                issue: 'Label does not specify htmlFor and does not wrap an input/select/textarea/button control'
+              });
+            }
+          } else {
+            unassociatedLabels.push({
+              file: path.relative(clientSrcDir, filePath),
+              label: match[0],
+              issue: 'Unclosed <label> tag'
+            });
+          }
+        }
+      }
+    }
+
+    assert.ok(totalClientLabels >= 67, `Expected at least 67 labels across client/src, found ${totalClientLabels}`);
+    assert.strictEqual(
+      unassociatedLabels.length,
+      0,
+      `All form labels must be programmatically associated with controls. Unassociated:\n${JSON.stringify(unassociatedLabels, null, 2)}`
+    );
+    console.log(`✅ PASS: [P2] All ${totalClientLabels} form labels across client/src are programmatically associated with form controls (WCAG 1.3.1 & 3.3.2 compliant)`);
   } catch (renderErr) {
     console.error('SSR test error:', renderErr);
     throw renderErr;

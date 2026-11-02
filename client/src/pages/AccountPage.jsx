@@ -412,8 +412,9 @@ export default function AccountPage({ onNavigate }) {
 
               <form onSubmit={handleUpdateProfile} className="space-y-4 max-w-lg">
                 <div>
-                  <label className="block text-xs font-semibold text-[#1F1A1C] mb-1">Full Name</label>
+                  <label htmlFor="account-profile-name" className="block text-xs font-semibold text-[#1F1A1C] mb-1">Full Name</label>
                   <input
+                    id="account-profile-name"
                     type="text"
                     required
                     value={profileName}
@@ -423,8 +424,9 @@ export default function AccountPage({ onNavigate }) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#1F1A1C] mb-1">Email Address</label>
+                  <label htmlFor="account-profile-email" className="block text-xs font-semibold text-[#1F1A1C] mb-1">Email Address</label>
                   <input
+                    id="account-profile-email"
                     type="email"
                     disabled
                     value={user.email}
@@ -434,8 +436,9 @@ export default function AccountPage({ onNavigate }) {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#1F1A1C] mb-1">Mobile Contact</label>
+                  <label htmlFor="account-profile-phone" className="block text-xs font-semibold text-[#1F1A1C] mb-1">Mobile Contact</label>
                   <input
+                    id="account-profile-phone"
                     type="tel"
                     value={profilePhone}
                     onChange={(e) => setProfilePhone(e.target.value)}
@@ -523,8 +526,9 @@ export default function AccountPage({ onNavigate }) {
             <form onSubmit={handleSaveAddress} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1">Recipient Name *</label>
+                  <label htmlFor="address-recipient-name" className="block font-semibold mb-1">Recipient Name *</label>
                   <input
+                    id="address-recipient-name"
                     type="text"
                     required
                     value={addressForm.name}
@@ -533,8 +537,9 @@ export default function AccountPage({ onNavigate }) {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">Mobile Phone *</label>
+                  <label htmlFor="address-mobile-phone" className="block font-semibold mb-1">Mobile Phone *</label>
                   <input
+                    id="address-mobile-phone"
                     type="tel"
                     required
                     value={addressForm.phone}
@@ -545,8 +550,9 @@ export default function AccountPage({ onNavigate }) {
               </div>
 
               <div>
-                <label className="block font-semibold mb-1">House / Flat / Building *</label>
+                <label htmlFor="address-house-flat" className="block font-semibold mb-1">House / Flat / Building *</label>
                 <input
+                  id="address-house-flat"
                   type="text"
                   required
                   value={addressForm.house_flat}
@@ -556,8 +562,9 @@ export default function AccountPage({ onNavigate }) {
               </div>
 
               <div>
-                <label className="block font-semibold mb-1">Street / Area / Colony *</label>
+                <label htmlFor="address-street-area" className="block font-semibold mb-1">Street / Area / Colony *</label>
                 <input
+                  id="address-street-area"
                   type="text"
                   required
                   value={addressForm.area}
@@ -568,8 +575,9 @@ export default function AccountPage({ onNavigate }) {
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1">PIN Code *</label>
+                  <label htmlFor="address-pincode" className="block font-semibold mb-1">PIN Code *</label>
                   <input
+                    id="address-pincode"
                     type="text"
                     required
                     maxLength={6}
@@ -579,8 +587,9 @@ export default function AccountPage({ onNavigate }) {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">City *</label>
+                  <label htmlFor="address-city" className="block font-semibold mb-1">City *</label>
                   <input
+                    id="address-city"
                     type="text"
                     required
                     value={addressForm.city}
@@ -589,8 +598,9 @@ export default function AccountPage({ onNavigate }) {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">State *</label>
+                  <label htmlFor="address-state" className="block font-semibold mb-1">State *</label>
                   <input
+                    id="address-state"
                     type="text"
                     required
                     value={addressForm.state}

@@ -224,9 +224,10 @@ export default function CartPage({ onNavigate, onOpenAuth }) {
               </div>
             ) : (
               <form onSubmit={handleApply} className="space-y-1">
-                <label className="block text-xs font-semibold text-[#1F1A1C]">Have a Promotional Code?</label>
+                <label htmlFor="cart-coupon-code" className="block text-xs font-semibold text-[#1F1A1C]">Have a Promotional Code?</label>
                 <div className="flex gap-2">
                   <input
+                    id="cart-coupon-code"
                     type="text"
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value.toUpperCase())}

@@ -367,8 +367,9 @@ export default function RazorpayModal({
               </div>
 
               <div className="pt-2">
-                <label className="block text-xs font-medium text-[#6E6467] mb-1">Or Enter Virtual Payment Address (VPA / UPI ID)</label>
+                <label htmlFor="razorpay-upi-id" className="block text-xs font-medium text-[#6E6467] mb-1">Or Enter Virtual Payment Address (VPA / UPI ID)</label>
                 <input
+                  id="razorpay-upi-id"
                   type="text"
                   value={upiId}
                   onChange={(e) => setUpiId(e.target.value)}
@@ -382,8 +383,9 @@ export default function RazorpayModal({
           {activeTab === 'card' && (
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-[#6E6467] mb-1">Card Number</label>
+                <label htmlFor="razorpay-card-number" className="block text-xs font-medium text-[#6E6467] mb-1">Card Number</label>
                 <input
+                  id="razorpay-card-number"
                   type="text"
                   value={cardDetails.number}
                   onChange={(e) => setCardDetails({ ...cardDetails, number: e.target.value })}
@@ -394,8 +396,9 @@ export default function RazorpayModal({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-medium text-[#6E6467] mb-1">Valid Thru</label>
+                  <label htmlFor="razorpay-card-expiry" className="block text-xs font-medium text-[#6E6467] mb-1">Valid Thru</label>
                   <input
+                    id="razorpay-card-expiry"
                     type="text"
                     value={cardDetails.expiry}
                     onChange={(e) => setCardDetails({ ...cardDetails, expiry: e.target.value })}
@@ -404,8 +407,9 @@ export default function RazorpayModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#6E6467] mb-1">CVV</label>
+                  <label htmlFor="razorpay-card-cvv" className="block text-xs font-medium text-[#6E6467] mb-1">CVV</label>
                   <input
+                    id="razorpay-card-cvv"
                     type="password"
                     maxLength="4"
                     value={cardDetails.cvv}
@@ -417,8 +421,9 @@ export default function RazorpayModal({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#6E6467] mb-1">Name on Card</label>
+                <label htmlFor="razorpay-card-name" className="block text-xs font-medium text-[#6E6467] mb-1">Name on Card</label>
                 <input
+                  id="razorpay-card-name"
                   type="text"
                   value={cardDetails.name}
                   onChange={(e) => setCardDetails({ ...cardDetails, name: e.target.value })}

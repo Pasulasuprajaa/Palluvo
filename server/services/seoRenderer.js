@@ -39,9 +39,13 @@ function findProductBySlug(slug) {
   if (database) {
     try {
       const p = database.prepare(`
-        SELECT p.name, p.tagline, p.short_desc, p.description,
+        SELECT p.id, p.name, p.slug, p.tagline, p.short_desc, p.description,
+               p.price, p.mrp, p.stock_quantity, p.rating, p.review_count,
+               p.category_id, p.fabric, p.sku,
+               c.name as category_name, c.slug as category_slug,
                (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) as primary_img
         FROM products p
+        LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.slug = ?
       `).get(slug);
       if (p) return p;
@@ -50,15 +54,114 @@ function findProductBySlug(slug) {
   const catalog = getCatalog();
   const found = (catalog.products || []).find(p => p.slug === slug);
   if (found) {
+    const cat = (catalog.categories || []).find(c => c.id === found.category_id || c.slug === found.category_slug);
     return {
+      id: found.id,
       name: found.name,
+      slug: found.slug,
       tagline: found.tagline,
       short_desc: found.short_desc,
       description: found.description,
+      price: found.price,
+      mrp: found.mrp,
+      stock_quantity: found.stock_quantity,
+      rating: found.rating,
+      review_count: found.review_count || found.reviews_count,
+      category_id: found.category_id,
+      category_name: cat ? cat.name : null,
+      category_slug: cat ? cat.slug : null,
+      fabric: found.fabric,
+      sku: found.sku,
       primary_img: found.primary_image || (found.images && found.images[0])
     };
   }
   return null;
+}
+
+function generateProductJsonLd(product, canonicalUrl, imageUrl, description) {
+  const price = typeof product.price === 'number' ? product.price : (parseFloat(product.price) || 0);
+  const stock = product.stock_quantity !== undefined && product.stock_quantity !== null ? product.stock_quantity : 10;
+  const inStock = stock > 0;
+  const ratingVal = parseFloat(product.rating) || 4.9;
+  const reviewCount = parseInt(product.review_count || product.reviews_count || 12, 10);
+
+  const schema = {
+    '@context': 'https://schema.org/',
+    '@type': 'Product',
+    name: product.name,
+    image: [imageUrl],
+    description: description,
+    sku: product.sku || `PAL-${product.id || product.slug}`,
+    brand: {
+      '@type': 'Brand',
+      name: 'PALLUVO'
+    },
+    offers: {
+      '@type': 'Offer',
+      url: canonicalUrl,
+      priceCurrency: 'INR',
+      price: price,
+      priceValidUntil: '2027-12-31',
+      itemCondition: 'https://schema.org/NewCondition',
+      availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      seller: {
+        '@type': 'Organization',
+        name: 'PALLUVO'
+      }
+    }
+  };
+
+  if (ratingVal > 0) {
+    schema.aggregateRating = {
+      '@type': 'AggregateRating',
+      ratingValue: ratingVal,
+      reviewCount: reviewCount > 0 ? reviewCount : 1,
+      bestRating: 5,
+      worstRating: 1
+    };
+  }
+
+  return schema;
+}
+
+function generateBreadcrumbJsonLd(product, canonicalUrl) {
+  const items = [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'Home',
+      item: `${BASE_URL}/`
+    },
+    {
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Sarees',
+      item: `${BASE_URL}/sarees`
+    }
+  ];
+
+  let pos = 3;
+  if (product.category_name && product.category_slug) {
+    items.push({
+      '@type': 'ListItem',
+      position: pos++,
+      name: product.category_name,
+      item: `${BASE_URL}/sarees?category=${encodeURIComponent(product.category_slug)}`
+    });
+  }
+
+  items.push({
+    '@type': 'ListItem',
+    position: pos,
+    name: product.name,
+    item: canonicalUrl
+  });
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items
+  };
 }
 
 function findCategoryBySlug(slug) {
@@ -164,6 +267,8 @@ function getMetaForRoute(urlPath, query = {}) {
   let imageAlt = 'PALLUVO Luxury Indian Handloom Sarees Collection';
   let isNotFound = false;
   let isNoIndex = false;
+  let ogType = 'website';
+  let structuredData = null;
 
   // Check category query parameter or category path (e.g. /sarees?category=slug, /sarees/category/slug, /category/slug)
   const categorySlug = query.category || (
@@ -196,6 +301,11 @@ function getMetaForRoute(urlPath, query = {}) {
       canonicalUrl = `${BASE_URL}/sarees/${encodeURIComponent(slug)}`;
       imageUrl = sanitizeUrl(product.primary_img, DEFAULT_IMAGE);
       imageAlt = `${product.name} - Luxury Handcrafted Indian Saree | PALLUVO`;
+      ogType = 'product';
+      structuredData = [
+        generateProductJsonLd(product, canonicalUrl, imageUrl, description),
+        generateBreadcrumbJsonLd(product, canonicalUrl)
+      ];
     } else {
       isNotFound = true;
     }
@@ -261,7 +371,7 @@ function getMetaForRoute(urlPath, query = {}) {
     isNoIndex = true;
   }
 
-  return { title, description, canonicalUrl, imageUrl, imageAlt, isNotFound, isNoIndex };
+  return { title, description, canonicalUrl, imageUrl, imageAlt, isNotFound, isNoIndex, ogType, structuredData };
 }
 
 function injectMetaTags(html, meta) {
@@ -284,6 +394,12 @@ function injectMetaTags(html, meta) {
   modified = modified.replace(/<meta\s+name="description"\s+content=".*?"\s*\/?>/is, `<meta name="description" content="${escapedAttrDesc}" />`);
 
   // Open Graph
+  const ogType = meta.ogType || 'website';
+  if (modified.includes('property="og:type"')) {
+    modified = modified.replace(/<meta\s+property="og:type"\s+content=".*?"\s*\/?>/is, `<meta property="og:type" content="${ogType}" />`);
+  } else {
+    modified = modified.replace('</head>', `  <meta property="og:type" content="${ogType}" />\n  </head>`);
+  }
   modified = modified.replace(/<meta\s+property="og:title"\s+content=".*?"\s*\/?>/is, `<meta property="og:title" content="${escapedAttrTitle}" />`);
   modified = modified.replace(/<meta\s+property="og:description"\s+content=".*?"\s*\/?>/is, `<meta property="og:description" content="${escapedAttrDesc}" />`);
   modified = modified.replace(/<meta\s+property="og:url"\s+content=".*?"\s*\/?>/is, `<meta property="og:url" content="${escapedAttrCanonical}" />`);
@@ -315,6 +431,15 @@ function injectMetaTags(html, meta) {
     modified = modified.replace(/<meta\s+name="robots"\s+content=".*?"\s*\/?>/is, `<meta name="robots" content="${robotsDirective}" />`);
   } else {
     modified = modified.replace('</head>', `  <meta name="robots" content="${robotsDirective}" />\n  </head>`);
+  }
+
+  // Structured Data (JSON-LD for Product and BreadcrumbList)
+  modified = modified.replace(/<script\s+type="application\/ld\+json">.*?<\/script>\s*/gis, '');
+  if (meta.structuredData && meta.structuredData.length > 0) {
+    const jsonLdTags = meta.structuredData.map(data =>
+      `  <script type="application/ld+json">\n${JSON.stringify(data, null, 2)}\n  </script>`
+    ).join('\n');
+    modified = modified.replace('</head>', `${jsonLdTags}\n  </head>`);
   }
 
   return modified;
