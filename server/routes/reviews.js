@@ -4,42 +4,70 @@ const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
 
-// Support up to 10mb JSON payload limit to align with customer photo review uploads
-router.use(express.json({ inflate: false, limit: '10mb' }));
+// Support up to 12mb JSON payload limit to align with customer photo review uploads (3 photos x 2MB binary = ~8.2MB base64)
+router.use(express.json({ inflate: false, limit: '12mb' }));
+
+const MAX_PHOTOS = 3;
+const MAX_PHOTO_BYTES = 2 * 1024 * 1024; // 2MB binary limit per photo
+const MAX_AGGREGATE_PHOTO_BYTES = 6 * 1024 * 1024; // 6MB binary limit total across all photos
 
 /**
  * Validates customer-uploaded photos.
  * Rejects external URLs (preventing IP harvesting / tracking pixels),
  * blob: URLs (origin-scoped pointers), and catalog imagery paths.
- * Accepts only validated raster image data URLs (JPEG, PNG, WebP) or same-origin /uploads/ paths.
+ * Accepts only validated raster image data URLs (JPEG, PNG, WebP) or same-origin /uploads/ paths
+ * and enforces strict matching per-photo size limits.
  */
-function isValidCustomerPhoto(photo) {
-  if (!photo || typeof photo !== 'string') return false;
+function validateCustomerPhoto(photo, index = 0) {
+  if (!photo || typeof photo !== 'string') {
+    return { valid: false, error: `Photo #${index + 1} must be a valid image string.` };
+  }
   const trimmed = photo.trim();
 
   // Reject external URLs (prevent third-party tracking / IP harvesting)
-  if (/^(https?:)?\/\//i.test(trimmed)) return false;
+  if (/^(https?:)?\/\//i.test(trimmed)) {
+    return { valid: false, error: `Photo #${index + 1} cannot be an external URL.` };
+  }
 
   // Reject blob URLs (origin-scoped client memory pointers)
-  if (trimmed.startsWith('blob:')) return false;
+  if (trimmed.startsWith('blob:')) {
+    return { valid: false, error: `Photo #${index + 1} cannot be a temporary blob URL.` };
+  }
 
   // Reject catalog photography
-  if (trimmed.startsWith('/images/') || trimmed.startsWith('images/')) return false;
+  if (trimmed.startsWith('/images/') || trimmed.startsWith('images/')) {
+    return { valid: false, error: `Photo #${index + 1} cannot be catalog imagery.` };
+  }
 
   // Accept validated image data URLs (JPEG, PNG, WebP) with base64 payload
-  const dataUrlRegex = /^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/i;
-  if (dataUrlRegex.test(trimmed)) {
-    // Max 3MB binary equivalent in base64 (~4.1MB)
-    return trimmed.length >= 50 && trimmed.length <= 4 * 1024 * 1024;
+  const dataUrlRegex = /^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/i;
+  const match = trimmed.match(dataUrlRegex);
+  if (match) {
+    const base64Data = match[2];
+    const byteLength = Math.ceil((base64Data.length * 3) / 4);
+    if (byteLength < 10) {
+      return { valid: false, error: `Photo #${index + 1} is empty or invalid.` };
+    }
+    if (byteLength > MAX_PHOTO_BYTES) {
+      return {
+        valid: false,
+        error: `Photo #${index + 1} exceeds the 2MB size limit (${(byteLength / (1024 * 1024)).toFixed(2)}MB).`
+      };
+    }
+    return { valid: true, byteLength, cleaned: trimmed };
   }
 
   // Accept strictly same-origin relative upload paths
   const localUploadRegex = /^\/uploads\/[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp)$/i;
   if (localUploadRegex.test(trimmed)) {
-    return true;
+    return { valid: true, byteLength: 50000, cleaned: trimmed };
   }
 
-  return false;
+  return { valid: false, error: `Photo #${index + 1} must be a valid JPEG, PNG, or WebP image.` };
+}
+
+function isValidCustomerPhoto(photo) {
+  return validateCustomerPhoto(photo).valid;
 }
 
 // GET /api/reviews/:productId
@@ -105,10 +133,34 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
     const reviewComment = comment.trim();
 
     let photosJson = null;
-    if (Array.isArray(photos) && photos.length > 0) {
-      // Accept only customer-uploaded photos (data URLs or same-origin uploads); strictly reject external URLs, blobs, & catalog imagery
-      const validPhotos = photos.filter(isValidCustomerPhoto).slice(0, 3);
-      if (validPhotos.length > 0) {
+    if (photos !== undefined && photos !== null) {
+      if (!Array.isArray(photos)) {
+        return res.status(400).json({ error: 'Photos must be provided as an array.' });
+      }
+
+      if (photos.length > MAX_PHOTOS) {
+        return res.status(400).json({ error: `A maximum of ${MAX_PHOTOS} photos can be uploaded per review.` });
+      }
+
+      if (photos.length > 0) {
+        let aggregateBytes = 0;
+        const validPhotos = [];
+
+        for (let i = 0; i < photos.length; i++) {
+          const validation = validateCustomerPhoto(photos[i], i);
+          if (!validation.valid) {
+            return res.status(400).json({ error: validation.error });
+          }
+          aggregateBytes += validation.byteLength;
+          validPhotos.push(validation.cleaned);
+        }
+
+        if (aggregateBytes > MAX_AGGREGATE_PHOTO_BYTES) {
+          return res.status(400).json({
+            error: `Total photo upload size exceeds the 6MB aggregate limit (${(aggregateBytes / (1024 * 1024)).toFixed(2)}MB).`
+          });
+        }
+
         photosJson = JSON.stringify(validPhotos);
       }
     }

@@ -3353,23 +3353,23 @@ async function testShopFilterAccessibility() {
 
     // Verify JSON limit alignment and image resizing in ReviewModal and server/index.js
     assert.ok(
-      reviewModalSource.includes('resizeImageToDataUrl') || reviewModalSource.includes('canvas'),
-      'ReviewModal.jsx must resize customer photos client-side before sending'
+      reviewModalSource.includes('resizeImageToDataUrl') && reviewModalSource.includes('MAX_PHOTO_BYTES'),
+      'ReviewModal.jsx must resize customer photos client-side and enforce post-resize MAX_PHOTO_BYTES cap'
     );
     const serverIndexSrc = fs.readFileSync(path.resolve(__dirname, '../index.js'), 'utf8');
     assert.ok(
-      serverIndexSrc.includes("limit: '10mb'") || serverIndexSrc.includes('limit: "10mb"'),
-      'server/index.js express.json must configure limit (10mb) to accept photo uploads without 413'
+      serverIndexSrc.includes("limit: '12mb'") || serverIndexSrc.includes('limit: "12mb"'),
+      'server/index.js express.json must configure limit (12mb) to align with aggregate photo upload caps without 413'
     );
 
-    // Verify server/routes/reviews.js rejects external URLs, blob URLs, and catalog photos
+    // Verify server/routes/reviews.js rejects external URLs, blob URLs, and catalog photos with HTTP 400 validation errors
     const reviewsRouteSource = fs.readFileSync(path.resolve(__dirname, '../routes/reviews.js'), 'utf8');
     assert.ok(
-      reviewsRouteSource.includes('isValidCustomerPhoto'),
-      'server/routes/reviews.js must define isValidCustomerPhoto'
+      reviewsRouteSource.includes('validateCustomerPhoto'),
+      'server/routes/reviews.js must define validateCustomerPhoto'
     );
 
-    // Test photo validation rules directly: reject external tracking URLs, blobs, catalog imagery
+    // Test photo validation rules directly: reject external tracking URLs, blobs, catalog imagery, and oversized payloads with 400
     const reviewsModule = require('../routes/reviews');
     const testProductForPhoto = testReviewDb.prepare('SELECT id FROM products LIMIT 1').get();
     if (testProductForPhoto) {
@@ -3384,34 +3384,64 @@ async function testShopFilterAccessibility() {
 
       const postHandler = reviewsModule.stack.find(layer => layer.route && layer.route.methods.post).route.stack.slice(-1)[0].handle;
 
-      // Submit review containing malicious external URL, blob URL, catalog image, and valid data URL
       const validSampleDataUrl = 'data:image/jpeg;base64,' + Buffer.from('fake-valid-jpeg-image-bytes-content').toString('base64');
       const untrustedBlobUrl = 'blob:http://localhost:5173/e00da989-14a8-48b4-93e1-d687aeebff8c';
       const externalTrackerUrl = 'https://attacker.example/uploads/pixel.png';
       const catalogImageUrl = '/images/sarees/banarasi.jpg';
 
-      let status1 = null;
-      let body1 = null;
-      postHandler({
-        user: { id: photoTestUserId, name: 'Photo Test User' },
-        body: {
-          product_id: testProductForPhoto.id,
-          rating: 5,
-          title: 'Photo Upload Test',
-          comment: 'Testing photo sanitization and persistence',
-          photos: [externalTrackerUrl, untrustedBlobUrl, catalogImageUrl, validSampleDataUrl]
-        }
-      }, {
-        status(c) { status1 = c; return this; },
-        json(b) { body1 = b; return this; }
-      }, () => {});
+      const executePost = (photosPayload) => {
+        let code = null;
+        let response = null;
+        postHandler({
+          user: { id: photoTestUserId, name: 'Photo Test User' },
+          body: {
+            product_id: testProductForPhoto.id,
+            rating: 5,
+            title: 'Photo Upload Test',
+            comment: 'Testing photo sanitization and persistence',
+            photos: photosPayload
+          }
+        }, {
+          status(c) { code = c; return this; },
+          json(b) { response = b; return this; }
+        }, () => {});
+        return { code, response };
+      };
 
-      assert.strictEqual(status1, 201);
+      // 1. External URL must return 400 validation error (not silently dropped)
+      const resExternal = executePost([externalTrackerUrl]);
+      assert.strictEqual(resExternal.code, 400, 'Submitting external image URL must return 400 validation error');
+      assert.ok(resExternal.response.error.includes('external URL'));
+
+      // 2. Blob URL must return 400 validation error
+      const resBlob = executePost([untrustedBlobUrl]);
+      assert.strictEqual(resBlob.code, 400, 'Submitting blob URL must return 400 validation error');
+      assert.ok(resBlob.response.error.includes('blob URL'));
+
+      // 3. Catalog image must return 400 validation error
+      const resCatalog = executePost([catalogImageUrl]);
+      assert.strictEqual(resCatalog.code, 400, 'Submitting catalog photo must return 400 validation error');
+      assert.ok(resCatalog.response.error.includes('catalog imagery'));
+
+      // 4. Oversized photo (> 2MB) must return 400 validation error
+      const oversizedB64 = 'data:image/jpeg;base64,' + Buffer.alloc(2.2 * 1024 * 1024, 'a').toString('base64');
+      const resOversized = executePost([oversizedB64]);
+      assert.strictEqual(resOversized.code, 400, 'Submitting photo > 2MB must return 400 validation error');
+      assert.ok(resOversized.response.error.includes('exceeds the 2MB size limit'));
+
+      // 5. More than 3 photos must return 400 validation error
+      const resTooMany = executePost([validSampleDataUrl, validSampleDataUrl, validSampleDataUrl, validSampleDataUrl]);
+      assert.strictEqual(resTooMany.code, 400, 'Submitting > 3 photos must return 400 validation error');
+      assert.ok(resTooMany.response.error.includes('maximum of 3 photos'));
+
+      // 6. Valid photos (<= 3 photos, <= 2MB each, <= 6MB aggregate) must succeed with 201
+      const resValid = executePost([validSampleDataUrl]);
+      assert.strictEqual(resValid.code, 201, 'Valid customer photo must return 201 Created');
       const insertedReview = testReviewDb.prepare('SELECT photos FROM reviews WHERE user_id = ? AND product_id = ?').get(photoTestUserId, testProductForPhoto.id);
-      assert.ok(insertedReview && insertedReview.photos, 'Valid data URL photo must be persisted');
+      assert.ok(insertedReview && insertedReview.photos);
       const savedPhotos = JSON.parse(insertedReview.photos);
-      assert.strictEqual(savedPhotos.length, 1, 'Only genuine data URL must be accepted; external tracker, blob, and catalog URLs must be rejected');
-      assert.strictEqual(savedPhotos[0], validSampleDataUrl, 'Persisted photo must match validated data URL');
+      assert.strictEqual(savedPhotos.length, 1);
+      assert.strictEqual(savedPhotos[0], validSampleDataUrl);
 
       // Clean up
       testReviewDb.prepare('DELETE FROM reviews WHERE user_id = ?').run(photoTestUserId);

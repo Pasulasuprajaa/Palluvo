@@ -18,7 +18,10 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
   if (!isOpen || !product) return null;
 
-  const resizeImageToDataUrl = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.85) => {
+  const MAX_PHOTO_BYTES = 2 * 1024 * 1024; // 2MB binary limit per photo
+  const MAX_AGGREGATE_PHOTO_BYTES = 6 * 1024 * 1024; // 6MB total limit across all photos
+
+  const resizeImageToDataUrl = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.82) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -45,16 +48,40 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext('2d');
+            // Fill white background in case of transparent PNG/WebP
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
             ctx.drawImage(img, 0, 0, width, height);
 
-            const format = file.type === 'image/png' ? 'image/png' : (file.type === 'image/webp' ? 'image/webp' : 'image/jpeg');
-            const resizedDataUrl = canvas.toDataURL(format, quality);
+            // Export as JPEG so browser strictly honors quality compression (PNG ignores quality)
+            let resizedDataUrl = canvas.toDataURL('image/jpeg', quality);
+
+            // Enforce matching per-photo cap (2MB) after resizing
+            let base64Part = resizedDataUrl.split(',')[1] || '';
+            let byteLength = Math.ceil((base64Part.length * 3) / 4);
+
+            if (byteLength > MAX_PHOTO_BYTES) {
+              // Retry with smaller dimensions and lower quality if initial pass exceeds cap
+              canvas.width = Math.round(width * 0.7);
+              canvas.height = Math.round(height * 0.7);
+              ctx.fillStyle = '#FFFFFF';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              resizedDataUrl = canvas.toDataURL('image/jpeg', 0.75);
+
+              base64Part = resizedDataUrl.split(',')[1] || '';
+              byteLength = Math.ceil((base64Part.length * 3) / 4);
+              if (byteLength > MAX_PHOTO_BYTES) {
+                return resolve(null);
+              }
+            }
+
             resolve(resizedDataUrl);
           } catch (e) {
-            resolve(rawDataUrl);
+            resolve(null);
           }
         };
-        img.onerror = () => resolve(rawDataUrl);
+        img.onerror = () => resolve(null);
         img.src = rawDataUrl;
       };
       reader.onerror = () => resolve(null);
@@ -74,23 +101,39 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
     const selectedFiles = files.slice(0, remainingSlots);
 
+    // Calculate current aggregate bytes
+    let currentAggregateBytes = photos.reduce((acc, p) => {
+      const b64 = p.split(',')[1] || '';
+      return acc + Math.ceil((b64.length * 3) / 4);
+    }, 0);
+
     for (const file of selectedFiles) {
       if (!file.type || !file.type.startsWith('image/')) {
-        showToast('Only image files (PNG, JPEG, WebP) are supported.', 'error');
+        showToast(`"${file.name}" is not a supported image file (PNG, JPEG, WebP).`, 'error');
         continue;
       }
-      if (file.size > 5 * 1024 * 1024) {
-        showToast('Image size must be under 5MB.', 'error');
+      if (file.size > 10 * 1024 * 1024) {
+        showToast(`"${file.name}" exceeds the 10MB limit.`, 'error');
         continue;
       }
 
       const resized = await resizeImageToDataUrl(file);
-      if (resized) {
-        setPhotos((prev) => {
-          if (prev.length >= 3) return prev;
-          return [...prev, resized];
-        });
+      if (!resized) {
+        showToast(`Photo "${file.name}" exceeds the 2MB limit after compression.`, 'error');
+        continue;
       }
+
+      const newPhotoBytes = Math.ceil(((resized.split(',')[1] || '').length * 3) / 4);
+      if (currentAggregateBytes + newPhotoBytes > MAX_AGGREGATE_PHOTO_BYTES) {
+        showToast('Total photo attachments cannot exceed the 6MB limit.', 'error');
+        break;
+      }
+
+      currentAggregateBytes += newPhotoBytes;
+      setPhotos((prev) => {
+        if (prev.length >= 3) return prev;
+        return [...prev, resized];
+      });
     }
 
     e.target.value = '';
