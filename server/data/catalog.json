@@ -82,10 +82,7 @@
       "discount_percent": 32,
       "silk_mark_certified": 1,
       "primary_image": "/images/sarees/banarasi_crimson.jpg",
-      "sku": "PAL-BAN-001",
-      "stock_quantity": 25,
-      "rating": 4.98,
-      "review_count": 148
+      "sku": "PAL-BAN-001"
     },
     {
       "id": 273,
@@ -103,10 +100,7 @@
       "discount_percent": 31,
       "silk_mark_certified": 1,
       "primary_image": "/images/sarees/kanjivaram_gold.jpg",
-      "sku": "PAL-KAN-002",
-      "stock_quantity": 12,
-      "rating": 4.88,
-      "review_count": 92
+      "sku": "PAL-KAN-002"
     },
     {
       "id": 274,
@@ -124,10 +118,7 @@
       "discount_percent": 32,
       "silk_mark_certified": 1,
       "primary_image": "/images/sarees/kanjivaram_peacock_blue.jpg",
-      "sku": "PAL-KAN-009",
-      "stock_quantity": 15,
-      "rating": 4.96,
-      "review_count": 124
+      "sku": "PAL-KAN-009"
     },
     {
       "id": 275,
@@ -145,10 +136,7 @@
       "discount_percent": 35,
       "silk_mark_certified": 0,
       "primary_image": "/images/sarees/organza_rose.jpg",
-      "sku": "PAL-ORG-003",
-      "stock_quantity": 24,
-      "rating": 4.8,
-      "review_count": 76
+      "sku": "PAL-ORG-003"
     },
     {
       "id": 276,
@@ -166,10 +154,7 @@
       "discount_percent": 32,
       "silk_mark_certified": 1,
       "primary_image": "/images/sarees/paithani_purple.jpg",
-      "sku": "PAL-PAI-011",
-      "stock_quantity": 10,
-      "rating": 4.89,
-      "review_count": 62
+      "sku": "PAL-PAI-011"
     },
     {
       "id": 277,
@@ -187,10 +172,7 @@
       "discount_percent": 33,
       "silk_mark_certified": 0,
       "primary_image": "/images/sarees/designer_black.jpg",
-      "sku": "PAL-DES-005",
-      "stock_quantity": 22,
-      "rating": 4.94,
-      "review_count": 110
+      "sku": "PAL-DES-005"
     },
     {
       "id": 278,
@@ -208,10 +190,7 @@
       "discount_percent": 34,
       "silk_mark_certified": 1,
       "primary_image": "/images/sarees/bridal_sindoor.jpg",
-      "sku": "PAL-BRI-008",
-      "stock_quantity": 8,
-      "rating": 4.87,
-      "review_count": 42
+      "sku": "PAL-BRI-008"
     },
     {
       "id": 279,
@@ -229,10 +208,7 @@
       "discount_percent": 37,
       "silk_mark_certified": 0,
       "primary_image": "/images/sarees/cotton_mulmul.jpg",
-      "sku": "PAL-COT-007",
-      "stock_quantity": 35,
-      "rating": 4.92,
-      "review_count": 96
+      "sku": "PAL-COT-007"
     },
     {
       "id": 280,
@@ -250,10 +226,7 @@
       "discount_percent": 31,
       "silk_mark_certified": 0,
       "primary_image": "/images/categories/silk.jpg",
-      "sku": "PAL-CHA-004",
-      "stock_quantity": 20,
-      "rating": 4.75,
-      "review_count": 53
+      "sku": "PAL-CHA-004"
     },
     {
       "id": 281,
@@ -271,10 +244,7 @@
       "discount_percent": 33,
       "silk_mark_certified": 0,
       "primary_image": "/images/categories/designer.jpg",
-      "sku": "PAL-GOT-010",
-      "stock_quantity": 19,
-      "rating": 4.85,
-      "review_count": 67
+      "sku": "PAL-GOT-010"
     },
     {
       "id": 282,
@@ -292,10 +262,7 @@
       "discount_percent": 33,
       "silk_mark_certified": 1,
       "primary_image": "/images/sarees/banarasi_crimson.jpg",
-      "sku": "PAL-BAN-012",
-      "stock_quantity": 14,
-      "rating": 4.93,
-      "review_count": 58
+      "sku": "PAL-BAN-012"
     },
     {
       "id": 283,
@@ -313,10 +280,7 @@
       "discount_percent": 31,
       "silk_mark_certified": 1,
       "primary_image": "/images/sarees/chanderi_tissue.jpg",
-      "sku": "PAL-KAN-013",
-      "stock_quantity": 8,
-      "rating": 4.86,
-      "review_count": 36
+      "sku": "PAL-KAN-013"
     },
     {
       "id": 284,
@@ -334,10 +298,7 @@
       "discount_percent": 34,
       "silk_mark_certified": 0,
       "primary_image": "/images/sarees/cotton_mulmul.jpg",
-      "sku": "PAL-COT-014",
-      "stock_quantity": 26,
-      "rating": 4.8,
-      "review_count": 51
+      "sku": "PAL-COT-014"
     },
     {
       "id": 285,
@@ -355,10 +316,7 @@
       "discount_percent": 34,
       "silk_mark_certified": 0,
       "primary_image": "/images/sarees/designer_black.jpg",
-      "sku": "PAL-DES-015",
-      "stock_quantity": 28,
-      "rating": 4.82,
-      "review_count": 64
+      "sku": "PAL-DES-015"
     },
     {
       "id": 286,
@@ -376,10 +334,7 @@
       "discount_percent": 30,
       "silk_mark_certified": 1,
       "primary_image": "/images/sarees/kanjivaram_gold.jpg",
-      "sku": "PAL-BRI-016",
-      "stock_quantity": 6,
-      "rating": 4.85,
-      "review_count": 31
+      "sku": "PAL-BRI-016"
     },
     {
       "id": 287,
@@ -397,10 +352,7 @@
       "discount_percent": 31,
       "silk_mark_certified": 1,
       "primary_image": "/images/sarees/banarasi_crimson.jpg",
-      "sku": "PAL-BAN-017",
-      "stock_quantity": 16,
-      "rating": 4.88,
-      "review_count": 47
+      "sku": "PAL-BAN-017"
     },
     {
       "id": 288,
@@ -418,10 +370,7 @@
       "discount_percent": 32,
       "silk_mark_certified": 1,
       "primary_image": "/images/sarees/kanjivaram_peacock_blue.jpg",
-      "sku": "PAL-KAN-018",
-      "stock_quantity": 12,
-      "rating": 4.9,
-      "review_count": 53
+      "sku": "PAL-KAN-018"
     },
     {
       "id": 289,
@@ -439,10 +388,7 @@
       "discount_percent": 32,
       "silk_mark_certified": 1,
       "primary_image": "/images/sarees/chanderi_tissue.jpg",
-      "sku": "PAL-MYS-019",
-      "stock_quantity": 20,
-      "rating": 4.86,
-      "review_count": 73
+      "sku": "PAL-MYS-019"
     },
     {
       "id": 290,
@@ -460,10 +406,7 @@
       "discount_percent": 34,
       "silk_mark_certified": 0,
       "primary_image": "/images/sarees/organza_rose.jpg",
-      "sku": "PAL-ORG-020",
-      "stock_quantity": 18,
-      "rating": 4.79,
-      "review_count": 44
+      "sku": "PAL-ORG-020"
     },
     {
       "id": 291,
@@ -481,10 +424,7 @@
       "discount_percent": 33,
       "silk_mark_certified": 0,
       "primary_image": "/images/sarees/cotton_mulmul.jpg",
-      "sku": "PAL-COT-021",
-      "stock_quantity": 25,
-      "rating": 4.74,
-      "review_count": 65
+      "sku": "PAL-COT-021"
     },
     {
       "id": 292,
@@ -502,10 +442,7 @@
       "discount_percent": 33,
       "silk_mark_certified": 0,
       "primary_image": "/images/sarees/designer_marigold.jpg",
-      "sku": "PAL-DES-022",
-      "stock_quantity": 20,
-      "rating": 4.85,
-      "review_count": 59
+      "sku": "PAL-DES-022"
     },
     {
       "id": 293,
@@ -523,10 +460,7 @@
       "discount_percent": 33,
       "silk_mark_certified": 0,
       "primary_image": "/images/sarees/designer_black.jpg",
-      "sku": "PAL-DES-023",
-      "stock_quantity": 22,
-      "rating": 4.8,
-      "review_count": 70
+      "sku": "PAL-DES-023"
     },
     {
       "id": 294,
@@ -544,10 +478,7 @@
       "discount_percent": 33,
       "silk_mark_certified": 0,
       "primary_image": "/images/sarees/velvet_zardozi.jpg",
-      "sku": "PAL-BRI-024",
-      "stock_quantity": 5,
-      "rating": 4.84,
-      "review_count": 28
+      "sku": "PAL-BRI-024"
     }
   ]
 }

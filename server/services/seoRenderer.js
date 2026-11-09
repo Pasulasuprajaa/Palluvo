@@ -40,7 +40,9 @@ function findProductBySlug(slug) {
     try {
       const p = database.prepare(`
         SELECT p.id, p.name, p.slug, p.tagline, p.short_desc, p.description,
-               p.price, p.mrp, p.stock_quantity, p.rating, p.review_count,
+               p.price, p.mrp, p.stock_quantity,
+               (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE product_id = p.id) as rating,
+               (SELECT COUNT(*) FROM reviews WHERE product_id = p.id) as review_count,
                p.category_id, p.fabric, p.sku,
                c.name as category_name, c.slug as category_slug,
                (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) as primary_img

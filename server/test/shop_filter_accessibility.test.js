@@ -2963,9 +2963,21 @@ async function testShopFilterAccessibility() {
     assert.ok(productSchema.offers, 'Product schema must include offers');
     assert.strictEqual(productSchema.offers.priceCurrency, 'INR', 'Product offer priceCurrency must be INR');
     assert.ok(productSchema.offers.price > 0, 'Product offer price must be > 0');
-    assert.ok(productSchema.offers.availability.includes('InStock'), 'Product offer availability must be InStock');
-    if (productSchema.aggregateRating) {
-      assert.ok(productSchema.aggregateRating.ratingValue > 0, 'Product aggregateRating must have ratingValue');
+    const db = require('../db/database');
+    const dbProduct = db.prepare('SELECT id, slug, stock_quantity FROM products WHERE slug = ?').get('royal-crimson-banarasi-katan-silk-saree');
+    if (dbProduct && dbProduct.stock_quantity !== undefined && dbProduct.stock_quantity !== null) {
+      assert.ok(productSchema.offers.availability.includes('InStock'), 'Product offer availability must be InStock when in stock in DB');
+      const reviewAggregate = db.prepare('SELECT COUNT(*) as count, ROUND(AVG(rating), 1) as avg_rating FROM reviews WHERE product_id = ?').get(dbProduct.id);
+      if (reviewAggregate && reviewAggregate.count > 0) {
+        assert.ok(productSchema.aggregateRating, 'Product with reviews in DB must have aggregateRating');
+        assert.strictEqual(productSchema.aggregateRating.reviewCount, reviewAggregate.count, 'Review count must match reviews table aggregate');
+        assert.strictEqual(productSchema.aggregateRating.ratingValue, reviewAggregate.avg_rating, 'Rating value must match reviews table average');
+      } else {
+        assert.strictEqual(productSchema.aggregateRating, undefined, 'Product with 0 reviews in DB must omit aggregateRating');
+      }
+    } else {
+      assert.strictEqual(productSchema.offers.availability, undefined, 'Product offer availability must be omitted without synchronized stock');
+      assert.strictEqual(productSchema.aggregateRating, undefined, 'Product aggregateRating must be omitted without review aggregate');
     }
 
     const breadcrumbSchema = productMeta.structuredData.find(s => s['@type'] === 'BreadcrumbList');
@@ -3016,15 +3028,25 @@ async function testShopFilterAccessibility() {
     }, 'https://palluvo.com/sarees/sold-out-saree', 'https://palluvo.com/img.jpg', 'Desc');
     assert.strictEqual(outOfStockProductSchema.offers.availability, 'https://schema.org/OutOfStock');
 
-    // Verify server catalog fallback path preserves verified stock from catalog.json
+    // Verify server catalog fallback path omits unsynchronized stock/ratings to prevent stale schema claims
     const catalogData = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../data/catalog.json'), 'utf8'));
     assert.ok(catalogData.products.length >= 23, 'catalog.json must contain at least 23 products');
     for (const catProd of catalogData.products) {
       assert.ok(catProd.price > 0, `Catalog product ${catProd.slug} must have verified price`);
-      assert.strictEqual(typeof catProd.stock_quantity, 'number', `Catalog product ${catProd.slug} must have verified stock_quantity`);
-      assert.strictEqual(typeof catProd.rating, 'number', `Catalog product ${catProd.slug} must have verified rating`);
-      assert.strictEqual(typeof catProd.review_count, 'number', `Catalog product ${catProd.slug} must have verified review_count`);
+      assert.strictEqual(catProd.stock_quantity, undefined, `Catalog fallback product ${catProd.slug} must not have hardcoded stock_quantity`);
+      assert.strictEqual(catProd.rating, undefined, `Catalog fallback product ${catProd.slug} must not have hardcoded rating`);
+      assert.strictEqual(catProd.review_count, undefined, `Catalog fallback product ${catProd.slug} must not have hardcoded review_count`);
     }
+
+    // Verify catalog fallback strictly omits availability and aggregateRating when live inventory and reviews are absent
+    const fallbackMeta = generateProductJsonLd(
+      catalogData.products[0],
+      `https://palluvo.com/sarees/${catalogData.products[0].slug}`,
+      'https://palluvo.com/img.jpg',
+      catalogData.products[0].description
+    );
+    assert.strictEqual(fallbackMeta.offers.availability, undefined, 'Fallback without live inventory must omit offers.availability');
+    assert.strictEqual(fallbackMeta.aggregateRating, undefined, 'Fallback without live reviews must omit aggregateRating');
 
     // Verify catalog fallback when product has no stock_quantity strictly omits availability
     const mockFallbackWithoutStock = {
