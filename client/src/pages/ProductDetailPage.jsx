@@ -39,6 +39,7 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   const [bankOffersOpen, setBankOffersOpen] = useState(false);
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [isUserVerifiedBuyer, setIsUserVerifiedBuyer] = useState(false);
 
   // Blouse Customization State (Flipkart Fashion / Amazon Apparel feature)
   const [blouseOption, setBlouseOption] = useState('unstitched'); // 'unstitched' | 'standard' | 'custom'
@@ -55,6 +56,31 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   const { addToCompare, isInCompare } = useCompare();
   const { user } = useAuth();
   const { showToast } = useToast();
+  // Verify whether the logged-in customer has a paid purchase for this product
+  useEffect(() => {
+    let isSubscribed = true;
+    const token = localStorage.getItem('palluvo_token');
+    if (token && product?.id) {
+      fetch(`/api/reviews/check-purchase/${product.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (isSubscribed) {
+            setIsUserVerifiedBuyer(Boolean(data?.verified_purchase));
+          }
+        })
+        .catch(() => {
+          if (isSubscribed) setIsUserVerifiedBuyer(false);
+        });
+    } else {
+      setIsUserVerifiedBuyer(false);
+    }
+    return () => {
+      isSubscribed = false;
+    };
+  }, [product?.id, user]);
+
 
   // Lightbox Focus Trapping, Escape Key Handling, and Scroll Lock
   useEffect(() => {
@@ -234,10 +260,13 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
   // Rating breakdown stats calculation
   const reviews = product.reviews || [];
   const ratingDist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  let verifiedReviewsCount = 0;
   reviews.forEach(r => {
     if (ratingDist[r.rating] !== undefined) ratingDist[r.rating]++;
+    if (r.verified_purchase === 1) verifiedReviewsCount++;
   });
   const totalReviewsCount = reviews.length || product.review_count || 0;
+  const isAllVerified = totalReviewsCount > 0 && reviews.length > 0 && verifiedReviewsCount === totalReviewsCount;
 
   const isSilkMarkCertified = Boolean(
     product && (Number(product.silk_mark_certified) === 1 || product.silk_mark_certified === true)
@@ -864,7 +893,11 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                   </div>
                   <p className="text-xs text-gray-600">
                     {totalReviewsCount > 0
-                      ? `Based on ${totalReviewsCount} verified customer ${totalReviewsCount === 1 ? 'rating' : 'ratings'}`
+                      ? (isAllVerified
+                          ? `Based on ${totalReviewsCount} verified customer ${totalReviewsCount === 1 ? 'rating' : 'ratings'}`
+                          : verifiedReviewsCount > 0
+                          ? `Based on ${totalReviewsCount} customer ${totalReviewsCount === 1 ? 'rating' : 'ratings'} (${verifiedReviewsCount} verified)`
+                          : `Based on ${totalReviewsCount} customer ${totalReviewsCount === 1 ? 'rating' : 'ratings'}`)
                       : 'No customer reviews recorded yet'}
                   </p>
                   {totalReviewsCount > 0 && (
@@ -881,7 +914,7 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                     }}
                     className="mt-4 px-5 py-2.5 bg-[#5B1425] hover:bg-[#430e1b] text-white text-xs font-bold rounded-xl transition shadow cursor-pointer"
                   >
-                    Write a Verified Review
+                    {isUserVerifiedBuyer ? 'Write a Verified Review' : 'Write a Review'}
                   </button>
                 </div>
 

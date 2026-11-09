@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Star, Upload, Sparkles, Check, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -15,15 +15,49 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
   const [fabricFeel, setFabricFeel] = useState('Ultra Soft & Luxurious');
   const [photos, setPhotos] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isProcessingPhotos, setIsProcessingPhotos] = useState(false);
+  const [isVerifiedBuyer, setIsVerifiedBuyer] = useState(false);
+
+  // Invalidation token to track and invalidate pending in-flight photo conversions
+  const conversionSessionRef = useRef(0);
 
   // Clear photo drafts and review form fields whenever product.id changes
   useEffect(() => {
+    conversionSessionRef.current += 1;
+    setIsProcessingPhotos(false);
     setPhotos([]);
     setTitle('');
     setComment('');
     setRating(5);
     setHoverRating(0);
   }, [product?.id]);
+
+  // Check if authenticated user has completed a paid purchase for this product
+  useEffect(() => {
+    let isSubscribed = true;
+    const token = localStorage.getItem('palluvo_token');
+    if (token && product?.id) {
+      fetch(`/api/reviews/check-purchase/${product.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (isSubscribed) {
+            setIsVerifiedBuyer(Boolean(data?.verified_purchase));
+          }
+        })
+        .catch(() => {
+          if (isSubscribed) setIsVerifiedBuyer(false);
+        });
+    } else {
+      setIsVerifiedBuyer(false);
+    }
+
+    return () => {
+      isSubscribed = false;
+      conversionSessionRef.current += 1;
+    };
+  }, [product?.id, user]);
 
   if (!isOpen || !product) return null;
 
@@ -110,42 +144,62 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
     const selectedFiles = files.slice(0, remainingSlots);
 
-    // Calculate current aggregate bytes
-    let currentAggregateBytes = photos.reduce((acc, p) => {
-      const b64 = p.split(',')[1] || '';
-      return acc + Math.ceil((b64.length * 3) / 4);
-    }, 0);
+    // Increment session token to invalidate previous runs and tie conversions to this session
+    conversionSessionRef.current += 1;
+    const currentSession = conversionSessionRef.current;
+    setIsProcessingPhotos(true);
 
-    for (const file of selectedFiles) {
-      if (!file.type || !file.type.startsWith('image/')) {
-        showToast(`"${file.name}" is not a supported image file (PNG, JPEG, WebP).`, 'error');
-        continue;
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        showToast(`"${file.name}" exceeds the 10MB limit.`, 'error');
-        continue;
-      }
+    try {
+      // Calculate current aggregate bytes
+      let currentAggregateBytes = photos.reduce((acc, p) => {
+        const b64 = p.split(',')[1] || '';
+        return acc + Math.ceil((b64.length * 3) / 4);
+      }, 0);
 
-      const resized = await resizeImageToDataUrl(file);
-      if (!resized) {
-        showToast(`Photo "${file.name}" exceeds the 2MB limit after compression.`, 'error');
-        continue;
-      }
+      for (const file of selectedFiles) {
+        // Guard: check if session was invalidated (e.g. closed or product changed)
+        if (conversionSessionRef.current !== currentSession) return;
 
-      const newPhotoBytes = Math.ceil(((resized.split(',')[1] || '').length * 3) / 4);
-      if (currentAggregateBytes + newPhotoBytes > MAX_AGGREGATE_PHOTO_BYTES) {
-        showToast('Total photo attachments cannot exceed the 6MB limit.', 'error');
-        break;
-      }
+        if (!file.type || !file.type.startsWith('image/')) {
+          showToast(`"${file.name}" is not a supported image file (PNG, JPEG, WebP).`, 'error');
+          continue;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          showToast(`"${file.name}" exceeds the 10MB limit.`, 'error');
+          continue;
+        }
 
-      currentAggregateBytes += newPhotoBytes;
-      setPhotos((prev) => {
-        if (prev.length >= 3) return prev;
-        return [...prev, resized];
-      });
+        const resized = await resizeImageToDataUrl(file);
+
+        // Guard: check again after async await if session was invalidated
+        if (conversionSessionRef.current !== currentSession) return;
+
+        if (!resized) {
+          showToast(`Photo "${file.name}" exceeds the 2MB limit after compression.`, 'error');
+          continue;
+        }
+
+        const newPhotoBytes = Math.ceil(((resized.split(',')[1] || '').length * 3) / 4);
+        if (currentAggregateBytes + newPhotoBytes > MAX_AGGREGATE_PHOTO_BYTES) {
+          showToast('Total photo attachments cannot exceed the 6MB limit.', 'error');
+          break;
+        }
+
+        currentAggregateBytes += newPhotoBytes;
+        setPhotos((prev) => {
+          if (conversionSessionRef.current !== currentSession) return prev;
+          if (prev.length >= 3) return prev;
+          return [...prev, resized];
+        });
+      }
+    } finally {
+      if (conversionSessionRef.current === currentSession) {
+        setIsProcessingPhotos(false);
+      }
+      if (e.target) {
+        e.target.value = '';
+      }
     }
-
-    e.target.value = '';
   };
 
   const handleRemovePhoto = (idx) => {
@@ -153,6 +207,8 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
   };
 
   const handleClose = () => {
+    conversionSessionRef.current += 1; // Invalidate all pending photo conversions immediately
+    setIsProcessingPhotos(false);
     setPhotos([]);
     setTitle('');
     setComment('');
@@ -163,11 +219,16 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isProcessingPhotos) {
+      showToast('Please wait for photos to finish processing before submitting.', 'info');
+      return;
+    }
     if (!comment.trim()) {
       showToast('Please share your drape experience in the review comment.', 'error');
       return;
     }
 
+    conversionSessionRef.current += 1; // Invalidate any lingering background conversions
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('palluvo_token');
@@ -194,7 +255,11 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
       setComment('');
       setRating(5);
       setHoverRating(0);
-      showToast('✨ Thank you! Your review has been published with Verified Drape badge.', 'success');
+      if (data.verified_purchase) {
+        showToast('✨ Thank you! Your review has been published with a Verified Drape badge.', 'success');
+      } else {
+        showToast('✨ Thank you! Your review has been published.', 'success');
+      }
       if (onReviewSubmitted) onReviewSubmitted();
       onClose();
     } catch (err) {
@@ -214,9 +279,16 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
               <Star className="w-5 h-5 fill-[#C5A059]" />
             </div>
             <div>
-              <h3 className="font-serif font-bold text-lg text-[#E5D3B3]">
-                Write a Verified Review
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-serif font-bold text-lg text-[#E5D3B3]">
+                  {isVerifiedBuyer ? 'Write a Verified Review' : 'Write a Review'}
+                </h3>
+                {isVerifiedBuyer && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                    <Check className="w-3 h-3 text-emerald-400" /> Verified Buyer
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-white/70 line-clamp-1">
                 {product.name}
               </p>
@@ -225,6 +297,7 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
           <button
             onClick={handleClose}
             className="p-1.5 text-white/80 hover:text-white rounded-full hover:bg-white/10 transition cursor-pointer"
+            aria-label="Close review modal"
           >
             <X className="w-5 h-5" />
           </button>
@@ -351,10 +424,18 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
               {photos.length < 3 && (
                 <label
                   htmlFor="review-attach-photo"
-                  className="flex flex-col items-center justify-center w-16 h-16 rounded-lg border-2 border-dashed border-[#C5A059] bg-white text-gray-500 hover:text-[#5B1425] hover:bg-[#FAF0E6] transition cursor-pointer text-[10px]"
+                  className={`flex flex-col items-center justify-center w-16 h-16 rounded-lg border-2 border-dashed border-[#C5A059] bg-white text-gray-500 hover:text-[#5B1425] hover:bg-[#FAF0E6] transition cursor-pointer text-[10px] ${
+                    isProcessingPhotos || isSubmitting ? 'opacity-50 pointer-events-none' : ''
+                  }`}
                 >
-                  <Upload className="w-4 h-4 text-[#C5A059]" />
-                  <span>Upload</span>
+                  {isProcessingPhotos ? (
+                    <span className="text-[9px] text-[#5B1425] font-semibold text-center px-1">Processing...</span>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 text-[#C5A059]" />
+                      <span>Upload</span>
+                    </>
+                  )}
                 </label>
               )}
 
@@ -363,6 +444,7 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
                 type="file"
                 accept="image/png, image/jpeg, image/webp"
                 multiple
+                disabled={isProcessingPhotos || isSubmitting}
                 onChange={handleFileSelect}
                 className="sr-only"
               />
@@ -380,11 +462,17 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isProcessingPhotos}
               className="flex items-center gap-2 px-6 py-2.5 bg-[#5B1425] hover:bg-[#430e1b] text-white text-xs font-semibold rounded-xl transition shadow disabled:opacity-50 cursor-pointer"
             >
               <Sparkles className="w-4 h-4 text-[#C5A059]" />
-              <span>{isSubmitting ? 'Publishing...' : 'Submit Verified Review'}</span>
+              <span>
+                {isSubmitting
+                  ? 'Publishing...'
+                  : isProcessingPhotos
+                  ? 'Processing Photos...'
+                  : (isVerifiedBuyer ? 'Submit Verified Review' : 'Submit Review')}
+              </span>
             </button>
           </div>
         </form>

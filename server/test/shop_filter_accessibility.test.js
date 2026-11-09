@@ -3450,6 +3450,7 @@ async function testShopFilterAccessibility() {
       // 6. Valid photos (<= 3 photos, <= 2MB each, <= 6MB aggregate) must succeed with 201
       const resValid = executePost([validSampleDataUrl]);
       assert.strictEqual(resValid.code, 201, 'Valid customer photo must return 201 Created');
+      assert.strictEqual(typeof resValid.response.verified_purchase, 'boolean', 'Review response must return verified_purchase boolean');
       const insertedReview = testReviewDb.prepare('SELECT photos FROM reviews WHERE user_id = ? AND product_id = ?').get(photoTestUserId, testProductForPhoto.id);
       assert.ok(insertedReview && insertedReview.photos);
       const savedPhotos = JSON.parse(insertedReview.photos);

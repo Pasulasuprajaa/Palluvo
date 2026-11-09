@@ -70,6 +70,23 @@ function isValidCustomerPhoto(photo) {
   return validateCustomerPhoto(photo).valid;
 }
 
+// GET /api/reviews/check-purchase/:productId (Check if authenticated user has completed a paid purchase for this product)
+router.get('/check-purchase/:productId', authenticateToken, (req, res) => {
+  try {
+    const purchased = db.prepare(`
+      SELECT 1 FROM orders o
+      JOIN order_items oi ON o.id = oi.order_id
+      WHERE o.user_id = ? AND oi.product_id = ? AND o.payment_status = 'Paid'
+      LIMIT 1
+    `).get(req.user.id, req.params.productId);
+
+    res.json({ verified_purchase: Boolean(purchased) });
+  } catch (err) {
+    console.error('Check purchase error:', err);
+    res.json({ verified_purchase: false });
+  }
+});
+
 // GET /api/reviews/:productId
 router.get('/:productId', (req, res) => {
   try {
@@ -85,12 +102,16 @@ router.get('/:productId', (req, res) => {
     const total = reviews.length;
     const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
     let sum = 0;
+    let verifiedCount = 0;
 
     reviews.forEach(r => {
       if (distribution[r.rating] !== undefined) {
         distribution[r.rating]++;
       }
       sum += r.rating;
+      if (r.verified_purchase === 1) {
+        verifiedCount++;
+      }
     });
 
     const averageRating = total > 0 ? parseFloat((sum / total).toFixed(1)) : 5.0;
@@ -99,6 +120,7 @@ router.get('/:productId', (req, res) => {
       reviews,
       stats: {
         total,
+        verifiedCount,
         averageRating,
         distribution
       }
@@ -234,7 +256,8 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
 
     res.status(201).json({
       message: existing ? 'Your review has been updated.' : 'Thank you! Your review has been published.',
-      updated: Boolean(existing)
+      updated: Boolean(existing),
+      verified_purchase: isVerified === 1
     });
   } catch (err) {
     console.error('Post review error:', err);
