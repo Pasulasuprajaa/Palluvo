@@ -33,7 +33,7 @@ export default function ProductCard({ product, onNavigate, imageLoading = 'lazy'
       return; // Allow native middle click / Ctrl+click / new tab
     }
     e.preventDefault();
-    onNavigate('product', { slug: product.slug, image: primaryImg, name: product.name });
+    onNavigate('product', { slug: product.slug, image: primaryImg, name: product.name, product });
   };
 
   const handleQuickView = (e) => {

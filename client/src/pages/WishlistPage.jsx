@@ -57,7 +57,8 @@ export default function WishlistPage({ onNavigate }) {
                   onNavigate('product', {
                     slug: item.slug,
                     image: item.primary_image || item.image_url,
-                    name: item.name
+                    name: item.name,
+                    product: item
                   });
                 }}
                 aria-label={`View ${item.name}`}
@@ -92,7 +93,8 @@ export default function WishlistPage({ onNavigate }) {
                   onNavigate('product', {
                     slug: item.slug,
                     image: item.primary_image || item.image_url,
-                    name: item.name
+                    name: item.name,
+                    product: item
                   });
                 }}
                 className="block group-hover:text-[#5B1425] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C5A059] rounded-lg"

@@ -227,14 +227,20 @@ export function updatePageMeta(page, params = {}) {
   setCanonicalUrl(url);
 
   // Manage JSON-LD Structured Data
-  let ldJsonScript = document.querySelector('script[data-schema="product-jsonld"]');
+  // Clear any existing application/ld+json script tags before updating
+  if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+    const existingLdScripts = document.querySelectorAll('script[type="application/ld+json"], script[data-schema="product-jsonld"]');
+    if (existingLdScripts && typeof existingLdScripts.forEach === 'function') {
+      existingLdScripts.forEach(el => {
+        if (el && typeof el.remove === 'function') {
+          el.remove();
+        }
+      });
+    }
+  }
+
   if (page === 'product' && (params.product || params.slug)) {
     const prod = params.product || {};
-    const price = typeof prod.price === 'number' ? prod.price : (parseFloat(prod.price) || 0);
-    const stock = prod.stock_quantity !== undefined && prod.stock_quantity !== null ? prod.stock_quantity : 10;
-    const inStock = stock > 0;
-    const ratingVal = parseFloat(prod.rating) || 4.9;
-    const reviewCount = parseInt(prod.review_count || prod.reviews_count || 12, 10);
     const prodName = params.name || prod.name || 'PALLUVO Saree';
 
     const productSchema = {
@@ -247,27 +253,47 @@ export function updatePageMeta(page, params = {}) {
       brand: {
         '@type': 'Brand',
         name: 'PALLUVO'
-      },
-      offers: {
+      }
+    };
+
+    // Only emit offers when price is verified and > 0
+    const rawPrice = prod.price !== undefined ? prod.price : (prod.offers && prod.offers.price);
+    const numericPrice = typeof rawPrice === 'number' ? rawPrice : parseFloat(rawPrice);
+    if (!isNaN(numericPrice) && numericPrice > 0) {
+      const offer = {
         '@type': 'Offer',
         url: url,
         priceCurrency: 'INR',
-        price: price,
+        price: numericPrice,
         priceValidUntil: '2027-12-31',
         itemCondition: 'https://schema.org/NewCondition',
-        availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
         seller: {
           '@type': 'Organization',
           name: 'PALLUVO'
         }
+      };
+      if (prod.stock_quantity !== undefined && prod.stock_quantity !== null) {
+        const numericStock = typeof prod.stock_quantity === 'number' ? prod.stock_quantity : parseInt(prod.stock_quantity, 10);
+        if (!isNaN(numericStock)) {
+          offer.availability = numericStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+        }
+      } else {
+        offer.availability = 'https://schema.org/InStock';
       }
-    };
+      productSchema.offers = offer;
+    }
 
-    if (ratingVal > 0) {
+    // Only emit aggregateRating when BOTH rating and review count are verified and > 0
+    const rawRating = prod.rating;
+    const numericRating = typeof rawRating === 'number' ? rawRating : parseFloat(rawRating);
+    const rawReviewCount = prod.review_count || prod.reviews_count;
+    const numericReviewCount = typeof rawReviewCount === 'number' ? rawReviewCount : parseInt(rawReviewCount, 10);
+
+    if (!isNaN(numericRating) && numericRating > 0 && !isNaN(numericReviewCount) && numericReviewCount > 0) {
       productSchema.aggregateRating = {
         '@type': 'AggregateRating',
-        ratingValue: ratingVal,
-        reviewCount: reviewCount > 0 ? reviewCount : 1,
+        ratingValue: numericRating,
+        reviewCount: numericReviewCount,
         bestRating: 5,
         worstRating: 1
       };
@@ -283,14 +309,12 @@ export function updatePageMeta(page, params = {}) {
       ]
     };
 
-    if (!ldJsonScript) {
-      ldJsonScript = document.createElement('script');
+    if (typeof document !== 'undefined' && typeof document.createElement === 'function' && document.head && typeof document.head.appendChild === 'function') {
+      const ldJsonScript = document.createElement('script');
       ldJsonScript.setAttribute('type', 'application/ld+json');
       ldJsonScript.setAttribute('data-schema', 'product-jsonld');
+      ldJsonScript.textContent = JSON.stringify([productSchema, breadcrumbSchema], null, 2);
       document.head.appendChild(ldJsonScript);
     }
-    ldJsonScript.textContent = JSON.stringify([productSchema, breadcrumbSchema], null, 2);
-  } else if (ldJsonScript) {
-    ldJsonScript.remove();
   }
 }

@@ -133,7 +133,7 @@ export default function QuickViewModal({ onNavigate }) {
     const image = quickViewProduct.primary_image || (quickViewProduct.images && quickViewProduct.images[0]);
     const name = quickViewProduct.name;
     setQuickViewProduct(null);
-    onNavigate('product', { slug, image, name });
+    onNavigate('product', { slug, image, name, product: quickViewProduct });
   };
 
   return (

@@ -127,7 +127,8 @@ export default function CompareDrawer({ onNavigate }) {
                               onNavigate('product', {
                                 slug: item.slug,
                                 image: item.primary_image || item.images?.[0],
-                                name: item.name
+                                name: item.name,
+                                product: item
                               });
                             }}
                           />

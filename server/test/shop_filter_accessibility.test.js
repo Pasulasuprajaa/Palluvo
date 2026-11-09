@@ -2391,6 +2391,7 @@ async function testShopFilterAccessibility() {
         }
       }),
       querySelector: (selector) => null,
+      querySelectorAll: (selector) => [],
       head: {
         appendChild: () => {}
       }
@@ -2963,8 +2964,9 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(productSchema.offers.priceCurrency, 'INR', 'Product offer priceCurrency must be INR');
     assert.ok(productSchema.offers.price > 0, 'Product offer price must be > 0');
     assert.ok(productSchema.offers.availability.includes('InStock'), 'Product offer availability must be InStock');
-    assert.ok(productSchema.aggregateRating, 'Product schema must include aggregateRating');
-    assert.ok(productSchema.aggregateRating.ratingValue > 0, 'Product aggregateRating must have ratingValue');
+    if (productSchema.aggregateRating) {
+      assert.ok(productSchema.aggregateRating.ratingValue > 0, 'Product aggregateRating must have ratingValue');
+    }
 
     const breadcrumbSchema = productMeta.structuredData.find(s => s['@type'] === 'BreadcrumbList');
     assert.ok(breadcrumbSchema, 'Structured data must include @type BreadcrumbList');
@@ -2974,14 +2976,114 @@ async function testShopFilterAccessibility() {
     const renderedHtml = injectMetaTags(sampleHtml, productMeta);
     assert.ok(renderedHtml.includes('property="og:type" content="product"'), 'Rendered HTML must switch og:type to product');
     assert.ok(renderedHtml.includes('application/ld+json'), 'Rendered HTML must inject application/ld+json script tags');
+    assert.ok(renderedHtml.includes('data-schema="product-jsonld"'), 'Rendered HTML must include data-schema="product-jsonld"');
     assert.ok(renderedHtml.includes('"@type": "Product"'), 'Rendered HTML must contain Product schema');
     assert.ok(renderedHtml.includes('"@type": "BreadcrumbList"'), 'Rendered HTML must contain BreadcrumbList schema');
+
+    // Verify verified rating emission on product with rating
+    const { generateProductJsonLd } = require('../services/seoRenderer');
+    const ratedProductSchema = generateProductJsonLd({
+      name: 'Rated Saree',
+      slug: 'rated-saree',
+      price: 8999,
+      rating: 4.8,
+      review_count: 25
+    }, 'https://palluvo.com/sarees/rated-saree', 'https://palluvo.com/img.jpg', 'Desc');
+    assert.ok(ratedProductSchema.aggregateRating, 'Product with verified rating must include aggregateRating');
+    assert.strictEqual(ratedProductSchema.aggregateRating.ratingValue, 4.8);
+    assert.strictEqual(ratedProductSchema.aggregateRating.reviewCount, 25);
+
+    // Verify unverified/unknown offers and aggregateRating are omitted (no price: 0 or fabricated 4.9/12)
+    const bareProductSchema = generateProductJsonLd({ name: 'Unpriced Saree', slug: 'unpriced-saree' }, 'https://palluvo.com/sarees/unpriced-saree', 'https://palluvo.com/img.jpg', 'Desc');
+    assert.strictEqual(bareProductSchema.offers, undefined, 'Product with unknown price must omit offers (no price: 0)');
+    assert.strictEqual(bareProductSchema.aggregateRating, undefined, 'Product with unknown rating must omit aggregateRating (no fabricated 4.9/12)');
 
     const staticMeta = getMetaForRoute('/sarees');
     assert.strictEqual(staticMeta.ogType, 'website', 'Non-product route meta must have ogType="website"');
     const renderedStatic = injectMetaTags(sampleHtml, staticMeta);
     assert.ok(renderedStatic.includes('property="og:type" content="website"'), 'Rendered static HTML must preserve og:type website');
-    console.log('✅ PASS: [P2] Product structured data (JSON-LD Product and BreadcrumbList) and og:type="product" verified');
+    assert.ok(!renderedStatic.includes('application/ld+json'), 'Non-product static HTML must not include product JSON-LD');
+
+    // Verify client-side updatePageMeta handles DOM structured data lifecycle without duplicate tags
+    const seoMockElements = [];
+    const seoMockDocument = {
+      head: {
+        appendChild(el) { seoMockElements.push(el); return el; }
+      },
+      title: '',
+      querySelector(selector) {
+        if (selector.startsWith('meta[')) {
+          const match = selector.match(/meta\[([^=]+)="([^"]+)"\]/);
+          return seoMockElements.find(el => el.tagName === 'META' && el.attrs[match[1]] === match[2]) || null;
+        }
+        if (selector.includes('rel="canonical"')) {
+          return seoMockElements.find(el => el.tagName === 'LINK' && el.attrs.rel === 'canonical') || null;
+        }
+        return null;
+      },
+      querySelectorAll(selector) {
+        if (selector.includes('application/ld+json')) {
+          return seoMockElements.filter(el => el.tagName === 'SCRIPT' && el.attrs.type === 'application/ld+json');
+        }
+        return [];
+      },
+      createElement(tag) {
+        const el = {
+          tagName: tag.toUpperCase(),
+          attrs: {},
+          setAttribute(k, v) { el.attrs[k] = v; },
+          getAttribute(k) { return el.attrs[k]; },
+          remove() {
+            const idx = seoMockElements.indexOf(el);
+            if (idx >= 0) seoMockElements.splice(idx, 1);
+          },
+          textContent: ''
+        };
+        return el;
+      }
+    };
+
+    global.document = seoMockDocument;
+    const { updatePageMeta: clientUpdatePageMeta } = require('../../client/src/utils/seo.js');
+
+    // Simulate server-rendered tag present on initial page load
+    const initialServerTag = seoMockDocument.createElement('script');
+    initialServerTag.setAttribute('type', 'application/ld+json');
+    initialServerTag.setAttribute('data-schema', 'product-jsonld');
+    initialServerTag.textContent = '[{"@type":"Product","name":"Initial"}]';
+    seoMockDocument.head.appendChild(initialServerTag);
+    assert.strictEqual(seoMockDocument.querySelectorAll('script[type="application/ld+json"]').length, 1);
+
+    // Navigate to product without hydrated product data (initial click-through with only slug/name)
+    clientUpdatePageMeta('product', { slug: 'test-saree-1', name: 'Test Saree 1' });
+    let ldScripts = seoMockDocument.querySelectorAll('script[type="application/ld+json"]');
+    assert.strictEqual(ldScripts.length, 1, 'Client must replace previous tag, maintaining exactly 1 script tag');
+    let parsedJson = JSON.parse(ldScripts[0].textContent);
+    let parsedProduct = parsedJson[0];
+    assert.strictEqual(parsedProduct.name, 'Test Saree 1');
+    assert.strictEqual(parsedProduct.offers, undefined, 'Client must omit offers when price is unknown (no price: 0)');
+    assert.strictEqual(parsedProduct.aggregateRating, undefined, 'Client must omit aggregateRating when rating is unknown (no 4.9/12)');
+
+    // Navigate to another product with hydrated product data
+    clientUpdatePageMeta('product', {
+      slug: 'test-saree-2',
+      product: { name: 'Test Saree 2', price: 9999, stock_quantity: 5, rating: 4.8, review_count: 50 }
+    });
+    ldScripts = seoMockDocument.querySelectorAll('script[type="application/ld+json"]');
+    assert.strictEqual(ldScripts.length, 1, 'Client must replace previous product tag, never duplicating');
+    parsedJson = JSON.parse(ldScripts[0].textContent);
+    parsedProduct = parsedJson[0];
+    assert.strictEqual(parsedProduct.name, 'Test Saree 2');
+    assert.strictEqual(parsedProduct.offers.price, 9999);
+    assert.strictEqual(parsedProduct.offers.availability, 'https://schema.org/InStock');
+    assert.strictEqual(parsedProduct.aggregateRating.ratingValue, 4.8);
+    assert.strictEqual(parsedProduct.aggregateRating.reviewCount, 50);
+
+    // Navigate to non-product page (cart)
+    clientUpdatePageMeta('cart', {});
+    ldScripts = seoMockDocument.querySelectorAll('script[type="application/ld+json"]');
+    assert.strictEqual(ldScripts.length, 0, 'Client must purge product JSON-LD on non-product routes');
+    console.log('✅ PASS: [P2] Product structured data (JSON-LD Product and BreadcrumbList), data-schema attribute, client tag replacement, and omission of unverified offers/ratings verified');
 
     // 11. Verify [P2] Form Labels Programmatically Associated Across client/src
     function scanLabels(dir) {

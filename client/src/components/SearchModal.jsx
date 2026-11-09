@@ -149,7 +149,8 @@ export default function SearchModal({ onNavigate }) {
     onNavigate('product', {
       slug: product.slug,
       image: product.primary_image || (product.images && product.images[0]),
-      name: product.name
+      name: product.name,
+      product
     });
   };
 

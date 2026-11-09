@@ -128,7 +128,8 @@ export default function CartPage({ onNavigate, onOpenAuth }) {
                     onClick={() => onNavigate('product', {
                       slug: item.slug,
                       image: item.primary_image || item.image_url,
-                      name: item.name
+                      name: item.name,
+                      product: item
                     })}
                     className="font-serif text-base font-bold text-[#1F1A1C] hover:text-[#5B1425] cursor-pointer transition line-clamp-1"
                   >

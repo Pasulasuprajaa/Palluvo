@@ -79,12 +79,6 @@ function findProductBySlug(slug) {
 }
 
 function generateProductJsonLd(product, canonicalUrl, imageUrl, description) {
-  const price = typeof product.price === 'number' ? product.price : (parseFloat(product.price) || 0);
-  const stock = product.stock_quantity !== undefined && product.stock_quantity !== null ? product.stock_quantity : 10;
-  const inStock = stock > 0;
-  const ratingVal = parseFloat(product.rating) || 4.9;
-  const reviewCount = parseInt(product.review_count || product.reviews_count || 12, 10);
-
   const schema = {
     '@context': 'https://schema.org/',
     '@type': 'Product',
@@ -95,27 +89,47 @@ function generateProductJsonLd(product, canonicalUrl, imageUrl, description) {
     brand: {
       '@type': 'Brand',
       name: 'PALLUVO'
-    },
-    offers: {
+    }
+  };
+
+  // Only emit offers when price is known and > 0
+  const rawPrice = product.price !== undefined ? product.price : (product.offers && product.offers.price);
+  const numericPrice = typeof rawPrice === 'number' ? rawPrice : parseFloat(rawPrice);
+  if (!isNaN(numericPrice) && numericPrice > 0) {
+    const offer = {
       '@type': 'Offer',
       url: canonicalUrl,
       priceCurrency: 'INR',
-      price: price,
+      price: numericPrice,
       priceValidUntil: '2027-12-31',
       itemCondition: 'https://schema.org/NewCondition',
-      availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
       seller: {
         '@type': 'Organization',
         name: 'PALLUVO'
       }
+    };
+    if (product.stock_quantity !== undefined && product.stock_quantity !== null) {
+      const numericStock = typeof product.stock_quantity === 'number' ? product.stock_quantity : parseInt(product.stock_quantity, 10);
+      if (!isNaN(numericStock)) {
+        offer.availability = numericStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+      }
+    } else {
+      offer.availability = 'https://schema.org/InStock';
     }
-  };
+    schema.offers = offer;
+  }
 
-  if (ratingVal > 0) {
+  // Only emit aggregateRating when BOTH rating and review count are known and > 0
+  const rawRating = product.rating;
+  const numericRating = typeof rawRating === 'number' ? rawRating : parseFloat(rawRating);
+  const rawReviewCount = product.review_count || product.reviews_count;
+  const numericReviewCount = typeof rawReviewCount === 'number' ? rawReviewCount : parseInt(rawReviewCount, 10);
+
+  if (!isNaN(numericRating) && numericRating > 0 && !isNaN(numericReviewCount) && numericReviewCount > 0) {
     schema.aggregateRating = {
       '@type': 'AggregateRating',
-      ratingValue: ratingVal,
-      reviewCount: reviewCount > 0 ? reviewCount : 1,
+      ratingValue: numericRating,
+      reviewCount: numericReviewCount,
       bestRating: 5,
       worstRating: 1
     };
@@ -434,10 +448,10 @@ function injectMetaTags(html, meta) {
   }
 
   // Structured Data (JSON-LD for Product and BreadcrumbList)
-  modified = modified.replace(/<script\s+type="application\/ld\+json">.*?<\/script>\s*/gis, '');
+  modified = modified.replace(/<script\s+type="application\/ld\+json"[^>]*>.*?<\/script>\s*/gis, '');
   if (meta.structuredData && meta.structuredData.length > 0) {
     const jsonLdTags = meta.structuredData.map(data =>
-      `  <script type="application/ld+json">\n${JSON.stringify(data, null, 2)}\n  </script>`
+      `  <script type="application/ld+json" data-schema="product-jsonld">\n${JSON.stringify(data, null, 2)}\n  </script>`
     ).join('\n');
     modified = modified.replace('</head>', `${jsonLdTags}\n  </head>`);
   }
@@ -448,6 +462,8 @@ function injectMetaTags(html, meta) {
 module.exports = {
   getMetaForRoute,
   injectMetaTags,
+  generateProductJsonLd,
+  generateBreadcrumbJsonLd,
   escapeHtml,
   escapeAttr,
   sanitizeUrl
