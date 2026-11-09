@@ -1089,6 +1089,7 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
       />
 
       <ReviewModal
+        key={product?.id || 'review-modal'}
         isOpen={reviewModalOpen}
         onClose={() => setReviewModalOpen(false)}
         product={product}

@@ -31,13 +31,17 @@ app.use(cors({
   origin: true,
   credentials: true
 }));
-// Disable inflation to prevent trailing-byte decoder exploits on compressed bodies (GHSA-27r3-jxmh-p828)
-// Support up to 12mb JSON payload limit to align with customer photo review uploads (3 photos x 2MB binary = ~8.2MB base64)
-app.use(express.json({ inflate: false, limit: '12mb' }));
 app.use(morgan('dev'));
 
-// Global API rate limiting
+// Global API rate limiting before body parsing to prevent unauthenticated buffer exhaustion
 app.use('/api', apiLimiter);
+
+// Scoped 12MB JSON parser specifically for review uploads (rate-limited route)
+app.use('/api/reviews', express.json({ inflate: false, limit: '12mb' }));
+
+// Small default global JSON parser (100kb default limit) for all other routes
+// Disable inflation to prevent trailing-byte decoder exploits on compressed bodies (GHSA-27r3-jxmh-p828)
+app.use(express.json({ inflate: false, limit: '100kb' }));
 
 // Static uploads / assets directory if needed
 app.use('/public', express.static(path.join(__dirname, 'public')));

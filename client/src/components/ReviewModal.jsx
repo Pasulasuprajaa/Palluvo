@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Star, Upload, Sparkles, Check, Image as ImageIcon } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +15,15 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
   const [fabricFeel, setFabricFeel] = useState('Ultra Soft & Luxurious');
   const [photos, setPhotos] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Clear photo drafts and review form fields whenever product.id changes
+  useEffect(() => {
+    setPhotos([]);
+    setTitle('');
+    setComment('');
+    setRating(5);
+    setHoverRating(0);
+  }, [product?.id]);
 
   if (!isOpen || !product) return null;
 
@@ -143,6 +152,15 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
     setPhotos(prev => prev.filter((_, i) => i !== idx));
   };
 
+  const handleClose = () => {
+    setPhotos([]);
+    setTitle('');
+    setComment('');
+    setRating(5);
+    setHoverRating(0);
+    onClose();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!comment.trim()) {
@@ -171,6 +189,11 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to submit review');
 
+      setPhotos([]);
+      setTitle('');
+      setComment('');
+      setRating(5);
+      setHoverRating(0);
       showToast('✨ Thank you! Your review has been published with Verified Drape badge.', 'success');
       if (onReviewSubmitted) onReviewSubmitted();
       onClose();
@@ -200,8 +223,8 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
             </div>
           </div>
           <button
-            onClick={onClose}
-            className="p-1.5 text-white/80 hover:text-white rounded-full hover:bg-white/10 transition"
+            onClick={handleClose}
+            className="p-1.5 text-white/80 hover:text-white rounded-full hover:bg-white/10 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -350,8 +373,8 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
           <div className="pt-2 flex justify-end gap-3">
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 transition"
+              onClick={handleClose}
+              className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 transition cursor-pointer"
             >
               Cancel
             </button>

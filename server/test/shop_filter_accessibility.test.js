@@ -3351,15 +3351,28 @@ async function testShopFilterAccessibility() {
       'ProductDetailPage.jsx must provide an honest empty state when no customer drape photos exist'
     );
 
-    // Verify JSON limit alignment and image resizing in ReviewModal and server/index.js
+    // Verify JSON limit alignment, scoped review parser, and image resizing in ReviewModal and server/index.js
     assert.ok(
       reviewModalSource.includes('resizeImageToDataUrl') && reviewModalSource.includes('MAX_PHOTO_BYTES'),
       'ReviewModal.jsx must resize customer photos client-side and enforce post-resize MAX_PHOTO_BYTES cap'
     );
+    assert.ok(
+      reviewModalSource.includes('[product?.id]') && reviewModalSource.includes('setPhotos([])'),
+      'ReviewModal.jsx must clear photo drafts and review fields when product.id changes'
+    );
+
     const serverIndexSrc = fs.readFileSync(path.resolve(__dirname, '../index.js'), 'utf8');
     assert.ok(
-      serverIndexSrc.includes("limit: '12mb'") || serverIndexSrc.includes('limit: "12mb"'),
-      'server/index.js express.json must configure limit (12mb) to align with aggregate photo upload caps without 413'
+      serverIndexSrc.indexOf("app.use('/api', apiLimiter)") < serverIndexSrc.indexOf("express.json("),
+      'server/index.js must apply rate limiting before body parsing to prevent unauthenticated buffer exhaustion'
+    );
+    assert.ok(
+      serverIndexSrc.includes("app.use('/api/reviews', express.json({ inflate: false, limit: '12mb' }))"),
+      'server/index.js must scope 12mb parser specifically to /api/reviews'
+    );
+    assert.ok(
+      serverIndexSrc.includes("limit: '100kb'") || serverIndexSrc.includes('limit: "100kb"'),
+      'server/index.js must keep small default limit (100kb) on global JSON parser'
     );
 
     // Verify server/routes/reviews.js rejects external URLs, blob URLs, and catalog photos with HTTP 400 validation errors
