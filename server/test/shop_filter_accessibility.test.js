@@ -2993,10 +2993,53 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(ratedProductSchema.aggregateRating.ratingValue, 4.8);
     assert.strictEqual(ratedProductSchema.aggregateRating.reviewCount, 25);
 
-    // Verify unverified/unknown offers and aggregateRating are omitted (no price: 0 or fabricated 4.9/12)
+    // Verify unverified/unknown offers, stock, and aggregateRating are omitted (no price: 0 or fabricated 4.9/12 or default InStock)
     const bareProductSchema = generateProductJsonLd({ name: 'Unpriced Saree', slug: 'unpriced-saree' }, 'https://palluvo.com/sarees/unpriced-saree', 'https://palluvo.com/img.jpg', 'Desc');
     assert.strictEqual(bareProductSchema.offers, undefined, 'Product with unknown price must omit offers (no price: 0)');
     assert.strictEqual(bareProductSchema.aggregateRating, undefined, 'Product with unknown rating must omit aggregateRating (no fabricated 4.9/12)');
+
+    // Verify unverified/unknown stock omits availability (never defaults to InStock)
+    const unstockedProductSchema = generateProductJsonLd({
+      name: 'Unstocked Saree',
+      slug: 'unstocked-saree',
+      price: 8999
+    }, 'https://palluvo.com/sarees/unstocked-saree', 'https://palluvo.com/img.jpg', 'Desc');
+    assert.strictEqual(unstockedProductSchema.offers.price, 8999);
+    assert.strictEqual(unstockedProductSchema.offers.availability, undefined, 'Product with unknown stock must omit offers.availability');
+
+    // Verify verified out-of-stock product emits OutOfStock
+    const outOfStockProductSchema = generateProductJsonLd({
+      name: 'Sold Out Saree',
+      slug: 'sold-out-saree',
+      price: 8999,
+      stock_quantity: 0
+    }, 'https://palluvo.com/sarees/sold-out-saree', 'https://palluvo.com/img.jpg', 'Desc');
+    assert.strictEqual(outOfStockProductSchema.offers.availability, 'https://schema.org/OutOfStock');
+
+    // Verify server catalog fallback path preserves verified stock from catalog.json
+    const catalogData = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../data/catalog.json'), 'utf8'));
+    assert.ok(catalogData.products.length >= 23, 'catalog.json must contain at least 23 products');
+    for (const catProd of catalogData.products) {
+      assert.ok(catProd.price > 0, `Catalog product ${catProd.slug} must have verified price`);
+      assert.strictEqual(typeof catProd.stock_quantity, 'number', `Catalog product ${catProd.slug} must have verified stock_quantity`);
+      assert.strictEqual(typeof catProd.rating, 'number', `Catalog product ${catProd.slug} must have verified rating`);
+      assert.strictEqual(typeof catProd.review_count, 'number', `Catalog product ${catProd.slug} must have verified review_count`);
+    }
+
+    // Verify catalog fallback when product has no stock_quantity strictly omits availability
+    const mockFallbackWithoutStock = {
+      name: 'Fallback Saree Without Inventory',
+      slug: 'fallback-no-stock',
+      price: 6499
+    };
+    const fallbackWithoutStockSchema = generateProductJsonLd(
+      mockFallbackWithoutStock,
+      'https://palluvo.com/sarees/fallback-no-stock',
+      'https://palluvo.com/img.jpg',
+      'Desc'
+    );
+    assert.strictEqual(fallbackWithoutStockSchema.offers.price, 6499);
+    assert.strictEqual(fallbackWithoutStockSchema.offers.availability, undefined, 'Server fallback with missing stock_quantity must omit availability');
 
     const staticMeta = getMetaForRoute('/sarees');
     assert.strictEqual(staticMeta.ogType, 'website', 'Non-product route meta must have ogType="website"');
@@ -3078,6 +3121,19 @@ async function testShopFilterAccessibility() {
     assert.strictEqual(parsedProduct.offers.availability, 'https://schema.org/InStock');
     assert.strictEqual(parsedProduct.aggregateRating.ratingValue, 4.8);
     assert.strictEqual(parsedProduct.aggregateRating.reviewCount, 50);
+
+    // Navigate to product with price but unknown stock_quantity (client must omit availability)
+    clientUpdatePageMeta('product', {
+      slug: 'test-saree-3',
+      product: { name: 'Test Saree 3', price: 7999 }
+    });
+    ldScripts = seoMockDocument.querySelectorAll('script[type="application/ld+json"]');
+    assert.strictEqual(ldScripts.length, 1);
+    parsedJson = JSON.parse(ldScripts[0].textContent);
+    parsedProduct = parsedJson[0];
+    assert.strictEqual(parsedProduct.name, 'Test Saree 3');
+    assert.strictEqual(parsedProduct.offers.price, 7999);
+    assert.strictEqual(parsedProduct.offers.availability, undefined, 'Client must omit availability when stock_quantity is unknown');
 
     // Navigate to non-product page (cart)
     clientUpdatePageMeta('cart', {});

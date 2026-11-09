@@ -277,8 +277,6 @@ export function updatePageMeta(page, params = {}) {
         if (!isNaN(numericStock)) {
           offer.availability = numericStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
         }
-      } else {
-        offer.availability = 'https://schema.org/InStock';
       }
       productSchema.offers = offer;
     }

@@ -113,8 +113,6 @@ function generateProductJsonLd(product, canonicalUrl, imageUrl, description) {
       if (!isNaN(numericStock)) {
         offer.availability = numericStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
       }
-    } else {
-      offer.availability = 'https://schema.org/InStock';
     }
     schema.offers = offer;
   }
