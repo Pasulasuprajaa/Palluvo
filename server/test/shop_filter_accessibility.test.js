@@ -3351,6 +3351,73 @@ async function testShopFilterAccessibility() {
       'ProductDetailPage.jsx must provide an honest empty state when no customer drape photos exist'
     );
 
+    // Verify JSON limit alignment and image resizing in ReviewModal and server/index.js
+    assert.ok(
+      reviewModalSource.includes('resizeImageToDataUrl') || reviewModalSource.includes('canvas'),
+      'ReviewModal.jsx must resize customer photos client-side before sending'
+    );
+    const serverIndexSrc = fs.readFileSync(path.resolve(__dirname, '../index.js'), 'utf8');
+    assert.ok(
+      serverIndexSrc.includes("limit: '10mb'") || serverIndexSrc.includes('limit: "10mb"'),
+      'server/index.js express.json must configure limit (10mb) to accept photo uploads without 413'
+    );
+
+    // Verify server/routes/reviews.js rejects external URLs, blob URLs, and catalog photos
+    const reviewsRouteSource = fs.readFileSync(path.resolve(__dirname, '../routes/reviews.js'), 'utf8');
+    assert.ok(
+      reviewsRouteSource.includes('isValidCustomerPhoto'),
+      'server/routes/reviews.js must define isValidCustomerPhoto'
+    );
+
+    // Test photo validation rules directly: reject external tracking URLs, blobs, catalog imagery
+    const reviewsModule = require('../routes/reviews');
+    const testProductForPhoto = testReviewDb.prepare('SELECT id FROM products LIMIT 1').get();
+    if (testProductForPhoto) {
+      const photoTestUserId = 88888;
+      testReviewDb.prepare(`
+        INSERT OR IGNORE INTO users (id, name, email, password_hash, role)
+        VALUES (?, 'Photo Test User', 'photouser@example.com', 'hash', 'user')
+      `).run(photoTestUserId);
+
+      // Clean existing
+      testReviewDb.prepare('DELETE FROM reviews WHERE user_id = ?').run(photoTestUserId);
+
+      const postHandler = reviewsModule.stack.find(layer => layer.route && layer.route.methods.post).route.stack.slice(-1)[0].handle;
+
+      // Submit review containing malicious external URL, blob URL, catalog image, and valid data URL
+      const validSampleDataUrl = 'data:image/jpeg;base64,' + Buffer.from('fake-valid-jpeg-image-bytes-content').toString('base64');
+      const untrustedBlobUrl = 'blob:http://localhost:5173/e00da989-14a8-48b4-93e1-d687aeebff8c';
+      const externalTrackerUrl = 'https://attacker.example/uploads/pixel.png';
+      const catalogImageUrl = '/images/sarees/banarasi.jpg';
+
+      let status1 = null;
+      let body1 = null;
+      postHandler({
+        user: { id: photoTestUserId, name: 'Photo Test User' },
+        body: {
+          product_id: testProductForPhoto.id,
+          rating: 5,
+          title: 'Photo Upload Test',
+          comment: 'Testing photo sanitization and persistence',
+          photos: [externalTrackerUrl, untrustedBlobUrl, catalogImageUrl, validSampleDataUrl]
+        }
+      }, {
+        status(c) { status1 = c; return this; },
+        json(b) { body1 = b; return this; }
+      }, () => {});
+
+      assert.strictEqual(status1, 201);
+      const insertedReview = testReviewDb.prepare('SELECT photos FROM reviews WHERE user_id = ? AND product_id = ?').get(photoTestUserId, testProductForPhoto.id);
+      assert.ok(insertedReview && insertedReview.photos, 'Valid data URL photo must be persisted');
+      const savedPhotos = JSON.parse(insertedReview.photos);
+      assert.strictEqual(savedPhotos.length, 1, 'Only genuine data URL must be accepted; external tracker, blob, and catalog URLs must be rejected');
+      assert.strictEqual(savedPhotos[0], validSampleDataUrl, 'Persisted photo must match validated data URL');
+
+      // Clean up
+      testReviewDb.prepare('DELETE FROM reviews WHERE user_id = ?').run(photoTestUserId);
+      testReviewDb.prepare('DELETE FROM users WHERE id = ?').run(photoTestUserId);
+    }
+
     // B. Upgrade fixture test: Deterministically migrate duplicate legacy reviews before creating unique index
     const Database = require('better-sqlite3');
     const fixtureDbPath = path.join(os.tmpdir(), `palluvo-upgrade-fixture-${Date.now()}.db`);

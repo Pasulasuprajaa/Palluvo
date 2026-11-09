@@ -18,7 +18,51 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
   if (!isOpen || !product) return null;
 
-  const handleFileSelect = (e) => {
+  const resizeImageToDataUrl = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.85) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const rawDataUrl = event.target?.result;
+        if (!rawDataUrl || typeof rawDataUrl !== 'string') {
+          return resolve(null);
+        }
+
+        const img = new Image();
+        img.onload = () => {
+          try {
+            let { width, height } = img;
+            if (width > maxWidth || height > maxHeight) {
+              if (width / height > maxWidth / maxHeight) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+              } else {
+                width = Math.round((width * maxHeight) / height);
+                height = maxHeight;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const format = file.type === 'image/png' ? 'image/png' : (file.type === 'image/webp' ? 'image/webp' : 'image/jpeg');
+            const resizedDataUrl = canvas.toDataURL(format, quality);
+            resolve(resizedDataUrl);
+          } catch (e) {
+            resolve(rawDataUrl);
+          }
+        };
+        img.onerror = () => resolve(rawDataUrl);
+        img.src = rawDataUrl;
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
@@ -30,28 +74,24 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
     const selectedFiles = files.slice(0, remainingSlots);
 
-    selectedFiles.forEach((file) => {
+    for (const file of selectedFiles) {
       if (!file.type || !file.type.startsWith('image/')) {
         showToast('Only image files (PNG, JPEG, WebP) are supported.', 'error');
-        return;
+        continue;
       }
       if (file.size > 5 * 1024 * 1024) {
         showToast('Image size must be under 5MB.', 'error');
-        return;
+        continue;
       }
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result;
-        if (result && typeof result === 'string') {
-          setPhotos((prev) => {
-            if (prev.length >= 3) return prev;
-            return [...prev, result];
-          });
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+      const resized = await resizeImageToDataUrl(file);
+      if (resized) {
+        setPhotos((prev) => {
+          if (prev.length >= 3) return prev;
+          return [...prev, resized];
+        });
+      }
+    }
 
     e.target.value = '';
   };

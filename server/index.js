@@ -32,7 +32,8 @@ app.use(cors({
   credentials: true
 }));
 // Disable inflation to prevent trailing-byte decoder exploits on compressed bodies (GHSA-27r3-jxmh-p828)
-app.use(express.json({ inflate: false }));
+// Support up to 10mb JSON payload limit to align with customer photo review uploads
+app.use(express.json({ inflate: false, limit: '10mb' }));
 app.use(morgan('dev'));
 
 // Global API rate limiting

@@ -4,6 +4,44 @@ const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
 const { requireDurableStorage } = require('../middleware/storageGuard');
 
+// Support up to 10mb JSON payload limit to align with customer photo review uploads
+router.use(express.json({ inflate: false, limit: '10mb' }));
+
+/**
+ * Validates customer-uploaded photos.
+ * Rejects external URLs (preventing IP harvesting / tracking pixels),
+ * blob: URLs (origin-scoped pointers), and catalog imagery paths.
+ * Accepts only validated raster image data URLs (JPEG, PNG, WebP) or same-origin /uploads/ paths.
+ */
+function isValidCustomerPhoto(photo) {
+  if (!photo || typeof photo !== 'string') return false;
+  const trimmed = photo.trim();
+
+  // Reject external URLs (prevent third-party tracking / IP harvesting)
+  if (/^(https?:)?\/\//i.test(trimmed)) return false;
+
+  // Reject blob URLs (origin-scoped client memory pointers)
+  if (trimmed.startsWith('blob:')) return false;
+
+  // Reject catalog photography
+  if (trimmed.startsWith('/images/') || trimmed.startsWith('images/')) return false;
+
+  // Accept validated image data URLs (JPEG, PNG, WebP) with base64 payload
+  const dataUrlRegex = /^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/i;
+  if (dataUrlRegex.test(trimmed)) {
+    // Max 3MB binary equivalent in base64 (~4.1MB)
+    return trimmed.length >= 50 && trimmed.length <= 4 * 1024 * 1024;
+  }
+
+  // Accept strictly same-origin relative upload paths
+  const localUploadRegex = /^\/uploads\/[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp)$/i;
+  if (localUploadRegex.test(trimmed)) {
+    return true;
+  }
+
+  return false;
+}
+
 // GET /api/reviews/:productId
 router.get('/:productId', (req, res) => {
   try {
@@ -68,14 +106,8 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
 
     let photosJson = null;
     if (Array.isArray(photos) && photos.length > 0) {
-      // Accept only customer-uploaded photos (data URLs or customer uploads); strictly reject catalog imagery
-      const validPhotos = photos.filter(p => (
-        typeof p === 'string' &&
-        p.trim().length > 0 &&
-        !p.startsWith('/images/') &&
-        !p.startsWith('images/') &&
-        (p.startsWith('data:image/') || p.startsWith('blob:') || p.includes('/uploads/'))
-      )).slice(0, 3);
+      // Accept only customer-uploaded photos (data URLs or same-origin uploads); strictly reject external URLs, blobs, & catalog imagery
+      const validPhotos = photos.filter(isValidCustomerPhoto).slice(0, 3);
       if (validPhotos.length > 0) {
         photosJson = JSON.stringify(validPhotos);
       }

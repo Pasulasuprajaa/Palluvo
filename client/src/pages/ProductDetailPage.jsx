@@ -921,12 +921,16 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                   const isCustomerUploadedPhoto = (photo) => {
                     if (!photo || typeof photo !== 'string') return false;
                     const trimmed = photo.trim();
+                    // Reject external URLs (prevent third-party tracking) and origin-scoped blob URLs
+                    if (/^(https?:)?\/\//i.test(trimmed) || trimmed.startsWith('blob:')) return false;
                     // Reject catalog paths, product photography, or fallbacks
                     if (trimmed.startsWith('/images/') || trimmed.startsWith('images/')) return false;
                     if (product?.primary_image && trimmed === product.primary_image) return false;
                     if (Array.isArray(product?.images) && product.images.includes(trimmed)) return false;
-                    // Accept only customer uploads (data URLs, blobs, or user uploads)
-                    return trimmed.startsWith('data:image/') || trimmed.startsWith('blob:') || trimmed.includes('/uploads/');
+                    // Accept validated image data URLs or same-origin /uploads/ paths
+                    if (/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(trimmed)) return true;
+                    if (/^\/uploads\/[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp)$/i.test(trimmed)) return true;
+                    return false;
                   };
 
                   const customerPhotos = (reviews || []).flatMap((rev) => {
@@ -1002,10 +1006,13 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                         const isCustomerUploadedPhoto = (photo) => {
                           if (!photo || typeof photo !== 'string') return false;
                           const trimmed = photo.trim();
+                          if (/^(https?:)?\/\//i.test(trimmed) || trimmed.startsWith('blob:')) return false;
                           if (trimmed.startsWith('/images/') || trimmed.startsWith('images/')) return false;
                           if (product?.primary_image && trimmed === product.primary_image) return false;
                           if (Array.isArray(product?.images) && product.images.includes(trimmed)) return false;
-                          return trimmed.startsWith('data:image/') || trimmed.startsWith('blob:') || trimmed.includes('/uploads/');
+                          if (/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(trimmed)) return true;
+                          if (/^\/uploads\/[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp)$/i.test(trimmed)) return true;
+                          return false;
                         };
 
                         let revPhotos = [];
