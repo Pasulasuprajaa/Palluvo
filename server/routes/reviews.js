@@ -43,7 +43,7 @@ router.get('/:productId', (req, res) => {
   }
 });
 
-// POST /api/reviews
+// POST /api/reviews (Idempotent per customer and product)
 router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { product_id, rating, title, comment } = req.body;
@@ -63,28 +63,77 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
     `).get(req.user.id, product_id);
 
     const isVerified = purchased ? 1 : 0;
+    const reviewTitle = title ? title.trim() : (purchased ? 'Verified Saree Drape Experience' : 'Customer Review');
+    const reviewComment = comment.trim();
 
-    const insert = db.prepare(`
-      INSERT INTO reviews (product_id, user_id, user_name, rating, title, comment, verified_purchase)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+    // Check for existing review from this customer for this product
+    const existing = db.prepare(`
+      SELECT id FROM reviews WHERE product_id = ? AND user_id = ?
+    `).get(product_id, req.user.id);
 
-    insert.run(
-      product_id,
-      req.user.id,
-      req.user.name,
-      cleanRating,
-      title ? title.trim() : (purchased ? 'Verified Saree Drape Experience' : 'Customer Review'),
-      comment.trim(),
-      isVerified
-    );
+    if (existing) {
+      // Idempotently update the existing review
+      db.prepare(`
+        UPDATE reviews
+        SET rating = ?, title = ?, comment = ?, user_name = ?, verified_purchase = ?, created_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(
+        cleanRating,
+        reviewTitle,
+        reviewComment,
+        req.user.name,
+        isVerified,
+        existing.id
+      );
+    } else {
+      try {
+        const insert = db.prepare(`
+          INSERT INTO reviews (product_id, user_id, user_name, rating, title, comment, verified_purchase)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        insert.run(
+          product_id,
+          req.user.id,
+          req.user.name,
+          cleanRating,
+          reviewTitle,
+          reviewComment,
+          isVerified
+        );
+      } catch (insertErr) {
+        if (insertErr.code === 'SQLITE_CONSTRAINT' || insertErr.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+          // Fallback update on concurrent race
+          db.prepare(`
+            UPDATE reviews
+            SET rating = ?, title = ?, comment = ?, user_name = ?, verified_purchase = ?, created_at = CURRENT_TIMESTAMP
+            WHERE product_id = ? AND user_id = ?
+          `).run(
+            cleanRating,
+            reviewTitle,
+            reviewComment,
+            req.user.name,
+            isVerified,
+            product_id,
+            req.user.id
+          );
+        } else {
+          throw insertErr;
+        }
+      }
+    }
 
-    // Update product rating and review_count
+    // Update product rating and review_count based on visible reviews
     const stats = db.prepare('SELECT AVG(rating) as avg_rating, COUNT(*) as total_reviews FROM reviews WHERE product_id = ?').get(product_id);
-    db.prepare('UPDATE products SET rating = ?, review_count = ? WHERE id = ?')
-      .run(parseFloat(stats.avg_rating.toFixed(2)), stats.total_reviews, product_id);
+    const totalReviews = stats.total_reviews || 0;
+    const avgRating = totalReviews > 0 ? parseFloat(stats.avg_rating.toFixed(2)) : 5.0;
 
-    res.status(201).json({ message: 'Thank you! Your review has been published.' });
+    db.prepare('UPDATE products SET rating = ?, review_count = ? WHERE id = ?')
+      .run(avgRating, totalReviews, product_id);
+
+    res.status(201).json({
+      message: existing ? 'Your review has been updated.' : 'Thank you! Your review has been published.',
+      updated: Boolean(existing)
+    });
   } catch (err) {
     console.error('Post review error:', err);
     res.status(500).json({ error: 'Failed to submit review.' });

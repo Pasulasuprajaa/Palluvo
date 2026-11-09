@@ -402,7 +402,8 @@ function initSchema() {
       verified_purchase INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+      UNIQUE(product_id, user_id)
     );
 
     -- Product Questions & Answers (Q&A) Table
@@ -427,6 +428,7 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
     CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
     CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_product_user ON reviews(product_id, user_id) WHERE user_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_product_qa_product ON product_qa(product_id);
     CREATE INDEX IF NOT EXISTS idx_order_items_product_order ON order_items(product_id, order_id);
 

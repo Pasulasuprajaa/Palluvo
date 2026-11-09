@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Star, Heart, ShoppingBag, ShieldCheck, Truck, RotateCcw,
   Sparkles, Check, ChevronRight, Share2, ZoomIn, X, Plus, Minus, Tag, MapPin,
-  Scale, Clock, Flame, CreditCard, Ruler, Scissors, MessageCircle, ThumbsUp
+  Scale, Clock, Flame, CreditCard, Ruler, Scissors, MessageCircle
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
@@ -964,10 +964,6 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
 
                       <div className="pt-2 flex items-center justify-between text-[11px] text-gray-400 border-t border-gray-100">
                         <span>Reviewed on {new Date(rev.created_at || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                        <div className="flex items-center gap-1 text-gray-500">
-                          <ThumbsUp className="w-3 h-3" />
-                          <span>Helpful (12)</span>
-                        </div>
                       </div>
                     </div>
                   ))

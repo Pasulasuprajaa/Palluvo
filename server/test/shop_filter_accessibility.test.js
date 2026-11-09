@@ -3235,6 +3235,95 @@ async function testShopFilterAccessibility() {
       `All form labels must be programmatically associated with controls. Unassociated:\n${JSON.stringify(unassociatedLabels, null, 2)}`
     );
     console.log(`✅ PASS: [P2] All ${totalClientLabels} form labels across client/src are programmatically associated with form controls (WCAG 1.3.1 & 3.3.2 compliant)`);
+
+    // 12. Verify [P2] Review Submissions Idempotent per Customer and Product & No Hard-Coded Helpful Counts
+    // A. Verify no hard-coded "Helpful (12)" in ProductDetailPage.jsx
+    const pdpSource = fs.readFileSync(path.resolve(__dirname, '../../client/src/pages/ProductDetailPage.jsx'), 'utf8');
+    assert.ok(
+      !pdpSource.includes('Helpful (12)'),
+      'ProductDetailPage.jsx must not contain hard-coded Helpful (12) count on reviews'
+    );
+    assert.ok(
+      !pdpSource.includes('Helpful ('),
+      'ProductDetailPage.jsx must not display unpersisted helpful counts for reviews'
+    );
+
+    // B. Verify database uniqueness constraint and idempotent review submissions
+    const testReviewDb = require('../db/database');
+    const targetProduct = testReviewDb.prepare('SELECT id, slug FROM products LIMIT 1').get();
+    if (targetProduct) {
+      const testUserId = 99998;
+      // Ensure test user exists
+      testReviewDb.prepare(`
+        INSERT OR IGNORE INTO users (id, name, email, password_hash, role)
+        VALUES (?, 'Test Reviewer', 'reviewer_test@example.com', 'hash', 'user')
+      `).run(testUserId);
+
+      // Clean any existing test review
+      testReviewDb.prepare('DELETE FROM reviews WHERE user_id = ?').run(testUserId);
+
+      // Initial review count
+      const initialCount = testReviewDb.prepare('SELECT COUNT(*) as c FROM reviews WHERE product_id = ?').get(targetProduct.id).c;
+      
+      // First insert
+      testReviewDb.prepare(`
+        INSERT INTO reviews (product_id, user_id, user_name, rating, title, comment, verified_purchase)
+        VALUES (?, ?, 'Test Reviewer', 5, 'Superb Weave', 'First authentic review', 1)
+      `).run(targetProduct.id, testUserId);
+
+      const afterFirstCount = testReviewDb.prepare('SELECT COUNT(*) as c FROM reviews WHERE product_id = ?').get(targetProduct.id).c;
+      assert.strictEqual(afterFirstCount, initialCount + 1, 'First review must increment total review count by 1');
+
+      // Attempt second insert with duplicate (product_id, user_id) - must throw constraint error at DB level
+      let constraintThrown = false;
+      try {
+        testReviewDb.prepare(`
+          INSERT INTO reviews (product_id, user_id, user_name, rating, title, comment, verified_purchase)
+          VALUES (?, ?, 'Test Reviewer', 1, 'Spam Review', 'Second review attempt', 1)
+        `).run(targetProduct.id, testUserId);
+      } catch (dbErr) {
+        constraintThrown = dbErr.code === 'SQLITE_CONSTRAINT' || dbErr.code === 'SQLITE_CONSTRAINT_UNIQUE';
+      }
+      assert.ok(constraintThrown, 'Database must enforce UNIQUE(product_id, user_id) constraint on reviews');
+
+      // Test route handler idempotency
+      const reviewsRouter = require('../routes/reviews');
+      const mockReq = {
+        user: { id: testUserId, name: 'Test Reviewer' },
+        body: {
+          product_id: targetProduct.id,
+          rating: 4,
+          title: 'Updated Review Title',
+          comment: 'Updated review drape experience'
+        }
+      };
+      let responseStatus = null;
+      let responseBody = null;
+      const mockRes = {
+        status(code) { responseStatus = code; return this; },
+        json(data) { responseBody = data; return this; }
+      };
+
+      const postHandler = reviewsRouter.stack.find(layer => layer.route && layer.route.methods.post).route.stack.slice(-1)[0].handle;
+      postHandler(mockReq, mockRes, () => {});
+
+      assert.strictEqual(responseStatus, 201, 'Repeat review submission must return 201 Created');
+      assert.strictEqual(responseBody.updated, true, 'Repeat review submission must indicate updated: true');
+
+      // Assert review count did not increment
+      const afterRepeatCount = testReviewDb.prepare('SELECT COUNT(*) as c FROM reviews WHERE product_id = ?').get(targetProduct.id).c;
+      assert.strictEqual(afterRepeatCount, afterFirstCount, 'Repeat review submission must not create duplicate review rows');
+
+      // Assert review content was updated
+      const updatedRow = testReviewDb.prepare('SELECT rating, title, comment FROM reviews WHERE product_id = ? AND user_id = ?').get(targetProduct.id, testUserId);
+      assert.strictEqual(updatedRow.rating, 4, 'Updated review must reflect new rating');
+      assert.strictEqual(updatedRow.title, 'Updated Review Title', 'Updated review must reflect new title');
+
+      // Clean up test review and user
+      testReviewDb.prepare('DELETE FROM reviews WHERE user_id = ?').run(testUserId);
+      testReviewDb.prepare('DELETE FROM users WHERE id = ?').run(testUserId);
+    }
+    console.log('✅ PASS: [P2] Review submissions idempotent per customer and product with DB constraint enforcement; hardcoded Helpful (12) removed');
   } catch (renderErr) {
     console.error('SSR test error:', renderErr);
     throw renderErr;
