@@ -400,10 +400,10 @@ function initSchema() {
       title TEXT,
       comment TEXT NOT NULL,
       verified_purchase INTEGER DEFAULT 1,
+      photos TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
-      UNIQUE(product_id, user_id)
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     );
 
     -- Product Questions & Answers (Q&A) Table
@@ -428,7 +428,6 @@ function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
     CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
     CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_product_user ON reviews(product_id, user_id) WHERE user_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_product_qa_product ON product_qa(product_id);
     CREATE INDEX IF NOT EXISTS idx_order_items_product_order ON order_items(product_id, order_id);
 
@@ -640,6 +639,13 @@ function initSchema() {
       applyCourierMigrations(db);
     } catch (e) {
       console.log('Fabricated courier migration note:', e.message);
+    }
+
+    // Review deduplication migration: Deduplicate legacy reviews before creating unique index
+    try {
+      applyReviewDeduplicationMigration(db);
+    } catch (e) {
+      console.log('Review deduplication migration note:', e.message);
     }
   } catch (e) {
     console.log('Product image migration note:', e.message);
@@ -1043,6 +1049,81 @@ function applyCourierMigrations(targetDb = db) {
   }
 }
 
+/**
+ * Safely migrates existing duplicate reviews for (product_id, user_id) pairs
+ * before creating the unique index idx_reviews_product_user.
+ * Deterministically retains the newest review (highest id) for each (product_id, user_id) pair
+ * and recalculates rating/review_count aggregates for affected products.
+ */
+function applyReviewDeduplicationMigration(targetDb = db) {
+  try {
+    targetDb.exec(`ALTER TABLE reviews ADD COLUMN photos TEXT;`);
+  } catch (e) {}
+
+  try {
+    targetDb.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        migration_name TEXT PRIMARY KEY,
+        applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Find all product IDs that have duplicate reviews from the same user
+    const duplicateRows = targetDb.prepare(`
+      SELECT DISTINCT product_id
+      FROM reviews
+      WHERE user_id IS NOT NULL
+        AND id NOT IN (
+          SELECT MAX(id)
+          FROM reviews
+          WHERE user_id IS NOT NULL
+          GROUP BY product_id, user_id
+        )
+    `).all();
+
+    if (duplicateRows && duplicateRows.length > 0) {
+      const affectedProductIds = duplicateRows.map(r => r.product_id);
+
+      // Deterministically delete older duplicates, keeping newest review
+      targetDb.prepare(`
+        DELETE FROM reviews
+        WHERE user_id IS NOT NULL
+          AND id NOT IN (
+            SELECT MAX(id)
+            FROM reviews
+            WHERE user_id IS NOT NULL
+            GROUP BY product_id, user_id
+          )
+      `).run();
+
+      const statsStmt = targetDb.prepare('SELECT AVG(rating) as avg_rating, COUNT(*) as total_reviews FROM reviews WHERE product_id = ?');
+      const updateProdStmt = targetDb.prepare('UPDATE products SET rating = ?, review_count = ? WHERE id = ?');
+
+      for (const prodId of affectedProductIds) {
+        const stats = statsStmt.get(prodId);
+        const total = stats ? (stats.total_reviews || 0) : 0;
+        const avg = total > 0 ? parseFloat(stats.avg_rating.toFixed(2)) : 5.0;
+        updateProdStmt.run(avg, total, prodId);
+      }
+    }
+
+    // Now safely create the partial unique index
+    targetDb.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_product_user
+      ON reviews(product_id, user_id)
+      WHERE user_id IS NOT NULL;
+    `);
+
+    targetDb.prepare(`
+      INSERT OR IGNORE INTO schema_migrations (migration_name)
+      VALUES ('deduplicate_reviews_unique_user_product')
+    `).run();
+  } catch (err) {
+    console.error('Error applying review deduplication migration:', err);
+    throw err;
+  }
+}
+
 initSchema();
 
 db.initSchema = initSchema;
@@ -1051,6 +1132,7 @@ db.repairMisclassifiedCourierDefaults = repairMisclassifiedCourierDefaults;
 db.restorePaidOrderExplicitCarrierAssignments = restorePaidOrderExplicitCarrierAssignments;
 db.recoverCarrierAssignmentsWithVerifiedEvidence = recoverCarrierAssignmentsWithVerifiedEvidence;
 db.applyCourierMigrations = applyCourierMigrations;
+db.applyReviewDeduplicationMigration = applyReviewDeduplicationMigration;
 
 module.exports = db;
 

@@ -46,7 +46,7 @@ router.get('/:productId', (req, res) => {
 // POST /api/reviews (Idempotent per customer and product)
 router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
   try {
-    const { product_id, rating, title, comment } = req.body;
+    const { product_id, rating, title, comment, photos } = req.body;
 
     if (!product_id || !rating || !comment) {
       return res.status(400).json({ error: 'Product ID, rating (1-5), and review comment are required.' });
@@ -66,6 +66,14 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
     const reviewTitle = title ? title.trim() : (purchased ? 'Verified Saree Drape Experience' : 'Customer Review');
     const reviewComment = comment.trim();
 
+    let photosJson = null;
+    if (Array.isArray(photos) && photos.length > 0) {
+      const validPhotos = photos.filter(p => typeof p === 'string' && p.trim().length > 0).slice(0, 10);
+      if (validPhotos.length > 0) {
+        photosJson = JSON.stringify(validPhotos);
+      }
+    }
+
     // Check for existing review from this customer for this product
     const existing = db.prepare(`
       SELECT id FROM reviews WHERE product_id = ? AND user_id = ?
@@ -75,12 +83,13 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
       // Idempotently update the existing review
       db.prepare(`
         UPDATE reviews
-        SET rating = ?, title = ?, comment = ?, user_name = ?, verified_purchase = ?, created_at = CURRENT_TIMESTAMP
+        SET rating = ?, title = ?, comment = ?, photos = COALESCE(?, photos), user_name = ?, verified_purchase = ?, created_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(
         cleanRating,
         reviewTitle,
         reviewComment,
+        photosJson,
         req.user.name,
         isVerified,
         existing.id
@@ -88,8 +97,8 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
     } else {
       try {
         const insert = db.prepare(`
-          INSERT INTO reviews (product_id, user_id, user_name, rating, title, comment, verified_purchase)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO reviews (product_id, user_id, user_name, rating, title, comment, photos, verified_purchase)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
         insert.run(
           product_id,
@@ -98,6 +107,7 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
           cleanRating,
           reviewTitle,
           reviewComment,
+          photosJson,
           isVerified
         );
       } catch (insertErr) {
@@ -105,12 +115,13 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
           // Fallback update on concurrent race
           db.prepare(`
             UPDATE reviews
-            SET rating = ?, title = ?, comment = ?, user_name = ?, verified_purchase = ?, created_at = CURRENT_TIMESTAMP
+            SET rating = ?, title = ?, comment = ?, photos = COALESCE(?, photos), user_name = ?, verified_purchase = ?, created_at = CURRENT_TIMESTAMP
             WHERE product_id = ? AND user_id = ?
           `).run(
             cleanRating,
             reviewTitle,
             reviewComment,
+            photosJson,
             req.user.name,
             isVerified,
             product_id,

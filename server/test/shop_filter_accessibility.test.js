@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const assert = require('assert');
 const vite = require('vite');
 
@@ -3324,6 +3325,135 @@ async function testShopFilterAccessibility() {
       testReviewDb.prepare('DELETE FROM users WHERE id = ?').run(testUserId);
     }
     console.log('✅ PASS: [P2] Review submissions idempotent per customer and product with DB constraint enforcement; hardcoded Helpful (12) removed');
+
+    // 13. Verify [P2] Customer Drape Showcase (Photo Reviews) & Upgrade Migration for Duplicate Reviews
+    // A. Verify ProductDetailPage does not label catalog imagery as customer drape photos
+    assert.ok(
+      !pdpSource.includes("alt={`Customer Drape ${idx + 1}`}") && !pdpSource.includes("product.images?.[1] || '/images/categories/silk.jpg'"),
+      'ProductDetailPage.jsx must not use catalog imagery or fallbacks as customer photo reviews'
+    );
+    assert.ok(
+      pdpSource.includes('No customer drape photos uploaded yet') || pdpSource.includes('Be the first patron to share a drape photo in your review'),
+      'ProductDetailPage.jsx must provide an honest empty state when no customer drape photos exist'
+    );
+
+    // B. Upgrade fixture test: Deterministically migrate duplicate legacy reviews before creating unique index
+    const Database = require('better-sqlite3');
+    const fixtureDbPath = path.join(os.tmpdir(), `palluvo-upgrade-fixture-${Date.now()}.db`);
+    const fixtureDb = new Database(fixtureDbPath);
+
+    try {
+      // Create legacy schema without UNIQUE constraint on (product_id, user_id)
+      fixtureDb.exec(`
+        CREATE TABLE products (
+          id INTEGER PRIMARY KEY,
+          name TEXT,
+          slug TEXT,
+          rating REAL DEFAULT 5.0,
+          review_count INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE reviews (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          product_id INTEGER NOT NULL,
+          user_id INTEGER,
+          user_name TEXT NOT NULL,
+          rating INTEGER NOT NULL,
+          title TEXT,
+          comment TEXT NOT NULL,
+          verified_purchase INTEGER DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        INSERT INTO products (id, name, slug, rating, review_count) VALUES (1, 'Kanjivaram Saree', 'kanjivaram', 4.0, 3);
+        INSERT INTO products (id, name, slug, rating, review_count) VALUES (2, 'Banarasi Saree', 'banarasi', 5.0, 2);
+
+        -- Legacy duplicate reviews for User 101 on Product 1 (3 duplicate submissions)
+        INSERT INTO reviews (id, product_id, user_id, user_name, rating, title, comment, created_at)
+        VALUES (10, 1, 101, 'Ananya', 3, 'Initial Review', 'Decent weave', '2026-01-01 10:00:00');
+        INSERT INTO reviews (id, product_id, user_id, user_name, rating, title, comment, created_at)
+        VALUES (11, 1, 101, 'Ananya', 4, 'Second Review', 'Better after drape', '2026-01-02 10:00:00');
+        INSERT INTO reviews (id, product_id, user_id, user_name, rating, title, comment, created_at)
+        VALUES (12, 1, 101, 'Ananya', 5, 'Final Review', 'Absolute masterpiece', '2026-01-03 10:00:00');
+
+        -- Legacy duplicate reviews for User 202 on Product 2 (2 duplicate submissions)
+        INSERT INTO reviews (id, product_id, user_id, user_name, rating, title, comment, created_at)
+        VALUES (20, 2, 202, 'Radhika', 4, 'Draft Review', 'Nice fabric', '2026-01-01 10:00:00');
+        INSERT INTO reviews (id, product_id, user_id, user_name, rating, title, comment, created_at)
+        VALUES (21, 2, 202, 'Radhika', 5, 'Final Review', 'Loved the zari work', '2026-01-02 10:00:00');
+
+        -- Anonymous / guest reviews with user_id NULL (should be preserved even if product_id matches)
+        INSERT INTO reviews (id, product_id, user_id, user_name, rating, title, comment)
+        VALUES (30, 1, NULL, 'Guest Patron 1', 5, 'Guest 1', 'Lovely');
+        INSERT INTO reviews (id, product_id, user_id, user_name, rating, title, comment)
+        VALUES (31, 1, NULL, 'Guest Patron 2', 4, 'Guest 2', 'Great');
+      `);
+
+      // Verify that running CREATE UNIQUE INDEX directly on this legacy database fails with constraint error
+      let directIndexFailed = false;
+      try {
+        fixtureDb.exec(`CREATE UNIQUE INDEX idx_reviews_product_user ON reviews(product_id, user_id) WHERE user_id IS NOT NULL;`);
+      } catch (err) {
+        directIndexFailed = err.code === 'SQLITE_CONSTRAINT_UNIQUE' || err.code === 'SQLITE_CONSTRAINT';
+      }
+      assert.ok(
+        directIndexFailed,
+        'Directly creating UNIQUE index without deduplicating legacy rows must fail with SQLITE_CONSTRAINT'
+      );
+
+      // Apply the review deduplication migration
+      testReviewDb.applyReviewDeduplicationMigration(fixtureDb);
+
+      // Verify legacy duplicate reviews were deduplicated deterministically to the newest id (MAX(id))
+      const prod1Reviews = fixtureDb.prepare('SELECT id, rating, title FROM reviews WHERE product_id = 1 AND user_id = 101').all();
+      assert.strictEqual(prod1Reviews.length, 1, 'Product 1 must have exactly 1 review for user 101 after migration');
+      assert.strictEqual(prod1Reviews[0].id, 12, 'Newest review (id 12) must be preserved');
+      assert.strictEqual(prod1Reviews[0].rating, 5, 'Newest rating (5) must be preserved');
+      assert.strictEqual(prod1Reviews[0].title, 'Final Review', 'Newest title must be preserved');
+
+      const prod2Reviews = fixtureDb.prepare('SELECT id, rating, title FROM reviews WHERE product_id = 2 AND user_id = 202').all();
+      assert.strictEqual(prod2Reviews.length, 1, 'Product 2 must have exactly 1 review for user 202 after migration');
+      assert.strictEqual(prod2Reviews[0].id, 21, 'Newest review (id 21) must be preserved');
+
+      // Verify guest reviews were NOT purged
+      const guestReviews = fixtureDb.prepare('SELECT id FROM reviews WHERE user_id IS NULL').all();
+      assert.strictEqual(guestReviews.length, 2, 'Guest reviews with NULL user_id must be preserved');
+
+      // Verify product aggregate stats were recalculated accurately
+      const prod1 = fixtureDb.prepare('SELECT rating, review_count FROM products WHERE id = 1').get();
+      // Product 1 reviews now: User 101 (rating 5) + Guest 1 (rating 5) + Guest 2 (rating 4) => avg 4.67, total 3
+      assert.strictEqual(prod1.review_count, 3, 'Product 1 review count should match remaining reviews');
+      assert.strictEqual(prod1.rating, 4.67, 'Product 1 rating should match remaining reviews average');
+
+      // Verify unique index now exists and is actively enforced
+      let insertDuplicateThrows = false;
+      try {
+        fixtureDb.prepare(`
+          INSERT INTO reviews (product_id, user_id, user_name, rating, title, comment)
+          VALUES (1, 101, 'Ananya', 2, 'New Spam', 'Should be rejected by unique index')
+        `).run();
+      } catch (err) {
+        insertDuplicateThrows = err.code === 'SQLITE_CONSTRAINT' || err.code === 'SQLITE_CONSTRAINT_UNIQUE';
+      }
+      assert.ok(insertDuplicateThrows, 'Index idx_reviews_product_user must enforce uniqueness on new submissions');
+
+      // Verify photos column was added
+      const photosColExists = fixtureDb.prepare("PRAGMA table_info(reviews)").all().some(c => c.name === 'photos');
+      assert.ok(photosColExists, 'Migration must ensure photos column exists on reviews table');
+
+      // Verify migration record in schema_migrations
+      const migrationEntry = fixtureDb.prepare("SELECT * FROM schema_migrations WHERE migration_name = 'deduplicate_reviews_unique_user_product'").get();
+      assert.ok(migrationEntry, 'Migration entry must be recorded in schema_migrations table');
+
+      // Verify idempotency: running migration again does not throw or corrupt data
+      assert.doesNotThrow(() => {
+        testReviewDb.applyReviewDeduplicationMigration(fixtureDb);
+      }, 'applyReviewDeduplicationMigration must be safely idempotent');
+    } finally {
+      try { fixtureDb.close(); } catch (e) {}
+      try { fs.unlinkSync(fixtureDbPath); } catch (e) {}
+    }
+    console.log('✅ PASS: [P2] Legacy duplicate reviews migration verified with upgrade fixture; photo reviews separate from catalog imagery');
   } catch (renderErr) {
     console.error('SSR test error:', renderErr);
     throw renderErr;

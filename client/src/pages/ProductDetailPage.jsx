@@ -917,18 +917,42 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                 <h4 className="font-serif font-bold text-sm text-[#1F1A1C] mb-3">
                   Customer Drape Showcase (Photo Reviews)
                 </h4>
-                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
-                  {[
-                    currentImage,
-                    product.images?.[1] || '/images/categories/silk.jpg',
-                    product.images?.[2] || '/images/occasions/wedding_edit.jpg',
-                    '/images/categories/banarasi.jpg'
-                  ].map((photo, idx) => (
-                    <div key={idx} className="relative w-24 h-32 rounded-xl overflow-hidden border border-[#E8E1D5] shrink-0 shadow-xs cursor-pointer hover:scale-105 transition">
-                      <img src={photo} alt={`Customer Drape ${idx + 1}`} className="w-full h-full object-cover" />
+                {(() => {
+                  const customerPhotos = (reviews || []).flatMap((rev) => {
+                    if (!rev) return [];
+                    if (Array.isArray(rev.photos)) return rev.photos;
+                    if (typeof rev.photos === 'string') {
+                      try {
+                        const parsed = JSON.parse(rev.photos);
+                        return Array.isArray(parsed) ? parsed : [];
+                      } catch (e) {
+                        return rev.photos ? [rev.photos] : [];
+                      }
+                    }
+                    if (rev.photo_url || rev.image_url) return [rev.photo_url || rev.image_url];
+                    return [];
+                  }).filter(Boolean);
+
+                  if (customerPhotos.length > 0) {
+                    return (
+                      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
+                        {customerPhotos.map((photo, idx) => (
+                          <div key={idx} className="relative w-24 h-32 rounded-xl overflow-hidden border border-[#E8E1D5] shrink-0 shadow-xs cursor-pointer hover:scale-105 transition">
+                            <img src={photo} alt={`Customer Drape Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="py-4 px-4 rounded-xl bg-[#FAF7F2] border border-[#E8E1D5]/60 text-center">
+                      <p className="text-xs text-gray-500 italic">
+                        No customer drape photos uploaded yet. Be the first patron to share a drape photo in your review!
+                      </p>
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
               </div>
 
               {/* Individual Reviews List */}
@@ -961,6 +985,29 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                       <p className="text-xs text-gray-700 leading-relaxed">
                         {rev.comment}
                       </p>
+
+                      {(() => {
+                        let revPhotos = [];
+                        if (Array.isArray(rev.photos)) revPhotos = rev.photos;
+                        else if (typeof rev.photos === 'string') {
+                          try {
+                            const parsed = JSON.parse(rev.photos);
+                            if (Array.isArray(parsed)) revPhotos = parsed;
+                          } catch (e) {
+                            if (rev.photos) revPhotos = [rev.photos];
+                          }
+                        }
+                        if (revPhotos.length > 0) {
+                          return (
+                            <div className="flex gap-2 pt-1 pb-1">
+                              {revPhotos.map((p, pIdx) => (
+                                <img key={pIdx} src={p} alt={`Review photo ${pIdx + 1}`} className="w-14 h-18 object-cover rounded-md border border-[#E8E1D5]" />
+                              ))}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
 
                       <div className="pt-2 flex items-center justify-between text-[11px] text-gray-400 border-t border-gray-100">
                         <span>Reviewed on {new Date(rev.created_at || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>

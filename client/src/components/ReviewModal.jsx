@@ -50,7 +50,8 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
           product_id: product.id,
           rating,
           title: title.trim() || 'Exquisite Handcrafted Saree',
-          comment: comment.trim()
+          comment: comment.trim(),
+          photos: photos.length > 0 ? photos : undefined
         })
       });
 
