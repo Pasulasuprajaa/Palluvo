@@ -68,7 +68,14 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
 
     let photosJson = null;
     if (Array.isArray(photos) && photos.length > 0) {
-      const validPhotos = photos.filter(p => typeof p === 'string' && p.trim().length > 0).slice(0, 10);
+      // Accept only customer-uploaded photos (data URLs or customer uploads); strictly reject catalog imagery
+      const validPhotos = photos.filter(p => (
+        typeof p === 'string' &&
+        p.trim().length > 0 &&
+        !p.startsWith('/images/') &&
+        !p.startsWith('images/') &&
+        (p.startsWith('data:image/') || p.startsWith('blob:') || p.includes('/uploads/'))
+      )).slice(0, 3);
       if (validPhotos.length > 0) {
         photosJson = JSON.stringify(validPhotos);
       }

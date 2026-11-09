@@ -918,20 +918,32 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                   Customer Drape Showcase (Photo Reviews)
                 </h4>
                 {(() => {
+                  const isCustomerUploadedPhoto = (photo) => {
+                    if (!photo || typeof photo !== 'string') return false;
+                    const trimmed = photo.trim();
+                    // Reject catalog paths, product photography, or fallbacks
+                    if (trimmed.startsWith('/images/') || trimmed.startsWith('images/')) return false;
+                    if (product?.primary_image && trimmed === product.primary_image) return false;
+                    if (Array.isArray(product?.images) && product.images.includes(trimmed)) return false;
+                    // Accept only customer uploads (data URLs, blobs, or user uploads)
+                    return trimmed.startsWith('data:image/') || trimmed.startsWith('blob:') || trimmed.includes('/uploads/');
+                  };
+
                   const customerPhotos = (reviews || []).flatMap((rev) => {
                     if (!rev) return [];
-                    if (Array.isArray(rev.photos)) return rev.photos;
-                    if (typeof rev.photos === 'string') {
+                    let revPhotos = [];
+                    if (Array.isArray(rev.photos)) {
+                      revPhotos = rev.photos;
+                    } else if (typeof rev.photos === 'string') {
                       try {
                         const parsed = JSON.parse(rev.photos);
-                        return Array.isArray(parsed) ? parsed : [];
+                        if (Array.isArray(parsed)) revPhotos = parsed;
                       } catch (e) {
-                        return rev.photos ? [rev.photos] : [];
+                        if (rev.photos) revPhotos = [rev.photos];
                       }
                     }
-                    if (rev.photo_url || rev.image_url) return [rev.photo_url || rev.image_url];
-                    return [];
-                  }).filter(Boolean);
+                    return revPhotos.filter(isCustomerUploadedPhoto);
+                  });
 
                   if (customerPhotos.length > 0) {
                     return (
@@ -987,6 +999,15 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                       </p>
 
                       {(() => {
+                        const isCustomerUploadedPhoto = (photo) => {
+                          if (!photo || typeof photo !== 'string') return false;
+                          const trimmed = photo.trim();
+                          if (trimmed.startsWith('/images/') || trimmed.startsWith('images/')) return false;
+                          if (product?.primary_image && trimmed === product.primary_image) return false;
+                          if (Array.isArray(product?.images) && product.images.includes(trimmed)) return false;
+                          return trimmed.startsWith('data:image/') || trimmed.startsWith('blob:') || trimmed.includes('/uploads/');
+                        };
+
                         let revPhotos = [];
                         if (Array.isArray(rev.photos)) revPhotos = rev.photos;
                         else if (typeof rev.photos === 'string') {
@@ -997,11 +1018,12 @@ export default function ProductDetailPage({ slug, onNavigate, onOpenAuth }) {
                             if (rev.photos) revPhotos = [rev.photos];
                           }
                         }
-                        if (revPhotos.length > 0) {
+                        const validRevPhotos = revPhotos.filter(isCustomerUploadedPhoto);
+                        if (validRevPhotos.length > 0) {
                           return (
                             <div className="flex gap-2 pt-1 pb-1">
-                              {revPhotos.map((p, pIdx) => (
-                                <img key={pIdx} src={p} alt={`Review photo ${pIdx + 1}`} className="w-14 h-18 object-cover rounded-md border border-[#E8E1D5]" />
+                              {validRevPhotos.map((p, pIdx) => (
+                                <img key={pIdx} src={p} alt={`Customer Drape Photo ${pIdx + 1}`} className="w-14 h-18 object-cover rounded-md border border-[#E8E1D5]" />
                               ))}
                             </div>
                           );

@@ -3327,7 +3327,21 @@ async function testShopFilterAccessibility() {
     console.log('✅ PASS: [P2] Review submissions idempotent per customer and product with DB constraint enforcement; hardcoded Helpful (12) removed');
 
     // 13. Verify [P2] Customer Drape Showcase (Photo Reviews) & Upgrade Migration for Duplicate Reviews
-    // A. Verify ProductDetailPage does not label catalog imagery as customer drape photos
+    // A. Verify ProductDetailPage and ReviewModal do not label or inject catalog imagery as customer drape photos
+    const reviewModalSource = fs.readFileSync(path.resolve(__dirname, '../../client/src/components/ReviewModal.jsx'), 'utf8');
+    assert.ok(
+      !reviewModalSource.includes('handleAddSamplePhoto'),
+      'ReviewModal.jsx must not have handleAddSamplePhoto handler injecting catalog assets'
+    );
+    assert.ok(
+      !reviewModalSource.includes('product.primary_image'),
+      'ReviewModal.jsx must not use product.primary_image as customer photo'
+    );
+    assert.ok(
+      reviewModalSource.includes('type="file"') && reviewModalSource.includes('accept="image/'),
+      'ReviewModal.jsx must provide actual customer file selection/upload input'
+    );
+
     assert.ok(
       !pdpSource.includes("alt={`Customer Drape ${idx + 1}`}") && !pdpSource.includes("product.images?.[1] || '/images/categories/silk.jpg'"),
       'ProductDetailPage.jsx must not use catalog imagery or fallbacks as customer photo reviews'

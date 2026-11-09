@@ -18,12 +18,42 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
   if (!isOpen || !product) return null;
 
-  const handleAddSamplePhoto = (sampleUrl) => {
-    if (photos.length >= 3) {
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const remainingSlots = 3 - photos.length;
+    if (remainingSlots <= 0) {
       showToast('Maximum 3 photos allowed.', 'info');
       return;
     }
-    setPhotos(prev => [...prev, sampleUrl]);
+
+    const selectedFiles = files.slice(0, remainingSlots);
+
+    selectedFiles.forEach((file) => {
+      if (!file.type || !file.type.startsWith('image/')) {
+        showToast('Only image files (PNG, JPEG, WebP) are supported.', 'error');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('Image size must be under 5MB.', 'error');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result;
+        if (result && typeof result === 'string') {
+          setPhotos((prev) => {
+            if (prev.length >= 3) return prev;
+            return [...prev, result];
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    e.target.value = '';
   };
 
   const handleRemovePhoto = (idx) => {
@@ -200,11 +230,12 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
             <div className="flex flex-wrap gap-2 items-center">
               {photos.map((photo, idx) => (
                 <div key={idx} className="relative w-16 h-16 rounded-lg overflow-hidden border border-[#C5A059] group">
-                  <img src={photo} alt="review" className="w-full h-full object-cover" />
+                  <img src={photo} alt={`Customer Drape Preview ${idx + 1}`} className="w-full h-full object-cover" />
                   <button
                     type="button"
                     onClick={() => handleRemovePhoto(idx)}
-                    className="absolute top-1 right-1 bg-red-600 text-white p-0.5 rounded-full text-[10px]"
+                    className="absolute top-1 right-1 bg-red-600 text-white p-0.5 rounded-full text-[10px] cursor-pointer"
+                    aria-label={`Remove drape photo ${idx + 1}`}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -212,16 +243,23 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
               ))}
 
               {photos.length < 3 && (
-                <button
-                  id="review-attach-photo"
-                  type="button"
-                  onClick={() => handleAddSamplePhoto(product.primary_image || '/images/categories/banarasi.jpg')}
+                <label
+                  htmlFor="review-attach-photo"
                   className="flex flex-col items-center justify-center w-16 h-16 rounded-lg border-2 border-dashed border-[#C5A059] bg-white text-gray-500 hover:text-[#5B1425] hover:bg-[#FAF0E6] transition cursor-pointer text-[10px]"
                 >
                   <Upload className="w-4 h-4 text-[#C5A059]" />
-                  <span>Attach</span>
-                </button>
+                  <span>Upload</span>
+                </label>
               )}
+
+              <input
+                id="review-attach-photo"
+                type="file"
+                accept="image/png, image/jpeg, image/webp"
+                multiple
+                onChange={handleFileSelect}
+                className="sr-only"
+              />
             </div>
           </div>
 
