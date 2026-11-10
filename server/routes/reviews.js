@@ -10,6 +10,8 @@ router.use(express.json({ inflate: false, limit: '12mb' }));
 const MAX_PHOTOS = 3;
 const MAX_PHOTO_BYTES = 2 * 1024 * 1024; // 2MB binary limit per photo
 const MAX_AGGREGATE_PHOTO_BYTES = 6 * 1024 * 1024; // 6MB binary limit total across all photos
+const MAX_TITLE_LENGTH = 150; // Maximum allowed characters for review headline
+const MAX_COMMENT_LENGTH = 4000; // Maximum allowed characters for review body
 
 /**
  * Validates customer-uploaded photos.
@@ -136,11 +138,46 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
   try {
     const { product_id, rating, title, comment, photos } = req.body;
 
-    if (!product_id || !rating || !comment) {
+    if (!product_id || rating === undefined || rating === null || !comment) {
       return res.status(400).json({ error: 'Product ID, rating (1-5), and review comment are required.' });
     }
 
-    const cleanRating = Math.min(5, Math.max(1, parseInt(rating)));
+    const cleanProductId = parseInt(product_id, 10);
+    if (isNaN(cleanProductId) || cleanProductId <= 0) {
+      return res.status(400).json({ error: 'Valid Product ID is required.' });
+    }
+
+    const parsedRating = parseInt(rating, 10);
+    if (isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+      return res.status(400).json({ error: 'Rating must be an integer between 1 and 5.' });
+    }
+    const cleanRating = parsedRating;
+
+    // Validate review comment type, content, and bounds under 12MB parser
+    if (typeof comment !== 'string') {
+      return res.status(400).json({ error: 'Review comment must be a text string.' });
+    }
+    const reviewComment = comment.trim();
+    if (!reviewComment) {
+      return res.status(400).json({ error: 'Review comment cannot be empty.' });
+    }
+    if (reviewComment.length > MAX_COMMENT_LENGTH) {
+      return res.status(400).json({
+        error: `Review comment exceeds the maximum allowed length of ${MAX_COMMENT_LENGTH} characters.`
+      });
+    }
+
+    // Validate review title type and bounds under 12MB parser
+    if (title !== undefined && title !== null) {
+      if (typeof title !== 'string') {
+        return res.status(400).json({ error: 'Review title must be a text string.' });
+      }
+      if (title.trim().length > MAX_TITLE_LENGTH) {
+        return res.status(400).json({
+          error: `Review title exceeds the maximum allowed length of ${MAX_TITLE_LENGTH} characters.`
+        });
+      }
+    }
 
     // Check if user has purchased this product
     const purchased = db.prepare(`
@@ -148,11 +185,12 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
       JOIN order_items oi ON o.id = oi.order_id
       WHERE o.user_id = ? AND oi.product_id = ? AND o.payment_status = 'Paid'
       LIMIT 1
-    `).get(req.user.id, product_id);
+    `).get(req.user.id, cleanProductId);
 
     const isVerified = purchased ? 1 : 0;
-    const reviewTitle = title ? title.trim() : (purchased ? 'Verified Saree Drape Experience' : 'Customer Review');
-    const reviewComment = comment.trim();
+    const reviewTitle = (typeof title === 'string' && title.trim().length > 0)
+      ? title.trim()
+      : (purchased ? 'Verified Saree Drape Experience' : 'Customer Review');
 
     let photosJson = null;
     if (photos !== undefined && photos !== null) {
@@ -190,7 +228,7 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
     // Check for existing review from this customer for this product
     const existing = db.prepare(`
       SELECT id FROM reviews WHERE product_id = ? AND user_id = ?
-    `).get(product_id, req.user.id);
+    `).get(cleanProductId, req.user.id);
 
     if (existing) {
       // Idempotently update the existing review
@@ -214,7 +252,7 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
         insert.run(
-          product_id,
+          cleanProductId,
           req.user.id,
           req.user.name,
           cleanRating,
@@ -237,7 +275,7 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
             photosJson,
             req.user.name,
             isVerified,
-            product_id,
+            cleanProductId,
             req.user.id
           );
         } else {
@@ -247,12 +285,12 @@ router.post('/', authenticateToken, requireDurableStorage, (req, res) => {
     }
 
     // Update product rating and review_count based on visible reviews
-    const stats = db.prepare('SELECT AVG(rating) as avg_rating, COUNT(*) as total_reviews FROM reviews WHERE product_id = ?').get(product_id);
+    const stats = db.prepare('SELECT AVG(rating) as avg_rating, COUNT(*) as total_reviews FROM reviews WHERE product_id = ?').get(cleanProductId);
     const totalReviews = stats.total_reviews || 0;
     const avgRating = totalReviews > 0 ? parseFloat(stats.avg_rating.toFixed(2)) : 5.0;
 
     db.prepare('UPDATE products SET rating = ?, review_count = ? WHERE id = ?')
-      .run(avgRating, totalReviews, product_id);
+      .run(avgRating, totalReviews, cleanProductId);
 
     res.status(201).json({
       message: existing ? 'Your review has been updated.' : 'Thank you! Your review has been published.',

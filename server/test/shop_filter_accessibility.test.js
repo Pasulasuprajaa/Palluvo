@@ -3457,6 +3457,41 @@ async function testShopFilterAccessibility() {
       assert.strictEqual(savedPhotos.length, 1);
       assert.strictEqual(savedPhotos[0], validSampleDataUrl);
 
+      // 7. Non-string or oversized review comments and titles must return 400 validation errors under 12MB parser
+      const executePostWithPayload = (customPayload) => {
+        let code = null;
+        let response = null;
+        postHandler({
+          user: { id: photoTestUserId, name: 'Photo Test User' },
+          body: {
+            product_id: testProductForPhoto.id,
+            rating: 5,
+            title: 'Valid Title',
+            comment: 'Valid comment text',
+            ...customPayload
+          }
+        }, {
+          status(c) { code = c; return this; },
+          json(b) { response = b; return this; }
+        }, () => {});
+        return { code, response };
+      };
+
+      const resNonStringComment = executePostWithPayload({ comment: { malicious: 'object' } });
+      assert.strictEqual(resNonStringComment.code, 400, 'Non-string review comment must return 400');
+
+      const resEmptyComment = executePostWithPayload({ comment: '    ' });
+      assert.strictEqual(resEmptyComment.code, 400, 'Blank review comment must return 400');
+
+      const resOversizedComment = executePostWithPayload({ comment: 'x'.repeat(4001) });
+      assert.strictEqual(resOversizedComment.code, 400, 'Review comment exceeding 4000 characters must return 400');
+
+      const resNonStringTitle = executePostWithPayload({ title: ['bad', 'array'] });
+      assert.strictEqual(resNonStringTitle.code, 400, 'Non-string review title must return 400');
+
+      const resOversizedTitle = executePostWithPayload({ title: 't'.repeat(151) });
+      assert.strictEqual(resOversizedTitle.code, 400, 'Review title exceeding 150 characters must return 400');
+
       // Clean up
       testReviewDb.prepare('DELETE FROM reviews WHERE user_id = ?').run(photoTestUserId);
       testReviewDb.prepare('DELETE FROM users WHERE id = ?').run(photoTestUserId);
