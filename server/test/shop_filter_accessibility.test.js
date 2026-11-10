@@ -3229,7 +3229,7 @@ async function testShopFilterAccessibility() {
       }
     }
 
-    assert.ok(totalClientLabels >= 67, `Expected at least 67 labels across client/src, found ${totalClientLabels}`);
+    assert.ok(totalClientLabels >= 65, `Expected at least 65 labels across client/src, found ${totalClientLabels}`);
     assert.strictEqual(
       unassociatedLabels.length,
       0,
@@ -3359,6 +3359,39 @@ async function testShopFilterAccessibility() {
     assert.ok(
       reviewModalSource.includes('[product?.id]') && reviewModalSource.includes('setPhotos([])'),
       'ReviewModal.jsx must clear photo drafts and review fields when product.id changes'
+    );
+
+    // Verify ReviewModal accessibility (dialog role, aria-modal, title labelling, focus trapping, Escape dismissal, focus restoration)
+    assert.ok(
+      reviewModalSource.includes('role="dialog"') &&
+      reviewModalSource.includes('aria-modal="true"') &&
+      reviewModalSource.includes('aria-labelledby="review-modal-title"'),
+      'ReviewModal.jsx must expose dialog role, aria-modal="true", and aria-labelledby="review-modal-title"'
+    );
+    assert.ok(
+      reviewModalSource.includes('id="review-modal-title"'),
+      'ReviewModal.jsx must provide matching id="review-modal-title" on the dialog title'
+    );
+    assert.ok(
+      reviewModalSource.includes("e.key === 'Escape'") &&
+      reviewModalSource.includes("e.key === 'Tab'") &&
+      reviewModalSource.includes('previouslyFocusedElementRef.current') &&
+      (reviewModalSource.includes('prevTarget.focus()') || reviewModalSource.includes('previouslyFocusedElementRef.current.focus()')),
+      'ReviewModal.jsx must support Escape dismissal, Tab focus trapping, and focus restoration to the opener'
+    );
+    assert.ok(
+      reviewModalSource.includes("document.body.style.overflow = 'hidden'") &&
+      reviewModalSource.includes('document.body.style.overflow = originalOverflow'),
+      'ReviewModal.jsx must lock body scroll when open and restore original overflow upon close'
+    );
+
+    // Verify ReviewModal removes unpersisted fabric and weave selections to prevent data loss
+    assert.ok(
+      !reviewModalSource.includes('fabricFeel') &&
+      !reviewModalSource.includes('fitRating') &&
+      !reviewModalSource.includes('review-fabric-feel') &&
+      !reviewModalSource.includes('review-zari-finish'),
+      'ReviewModal.jsx must not present unpersisted fabric feel or weave controls'
     );
 
     const serverIndexSrc = fs.readFileSync(path.resolve(__dirname, '../index.js'), 'utf8');

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Star, Upload, Sparkles, Check, Image as ImageIcon } from 'lucide-react';
+import { X, Star, Upload, Sparkles, Check } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,8 +11,6 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
   const [hoverRating, setHoverRating] = useState(0);
   const [title, setTitle] = useState('');
   const [comment, setComment] = useState('');
-  const [fitRating, setFitRating] = useState('True to Drape');
-  const [fabricFeel, setFabricFeel] = useState('Ultra Soft & Luxurious');
   const [photos, setPhotos] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isProcessingPhotos, setIsProcessingPhotos] = useState(false);
@@ -21,6 +19,11 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
   // Invalidation tokens to track and invalidate pending conversions and submissions
   const conversionSessionRef = useRef(0);
   const submissionSessionRef = useRef(0);
+
+  // Accessibility and focus management refs
+  const modalRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const previouslyFocusedElementRef = useRef(null);
 
   // Clear photo drafts, review form fields, and invalidate in-flight sessions whenever product.id changes
   useEffect(() => {
@@ -42,6 +45,106 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
       conversionSessionRef.current += 1;
     };
   }, []);
+
+  // Manage modal accessibility, focus trapping, Escape dismissal, and focus restoration
+  useEffect(() => {
+    if (isOpen && product) {
+      // Capture previously focused element to restore focus when closing
+      const activeEl = typeof document !== 'undefined' ? document.activeElement : null;
+      const isUsableTarget =
+        activeEl &&
+        activeEl !== document.body &&
+        activeEl !== document.documentElement &&
+        typeof activeEl.focus === 'function' &&
+        document.contains(activeEl);
+
+      previouslyFocusedElementRef.current = isUsableTarget ? activeEl : null;
+
+      const originalOverflow = typeof document !== 'undefined' ? document.body.style.overflow : '';
+      if (typeof document !== 'undefined') {
+        document.body.style.overflow = 'hidden';
+      }
+
+      // Move focus into modal dialog (close button or first focusable control)
+      const focusTimer = setTimeout(() => {
+        if (closeButtonRef.current && typeof closeButtonRef.current.focus === 'function') {
+          closeButtonRef.current.focus();
+        } else if (modalRef.current) {
+          const focusable = modalRef.current.querySelectorAll(
+            'button:not([disabled]), [href]:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusable.length > 0 && typeof focusable[0].focus === 'function') {
+            focusable[0].focus();
+          }
+        }
+      }, 50);
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape' || e.key === 'Esc') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!isSubmitting) {
+            handleClose();
+          }
+          return;
+        }
+
+        if (e.key === 'Tab') {
+          const dialogNode = modalRef.current;
+          if (!dialogNode) return;
+
+          const focusableElements = Array.from(
+            dialogNode.querySelectorAll(
+              'button:not([disabled]), [href]:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )
+          ).filter((el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
+
+          if (focusableElements.length === 0) {
+            e.preventDefault();
+            return;
+          }
+
+          const firstElement = focusableElements[0];
+          const lastElement = focusableElements[focusableElements.length - 1];
+
+          if (e.shiftKey) {
+            if (document.activeElement === firstElement || !dialogNode.contains(document.activeElement)) {
+              e.preventDefault();
+              lastElement.focus();
+            }
+          } else {
+            if (document.activeElement === lastElement || !dialogNode.contains(document.activeElement)) {
+              e.preventDefault();
+              firstElement.focus();
+            }
+          }
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        clearTimeout(focusTimer);
+        if (typeof document !== 'undefined') {
+          document.body.style.overflow = originalOverflow;
+        }
+        window.removeEventListener('keydown', handleKeyDown);
+
+        const prevTarget = previouslyFocusedElementRef.current;
+        if (
+          prevTarget &&
+          prevTarget !== document.body &&
+          prevTarget !== document.documentElement &&
+          typeof prevTarget.focus === 'function' &&
+          document.contains(prevTarget)
+        ) {
+          try {
+            prevTarget.focus();
+          } catch (err) {}
+        }
+      };
+    }
+  }, [isOpen, product, isSubmitting]);
 
   // Check if authenticated user has completed a paid purchase for this product
   useEffect(() => {
@@ -104,20 +207,16 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext('2d');
-            // Fill white background in case of transparent PNG/WebP
             ctx.fillStyle = '#FFFFFF';
             ctx.fillRect(0, 0, width, height);
             ctx.drawImage(img, 0, 0, width, height);
 
-            // Export as JPEG so browser strictly honors quality compression (PNG ignores quality)
             let resizedDataUrl = canvas.toDataURL('image/jpeg', quality);
 
-            // Enforce matching per-photo cap (2MB) after resizing
             let base64Part = resizedDataUrl.split(',')[1] || '';
             let byteLength = Math.ceil((base64Part.length * 3) / 4);
 
             if (byteLength > MAX_PHOTO_BYTES) {
-              // Retry with smaller dimensions and lower quality if initial pass exceeds cap
               canvas.width = Math.round(width * 0.7);
               canvas.height = Math.round(height * 0.7);
               ctx.fillStyle = '#FFFFFF';
@@ -158,20 +257,17 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
     const selectedFiles = files.slice(0, remainingSlots);
 
-    // Increment session token to invalidate previous runs and tie conversions to this session
     conversionSessionRef.current += 1;
     const currentSession = conversionSessionRef.current;
     setIsProcessingPhotos(true);
 
     try {
-      // Calculate current aggregate bytes
       let currentAggregateBytes = photos.reduce((acc, p) => {
         const b64 = p.split(',')[1] || '';
         return acc + Math.ceil((b64.length * 3) / 4);
       }, 0);
 
       for (const file of selectedFiles) {
-        // Guard: check if session was invalidated (e.g. closed or product changed)
         if (conversionSessionRef.current !== currentSession) return;
 
         if (!file.type || !file.type.startsWith('image/')) {
@@ -185,7 +281,6 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
 
         const resized = await resizeImageToDataUrl(file);
 
-        // Guard: check again after async await if session was invalidated
         if (conversionSessionRef.current !== currentSession) return;
 
         if (!resized) {
@@ -222,10 +317,8 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
   };
 
   const handleClose = () => {
-    // Keep a closed submission from mutating a later draft: disallow closing while publishing
     if (isSubmitting) return;
 
-    // Invalidate any in-flight submission and photo conversion sessions immediately
     submissionSessionRef.current += 1;
     conversionSessionRef.current += 1;
     setIsProcessingPhotos(false);
@@ -257,7 +350,6 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
       return;
     }
 
-    // Invalidate background conversions and capture active submission session
     conversionSessionRef.current += 1;
     submissionSessionRef.current += 1;
     const currentSubmissionSession = submissionSessionRef.current;
@@ -283,7 +375,6 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to submit review');
 
-      // Guard: if modal was closed, cancelled, or product changed during fetch, discard callback
       if (submissionSessionRef.current !== currentSubmissionSession) return;
 
       setPhotos([]);
@@ -311,7 +402,18 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
   const isFormLocked = isSubmitting || isProcessingPhotos;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+    <div
+      ref={modalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="review-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isSubmitting) {
+          handleClose();
+        }
+      }}
+    >
       <div className="relative w-full max-w-lg bg-[#FAF7F2] rounded-2xl shadow-2xl border border-[#C5A059]/40 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-[#5B1425] text-white">
@@ -321,7 +423,7 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-serif font-bold text-lg text-[#E5D3B3]">
+                <h3 id="review-modal-title" className="font-serif font-bold text-lg text-[#E5D3B3]">
                   {isVerifiedBuyer ? 'Write a Verified Review' : 'Write a Review'}
                 </h3>
                 {isVerifiedBuyer && (
@@ -336,16 +438,17 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
             </div>
           </div>
           <button
+            ref={closeButtonRef}
             onClick={handleClose}
             disabled={isSubmitting}
             className={`p-1.5 rounded-full transition ${
               isSubmitting
                 ? 'opacity-40 cursor-not-allowed text-white/50'
-                : 'text-white/80 hover:text-white hover:bg-white/10 cursor-pointer'
+                : 'text-white/80 hover:text-white hover:bg-white/10 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none'
             }`}
             aria-label="Close review modal"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -366,7 +469,7 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
                   onClick={() => setRating(star)}
                   onMouseEnter={() => !isFormLocked && setHoverRating(star)}
                   onMouseLeave={() => !isFormLocked && setHoverRating(0)}
-                  className={`p-1 text-2xl transition ${isFormLocked ? 'cursor-not-allowed opacity-60' : 'hover:scale-110 cursor-pointer'}`}
+                  className={`p-1 text-2xl transition ${isFormLocked ? 'cursor-not-allowed opacity-60' : 'hover:scale-110 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#C5A059] focus-visible:outline-none'}`}
                 >
                   <Star
                     className={`w-7 h-7 ${
@@ -384,42 +487,6 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
                 {rating === 2 && 'Needs Improvement (2/5)'}
                 {rating === 1 && 'Disappointing (1/5)'}
               </span>
-            </div>
-          </div>
-
-          {/* Quick Fit & Fabric Chips */}
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div>
-              <label htmlFor="review-fabric-feel" className="block font-semibold text-gray-700 mb-1">Drape Fall & Feel</label>
-              <select
-                id="review-fabric-feel"
-                value={fabricFeel}
-                disabled={isFormLocked}
-                onChange={(e) => setFabricFeel(e.target.value)}
-                className={`w-full p-2 bg-white rounded-lg border border-[#E8E1D5] text-xs focus:ring-1 focus:ring-[#5B1425] outline-none ${
-                  isFormLocked ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''
-                }`}
-              >
-                <option>Ultra Soft & Luxurious</option>
-                <option>Sturdy & Crisp Rich Fall</option>
-                <option>Whisper Light & Flowing</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="review-zari-finish" className="block font-semibold text-gray-700 mb-1">Zari & Weave Finish</label>
-              <select
-                id="review-zari-finish"
-                value={fitRating}
-                disabled={isFormLocked}
-                onChange={(e) => setFitRating(e.target.value)}
-                className={`w-full p-2 bg-white rounded-lg border border-[#E8E1D5] text-xs focus:ring-1 focus:ring-[#5B1425] outline-none ${
-                  isFormLocked ? 'opacity-60 cursor-not-allowed bg-gray-50' : ''
-                }`}
-              >
-                <option>True 100% Handcrafted Gold</option>
-                <option>Subtle Elegant Sheen</option>
-                <option>Antique Matte Finish</option>
-              </select>
             </div>
           </div>
 
@@ -486,7 +553,7 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
                     }`}
                     aria-label={`Remove drape photo ${idx + 1}`}
                   >
-                    <X className="w-3 h-3" />
+                    <X className="w-3 h-3" aria-hidden="true" />
                   </button>
                 </div>
               ))}
@@ -502,7 +569,7 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
                     <span className="text-[9px] text-[#5B1425] font-semibold text-center px-1">Processing...</span>
                   ) : (
                     <>
-                      <Upload className="w-4 h-4 text-[#C5A059]" />
+                      <Upload className="w-4 h-4 text-[#C5A059]" aria-hidden="true" />
                       <span>Upload</span>
                     </>
                   )}
@@ -540,7 +607,7 @@ export default function ReviewModal({ isOpen, onClose, product, onReviewSubmitte
               disabled={isSubmitting || isProcessingPhotos}
               className="flex items-center gap-2 px-6 py-2.5 bg-[#5B1425] hover:bg-[#430e1b] text-white text-xs font-semibold rounded-xl transition shadow disabled:opacity-50 cursor-pointer"
             >
-              <Sparkles className="w-4 h-4 text-[#C5A059]" />
+              <Sparkles className="w-4 h-4 text-[#C5A059]" aria-hidden="true" />
               <span>
                 {isSubmitting
                   ? 'Publishing...'
